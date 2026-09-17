@@ -72,7 +72,7 @@ baseline/              每台设备的部署产物(永不入库)
 
 ## 健壮性措施
 
-失去一个可用系统的代价远高于重装,所以 Ubuntu 侧做了九项加固:变更前快照(独立的 15GiB 快照分区)、保留旧内核配合 `GRUB_DEFAULT=saved` 支持一次性启动、常备救援 U 盘、journald 持久化以保留崩溃日志、zram + `systemd-oomd` 内存压力防护、常开 SSH 救援通道、保守更新策略(仅安全更新、绝不自动重启)、SMART 磁盘监控、所有非 root 挂载点均带 `nofail`。详见 `docs/design/00-design.md` 第 4.7 节。
+失去一个可用系统的代价远高于重装,所以 Ubuntu 侧做了九项加固:变更前快照(独立的 15GiB 快照分区)、保留旧内核配合 `GRUB_DEFAULT=saved` 支持一次性启动、常备救援 U 盘、journald 持久化以保留崩溃日志、zram + `systemd-oomd` 内存压力防护、常开 SSH 救援通道、保守更新策略(仅安全更新、绝不自动重启,**内核与显卡驱动包特意排除在自动更新之外**)、SMART 磁盘监控、所有非 root 挂载点均带 `nofail`。详见 `docs/design/00-design.md` 第 4.7 节。
 
 ## 风险
 

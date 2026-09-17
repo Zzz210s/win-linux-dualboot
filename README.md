@@ -72,7 +72,7 @@ Completion is judged by `docs/08-verification.md` being fully green — not by "
 
 ## Robustness measures
 
-Losing a working system costs far more than reinstalling it, so the Ubuntu side is hardened with nine measures: pre-change snapshots backed by a dedicated 15 GiB snapshot partition, old kernels kept alongside `GRUB_DEFAULT=saved` for one-shot booting, a permanent rescue USB, persistent journald for post-crash diagnosis, zram plus `systemd-oomd` for memory pressure, an always-on SSH rescue channel, a conservative update policy (security updates only, never auto-reboot), SMART monitoring, and `nofail` on every non-root mount. Details in `docs/design/00-design.md` section 4.7.
+Losing a working system costs far more than reinstalling it, so the Ubuntu side is hardened with nine measures: pre-change snapshots backed by a dedicated 15 GiB snapshot partition, old kernels kept alongside `GRUB_DEFAULT=saved` for one-shot booting, a permanent rescue USB, persistent journald for post-crash diagnosis, zram plus `systemd-oomd` for memory pressure, an always-on SSH rescue channel, a conservative update policy (security updates only, never auto-reboot, **kernel and GPU driver packages deliberately excluded**), SMART monitoring, and `nofail` on every non-root mount. Details in `docs/design/00-design.md` section 4.7.
 
 ## Risks
 
