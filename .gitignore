@@ -10,6 +10,7 @@ baseline/*
 AGENTS.md
 CLAUDE.md
 docs/superpowers/
+.superpowers/
 .codegraph/
 
 # 杂物
