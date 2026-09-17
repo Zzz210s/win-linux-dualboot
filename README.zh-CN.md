@@ -30,7 +30,7 @@
 
 需同时满足:
 
-- 单块 NVMe SSD,容量 1TB 及以上,UEFI + GPT;
+- 单块 NVMe SSD,标称 1TB(实际可用约 953GiB,属于「近似但小于 1TB」的容量级,不是 1TiB),UEFI + GPT;
 - 混合显卡(集显 + NVIDIA/AMD 独显);
 - Windows 侧目标为 Windows 11 专业版,Linux 侧为 Ubuntu 26.04 LTS;
 - 允许整盘格式化。
@@ -55,7 +55,11 @@ baseline/              每台设备的部署产物(永不入库)
 
 ## 验收
 
-是否完成,以 `docs/08-verification.md` 全绿为唯一判据,不以"装完了"为准。验收集包含一次**可逆的撤除演练**:临时删掉 `\EFI\ubuntu\`,确认机器仍能自动进 Windows、不出现 `grub rescue`,再用 ESP 镜像还原。
+是否完成,以 `docs/08-verification.md` 全绿为唯一判据,不以"装完了"为准。验收集包含一次**可逆的撤除演练**:临时删掉 `\EFI\ubuntu\`,确认机器仍能自动进 Windows、不出现 `grub rescue`,再用 ESP 镜像还原。另有一组健壮性验收:快照回滚演练一次、journald 持久化、SSH 救援通道可达、保守更新策略、SMART 磁盘健康。
+
+## 健壮性措施
+
+失去一个可用系统的代价远高于重装,所以 Ubuntu 侧做了九项加固:变更前快照(独立的 20GiB 快照分区)、保留旧内核配合 `GRUB_DEFAULT=saved` 支持一次性启动、常备救援 U 盘、journald 持久化以保留崩溃日志、zram + `systemd-oomd` 内存压力防护、常开 SSH 救援通道、保守更新策略(仅安全更新、绝不自动重启)、SMART 磁盘监控、所有非 root 挂载点均带 `nofail`。详见 `docs/design/00-design.md` 第 4.7 节。
 
 ## 风险
 

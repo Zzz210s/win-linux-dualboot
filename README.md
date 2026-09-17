@@ -30,7 +30,7 @@ Every step in this playbook obeys these. They, not any particular tool, are what
 
 Applicable when the machine matches all of:
 
-- single NVMe SSD, 1 TB or larger, UEFI + GPT
+- single NVMe SSD, nominal 1 TB (about 953 GiB usable — this is the "close to, but under 1 TB" class, not 1 TiB), UEFI + GPT
 - hybrid graphics (integrated + discrete NVIDIA/AMD)
 - Windows 11 Pro as the Windows target, Ubuntu 26.04 LTS as the Linux target
 - the whole disk may be formatted
@@ -55,7 +55,11 @@ Start at `docs/00-overview.md` and follow the stages in order. Each stage ends w
 
 ## Verification
 
-Completion is judged by `docs/08-verification.md` being fully green — not by "it installed". The verification set includes a **reversible decommission drill**: temporarily remove `\EFI\ubuntu\`, confirm the machine still boots Windows unattended with no `grub rescue` prompt, then restore from the ESP image.
+Completion is judged by `docs/08-verification.md` being fully green — not by "it installed". The verification set includes a **reversible decommission drill**: temporarily remove `\EFI\ubuntu\`, confirm the machine still boots Windows unattended with no `grub rescue` prompt, then restore from the ESP image. A separate group verifies robustness: a snapshot rollback drilled once, persistent journald, a reachable SSH rescue channel, a conservative update policy and SMART disk health.
+
+## Robustness measures
+
+Losing a working system costs far more than reinstalling it, so the Ubuntu side is hardened with nine measures: pre-change snapshots backed by a dedicated 20 GiB snapshot partition, old kernels kept alongside `GRUB_DEFAULT=saved` for one-shot booting, a permanent rescue USB, persistent journald for post-crash diagnosis, zram plus `systemd-oomd` for memory pressure, an always-on SSH rescue channel, a conservative update policy (security updates only, never auto-reboot), SMART monitoring, and `nofail` on every non-root mount. Details in `docs/design/00-design.md` section 4.7.
 
 ## Risks
 
