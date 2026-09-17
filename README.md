@@ -35,6 +35,10 @@ The plan isolates system from data on **both** operating systems, so a crash nev
 
 Both sides can be recovered **in place, on the original disk**: the design document (section 4.8) describes reinstalling Windows while formatting `C:` only, reinstalling Ubuntu while formatting root only (never the ESP), and the non-reinstall path for bootloader-only damage.
 
+## A disk both systems can read
+
+`D:` is a **shared partition**: Windows accesses it natively, Ubuntu mounts it read-write through the in-kernel `ntfs3` driver, so office files opened in Windows are reachable from Linux simply by switching systems — no copying, no transfer medium. Four conditions make it safe: Fast Startup and hibernation disabled, no BitLocker on `D:`, fixed `uid`/`gid`/`umask` plus `windows_names` mount options, and no POSIX-semantics-sensitive work (symlinks, permission bits, case-sensitive renames) on the shared volume.
+
 ## Target device class
 
 Applicable when the machine matches all of:
