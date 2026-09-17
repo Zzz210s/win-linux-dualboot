@@ -30,8 +30,8 @@ Every step in this playbook obeys these. They, not any particular tool, are what
 
 The plan isolates system from data on **both** operating systems, so a crash never costs you the other half of the machine:
 
-- **Windows**: a 200 GiB system partition (`C:`) plus a ~590 GiB data partition (`D:`); known folders, game libraries and container images are redirected to `D:`. Reinstalling Windows formats `C:` only.
-- **Ubuntu**: a 140 GiB root plus a dedicated 20 GiB snapshot partition. Rolling back a bad upgrade restores root without destroying snapshot history.
+- **Windows**: a 200 GiB system partition (`C:`) plus a ~635 GiB data partition (`D:`); known folders, game libraries and container images are redirected to `D:`. Reinstalling Windows formats `C:` only.
+- **Ubuntu**: a 100 GiB root plus a dedicated 15 GiB snapshot partition. Documents, downloads, pictures and desktop live on the shared partition, so root stays small; rolling back a bad upgrade restores root without destroying snapshot history.
 
 Both sides can be recovered **in place, on the original disk**: the design document (section 4.8) describes reinstalling Windows while formatting `C:` only, reinstalling Ubuntu while formatting root only (never the ESP), and the non-reinstall path for bootloader-only damage.
 
@@ -72,7 +72,7 @@ Completion is judged by `docs/08-verification.md` being fully green — not by "
 
 ## Robustness measures
 
-Losing a working system costs far more than reinstalling it, so the Ubuntu side is hardened with nine measures: pre-change snapshots backed by a dedicated 20 GiB snapshot partition, old kernels kept alongside `GRUB_DEFAULT=saved` for one-shot booting, a permanent rescue USB, persistent journald for post-crash diagnosis, zram plus `systemd-oomd` for memory pressure, an always-on SSH rescue channel, a conservative update policy (security updates only, never auto-reboot), SMART monitoring, and `nofail` on every non-root mount. Details in `docs/design/00-design.md` section 4.7.
+Losing a working system costs far more than reinstalling it, so the Ubuntu side is hardened with nine measures: pre-change snapshots backed by a dedicated 15 GiB snapshot partition, old kernels kept alongside `GRUB_DEFAULT=saved` for one-shot booting, a permanent rescue USB, persistent journald for post-crash diagnosis, zram plus `systemd-oomd` for memory pressure, an always-on SSH rescue channel, a conservative update policy (security updates only, never auto-reboot), SMART monitoring, and `nofail` on every non-root mount. Details in `docs/design/00-design.md` section 4.7.
 
 ## Risks
 
