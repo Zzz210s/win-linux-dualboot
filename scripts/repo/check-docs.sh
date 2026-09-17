@@ -7,6 +7,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
 REQ=("## 目标" "## 前置条件" "## 步骤" "## 验证" "## 失败处理" "## 回滚")
 PH='TBD|TODO|待补|FIXME|占位符'
+# emoji 字节模式(F0 9F = U+1F000 及以上;E2 98/99/9A/9B = U+2600~U+26FF 符号区;EF B8 8F = 变体选择符)。
+# 本机 grep -P 不支持多字节码点范围(恒 exit 2,且 LC_ALL=C.UTF-8 会把 ASCII 判成 emoji),故用 LC_ALL=C 下的字节级 -E 匹配。
+EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xef\xb8\x8f')"
 # 手册应有清单:文档尚未写出时如实报 MISSING,而不是静默跳过
 EXPECTED=(00-overview.md 01-firmware.md 02-windows.md 03-preflight.md 04-ubuntu.md
   05-first-boot.md 06-decommission.md 07-rescue.md 08-verification.md 09-risks.md 10-faq.md)
@@ -33,14 +36,15 @@ for f in "${files[@]}"; do
   if grep -nE "$PH" "$f" >/dev/null; then
     echo "PLACEHOLDER $f"; grep -nE "$PH" "$f" | head -3; fail=1
   fi
-  if grep -qP '[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]' "$f" 2>/dev/null; then
+  if LC_ALL=C grep -qE "$EMOJI" "$f"; then
     echo "EMOJI $f"; fail=1
   fi
   while IFS= read -r link; do
     case "$link" in http*|"") continue ;; esac
     d="$(dirname "$f")"
     [ -e "$d/$link" ] || { echo "BROKEN_LINK $f -> $link"; fail=1; }
-  done < <(grep -oE '\]\([^)#][^)]*\)' "$f" | sed -E 's/^\]\(//; s/\)$//' | grep -E '\.md$|\.sh$|\.ps1$|\.txt$|\.snippet$|\.conf$')
+    # 先剥离锚点(#...),再做扩展名过滤;否则 "x.md#锚点" 会被整条丢弃而漏检
+  done < <(grep -oE '\]\([^)#][^)]*\)' "$f" | sed -E 's/^\]\(//; s/\)$//; s/#.*$//' | grep -E '\.md$|\.sh$|\.ps1$|\.txt$|\.snippet$|\.conf$')
 done
 
 if [ "$fail" -eq 0 ]; then echo "check-docs: OK"; else echo "check-docs: FAIL"; fi

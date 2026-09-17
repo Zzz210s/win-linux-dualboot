@@ -4,6 +4,11 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
 PS="$(command -v pwsh || command -v powershell.exe || true)"
+SC="$(command -v shellcheck || true)"
+
+# 环境缺失的检查项必须显式披露为 SKIP;SKIP 不影响退出码(退出码只由 fail 决定)。
+[ -n "$SC" ] || echo "SKIP shellcheck (not installed)"
+[ -n "$PS" ] || echo "SKIP powershell syntax (no pwsh)"
 
 while IFS= read -r f; do
   n=$(wc -l < "$f")
@@ -11,7 +16,7 @@ while IFS= read -r f; do
   case "$f" in
     *.sh)
       bash -n "$f" || { echo "SYNTAX $f"; fail=1; }
-      if command -v shellcheck >/dev/null; then
+      if [ -n "$SC" ]; then
         shellcheck -S warning "$f" || { echo "SHELLCHECK $f"; fail=1; }
       fi ;;
     *.ps1)
