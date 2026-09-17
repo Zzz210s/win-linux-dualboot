@@ -1,0 +1,20 @@
+# 本机部署产物:每台设备各一份,本地留存,永不入库
+baseline/*
+!baseline/README.md
+
+# AI 运行与编辑产物(全局规则:AI 文件不上远程)
+.claude/
+.cursor/
+.pi/
+.aider*
+AGENTS.md
+CLAUDE.md
+docs/superpowers/
+.codegraph/
+
+# 杂物
+*.tmp
+*.bak
+*.log
+.DS_Store
+Thumbs.db
