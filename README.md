@@ -26,6 +26,15 @@ Every step in this playbook obeys these. They, not any particular tool, are what
 | I3 | Never overwrite `\EFI\Microsoft\`; never change the `{bootmgr}` path | A third party owning the Windows boot path |
 | I4 | Before touching the partition table or firmware settings: **back up the baseline** (BitLocker suspended, ESP imaged, firmware entries snapshotted) | No way back except reinstalling |
 
+## Isolation on both sides
+
+The plan isolates system from data on **both** operating systems, so a crash never costs you the other half of the machine:
+
+- **Windows**: a 200 GiB system partition (`C:`) plus a ~590 GiB data partition (`D:`); known folders, game libraries and container images are redirected to `D:`. Reinstalling Windows formats `C:` only.
+- **Ubuntu**: a 140 GiB root plus a dedicated 20 GiB snapshot partition. Rolling back a bad upgrade restores root without destroying snapshot history.
+
+Both sides can be recovered **in place, on the original disk**: the design document (section 4.8) describes reinstalling Windows while formatting `C:` only, reinstalling Ubuntu while formatting root only (never the ESP), and the non-reinstall path for bootloader-only damage.
+
 ## Target device class
 
 Applicable when the machine matches all of:
@@ -55,7 +64,7 @@ Start at `docs/00-overview.md` and follow the stages in order. Each stage ends w
 
 ## Verification
 
-Completion is judged by `docs/08-verification.md` being fully green — not by "it installed". The verification set includes a **reversible decommission drill**: temporarily remove `\EFI\ubuntu\`, confirm the machine still boots Windows unattended with no `grub rescue` prompt, then restore from the ESP image. A separate group verifies robustness: a snapshot rollback drilled once, persistent journald, a reachable SSH rescue channel, a conservative update policy and SMART disk health.
+Completion is judged by `docs/08-verification.md` being fully green — not by "it installed". The verification set includes a **reversible decommission drill**: temporarily remove `\EFI\ubuntu\`, confirm the machine still boots Windows unattended with no `grub rescue` prompt, then restore from the ESP image. A separate group verifies robustness: a snapshot rollback drilled once, persistent journald, a reachable SSH rescue channel, a conservative update policy and SMART disk health. A third group verifies in-place recovery: system/data isolation is real, and both reinstall paths have been walked through.
 
 ## Robustness measures
 
