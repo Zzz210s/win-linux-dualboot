@@ -196,7 +196,7 @@ loginctl show-session "$(loginctl | awk -v u="$USER" '$3==u {print $1; exit}')" 
 
 MUX 分支(指向 L3,不在本步骤展开):**混合模式下装完驱动仍点不亮/黑屏时**,按设计 3.17 走 [L3 手册](04-ubuntu.md) 步骤 5(b)的 MUX 分支——固件切"独显直连"先拿到可用系统,再权衡是否切回混合。必须记录代价:所有进程占用独显显存、续航明显变差、日后本地推理显存被显示输出吃掉。**不因驱动问题降级发行版**;驱动不认时的顺序是:换更新内核(HWE)→ 换驱动版本 → 才考虑发行版问题(设计第 9 节)。
 
-引导菜单阶段黑屏(键盘仍可用):按决策 3.19 处置——`GRUB_TERMINAL=console` 后 `update-grub`(模板 `templates/grub-defaults.snippet` 由后续任务交付),日常切换系统改用步骤 7 的一次性入口。此时菜单黑屏**不等于**系统损坏,不要重装。
+引导菜单阶段黑屏(键盘仍可用):按决策 3.19 处置——`GRUB_TERMINAL=console` 后 `update-grub`(模板 [templates/grub-defaults.snippet](../templates/grub-defaults.snippet),合并动作见步骤 6 的 R3 行),日常切换系统改用步骤 7 的一次性入口。此时菜单黑屏**不等于**系统损坏,不要重装。
 
 变更纪律(R1 + 3.18):装驱动、换内核之前先建快照点(步骤 6 第 1 小节);内核与驱动**不参与自动更新**;大版本升级前同样先快照。
 
@@ -241,13 +241,29 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeI
 
 ### 6. 健壮性配置(设计 3.14 与 4.7 的 R1-R9)
 
-做什么:按九项措施把"不会因为一次升级、一个驱动或一块盘的问题而失去可用系统"落到机器上。全部动作由 `scripts/linux/storage.sh`、`scripts/linux/hardening.sh` 承载,由 `scripts/linux/first-boot.sh` 依次编排(三个脚本均由后续任务交付);手动执行的等价命令见下表的"判据"列。
+做什么:按九项措施把"不会因为一次升级、一个驱动或一块盘的问题而失去可用系统"落到机器上。全部动作由 `scripts/linux/storage.sh`(交换空间与 zram)、`scripts/linux/hardening.sh`(R1-R9 六项)承载,由 `scripts/linux/first-boot.sh` 依次编排(三个脚本均已交付,位于 `scripts/linux/`);手动执行的等价命令见下表的"判据"列。
+
+三个脚本都**默认 dry-run**:不加 `--apply` 只打印计划、不改系统。先看计划,再执行:
+
+```bash
+# 1) 先看计划(不需要 root;日志改落 <TMPDIR>/dbk-<uid>/)
+bash scripts/linux/first-boot.sh --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID>
+# 2) 再真正执行(需要 root):模块顺序固定为 storage -> hardening -> mount-shared -> graphics
+sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID>
+```
+
+- **安装前置**:zram 单元由 `systemd-zram-generator` 提供,该包必须在 zram 配置落地前装好。`storage.sh --apply` 会自己 `apt-get install -y systemd-zram-generator` 一次(已装则跳过;`DBK_SKIP_APT=1` 时只跳过安装,便于无 apt 环境做静态校验)。若脚本报"必须先执行 `sudo apt install -y systemd-zram-generator` 再重跑",照提示装完重跑 `storage.sh --apply` 即可,否则 R6 的 zram 半项判据不成立;
+- **`--uuid` 与 `--snapshot-uuid` 的先后**:两个 UUID 都先交给 `mount-shared.sh` 写 `fstab`(共享盘行与快照分区行各自独立判定,第一次只给 `--uuid` 也能跑,补上 `--snapshot-uuid` 重跑会补写快照行);`--snapshot-uuid` 决定 `/snapshots` 是否可用——**它是 R1/R2 的落点,缺了它 R1/R2 判据不可能达成**;
+- **退出码不能当判据**:`first-boot.sh` 的退出码**恒为 0**(单模块失败不阻塞登录),要看的是 `/var/log/dbk/first-boot-summary.txt`——表头 `模块 | 状态 | 关键输出`,末尾有 `失败项: N;跳过项: M` 与失败模块清单。`--apply` 之后先看这个文件,再看 `/var/log/dbk/<模块>.log`;
+- **`hardening.sh` 要在 `mount-shared.sh` 之后复跑一次**:编排顺序是 hardening 在 mount-shared 之前,所以首次 `--apply` 时 `/snapshots` 还没挂上,R1/R2 会记 `fail`(属预期,不是缺陷);`mount-shared` 记 `ok` 后执行 `sudo bash scripts/linux/hardening.sh --apply`,R1/R2 才会记为 `ok`;
+- **单模块重跑**(排障,全部幂等):`sudo bash scripts/linux/storage.sh --apply`、`sudo bash scripts/linux/hardening.sh --apply`、`sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID> --apply`;
+- **`graphics.sh` 尚未交付时**(任务 9):`first-boot.sh` 检测到该文件不存在会打印提示级消息并把 `graphics` 记为 `skipped`(`graphics.sh 未交付(任务 9):NVIDIA 驱动与 PRIME 未配置`),**不改变退出码、不阻塞登录**;此时显卡驱动按步骤 3 手工收敛,交付后单独跑 `sudo bash scripts/linux/graphics.sh --apply`。
 
 | # | 措施 | 落地 | 判据 / 回滚点 |
 |---|---|---|---|
 | R1 | **变更前快照** | Timeshift 目标为 `/snapshots`,**仅在变更前手动创建**(不强加定时任务),在装驱动/换内核之前先建一份 | `/snapshots` 下有快照;回滚 = 从快照整体还原 |
 | R2 | **独立快照分区** | 15GiB ext4 挂 `/snapshots`(L3 已建,本步骤确认可写),保留 3 份 | `findmnt /snapshots`;删除快照即回收空间 |
-| R3 | **多内核保留 + 一次性启动** | 不启用 `Remove-Unused-Kernel-Packages`;`GRUB_DEFAULT=saved`(模板由后续任务交付) | GRUB "Advanced options" 有旧内核;`grep GRUB_DEFAULT /etc/default/grub` |
+| R3 | **多内核保留 + 一次性启动** | 不启用 `Remove-Unused-Kernel-Packages`;`GRUB_DEFAULT=saved`(模板 [templates/grub-defaults.snippet](../templates/grub-defaults.snippet),由本步骤的 hardening 合并) | GRUB "Advanced options" 有旧内核;`grep GRUB_DEFAULT /etc/default/grub` |
 | R4 | **永久救援介质** | L3 的安装 U 盘不回收,标记"已验证可用" | 介质在位;从 U 盘能进 live 环境 |
 | R5 | **崩溃可观测** | journald 持久化(`/var/log/journal`)+ 自建日志目录 `/var/log/dbk/` | `ls -d /var/log/journal`;`journalctl -b -1` 可读 |
 | R6 | **OOM 与内存压力防护** | zram(约 8GiB)+ swapfile 4GiB,确认 `systemd-oomd` 启用 | `zramctl`、`swapon --show`、`systemctl is-enabled systemd-oomd` |
@@ -360,6 +376,7 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeI
 | 两系统时间仍差整时区 | 两边口径不统一:Linux 侧确认 `timedatectl` 为 `RTC in local TZ: no`;Windows 侧配 `RealTimeIsUniversal=1` 或反过来,二者只能选一种;改完各自重启核对一次 |
 | 蓝牙仍要反复重配对 | 按步骤 5 的顺序重做:**先在 Linux 配对 -> 回 Windows 重新配对 -> 再回 Linux 以 `--windows-keys` 导入**;顺序错了就以 Windows 侧为准重来一遍。反向写 Windows 注册表不在本方案内 |
 | 共享盘上文件"设备忙 / 目录非空" | 先在 Windows 侧关掉资源管理器预览、搜索索引、同步客户端,再回 Linux 操作(设计 5.3 风险与缓解表末行) |
+| `first-boot-summary.txt` 里 `hardening` 记 `fail`,关键输出提到 `/snapshots` 未挂载 | 属预期(编排顺序是 hardening 先于 mount-shared):先按步骤 1.2 用 `--snapshot-uuid` 把快照分区写进 `fstab` 并挂载,再复跑 `sudo bash scripts/linux/hardening.sh --apply`,让 R1/R2 记为 `ok` |
 | 快照创建失败或 `/snapshots` 将满 | 删除最旧的一份(默认保留 3 份)后重试;**快照失败即视为"不得执行本次变更"**(第 9 节"快照分区容量耗尽"行):先解决快照,再谈装驱动/换内核 |
 | 内核/驱动更新后黑屏或不进桌面 | 走 R3 + R1:GRUB "Advanced options" 选旧内核启动 → 从 `/snapshots` 快照回滚;同时核对 `Package-Blacklist` 是否含 `linux-`、`nvidia-`(决策 3.18),避免复发 |
 | 桌面挂死但系统仍在 | 走 R7/R5:从另一台机器 SSH 登录(`ss -tlnp \| grep :22` 先确认在听),或切 TTY 看 `journalctl -b -1 -p err`;不要在桌面无响应时长按电源 |

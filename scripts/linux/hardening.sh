@@ -8,7 +8,7 @@
 #        R9 apt install smartmontools -> enable --now smartd -> 记录 smartctl -H 摘要;
 #        R7 apt install openssh-server -> enable --now ssh -> 记录 22 端口监听;
 #        R3 grub-defaults.snippet 合并进 /etc/default/grub(先备份)-> update-grub;
-#        R1/R2 apt install timeshift -> 说明快照口径(/snapshots、保留 3 份、只在变更前手动创建,不设定时任务)。
+#        R1/R2 先查 /snapshots 已挂载(未挂载记 fail 并提示在 mount-shared.sh 之后复跑)-> apt install timeshift -> 说明快照口径(保留 3 份、只在变更前手动创建、不设定时任务)。
 # 环境开关:DBK_SKIP_APT=1 只跳过 apt-get install(文件与 systemd 动作照做),用于无网络/无 apt 的静态校验。
 # 日志追加到 /var/log/dbk/hardening.log;每项结果打成 DBK-RESULT 行(供 first-boot.sh 摘要提取)。
 # 退出码:0=无失败项(跳过不影响),1=有失败项。设计依据:设计 4.7 的 R1-R9、第 7 节故障矩阵。
@@ -17,8 +17,10 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 [ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
+[ -r "$HERE/dbk-apt.sh" ] || { echo "错误: 缺少 $HERE/dbk-apt.sh" >&2; exit 1; }
 LOG="${DBK_LOG:-/var/log/dbk/hardening.log}"
 source "$HERE/dbk-log.sh"
+source "$HERE/dbk-apt.sh"
 
 TPL="$ROOT/templates"
 JOURNALD_CONF="${DBK_JOURNALD_CONF:-/etc/systemd/journald.conf.d/99-dbk-persistent.conf}"
@@ -58,7 +60,7 @@ if [ "$APPLY" -ne 1 ]; then
   log "R9 磁盘健康:apt-get install -y smartmontools;enable --now smartd;判据 smartctl -H 摘要与 smartd active"
   log "R7 SSH 救援:apt-get install -y openssh-server;enable --now ssh;判据 ss -tlnp | grep :22"
   log "R3 引导:$TPL/grub-defaults.snippet 合并进 $GRUB_FILE(备份 $GRUB_BAK)-> update-grub"
-  log "R1/R2 快照:apt-get install -y timeshift;/snapshots 保留 3 份、只在变更前手动创建(不设定时任务)"
+  log "R1/R2 快照:先查 /snapshots 已挂载(未挂载即 fail,需在 mount-shared.sh --snapshot-uuid 之后复跑);apt-get install -y timeshift;保留 3 份、只在变更前手动创建"
   log "环境开关:DBK_SKIP_APT=1 只跳过 apt-get install,文件与 systemd 动作照做"
   log "dry-run 结束:未修改任何文件。确认无误后加 --apply 重跑:sudo bash scripts/linux/hardening.sh --apply"
   exit 0
@@ -82,14 +84,7 @@ install_snippet() {
   log "已安装 $tpl -> $dst"
 }
 
-# apt 安装:返回 0=成功 9=按开关跳过 1=失败
-apt_install() {
-  if [ "$SKIP_APT" = 1 ]; then log "DBK_SKIP_APT=1:跳过 apt-get install $*"; return 9; fi
-  command -v apt-get >/dev/null 2>&1 || { log "错误: 无 apt-get,无法安装 $*"; return 1; }
-  local out
-  if out="$(DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" 2>&1)"; then log "apt-get install $*: 成功"; return 0; fi
-  log "错误: apt-get install $* 失败: $(printf '%s' "$out" | tail -n 3 | tr '\n' ' ')"; return 1
-}
+# apt 安装:apt_install() 由 dbk-apt.sh 提供(0=成功 9=按 DBK_SKIP_APT 跳过 1=失败),本脚本不再重复实现
 
 run_update_grub() {
   if command -v update-grub >/dev/null 2>&1; then update-grub
@@ -163,7 +158,14 @@ item_r3() {
 
 item_r1() {
   local name="R1/R2 变更前快照(timeshift)" st snap
-  if findmnt -rn /snapshots >/dev/null 2>&1; then snap="$(findmnt -rn -o SOURCE,FSTYPE,SIZE /snapshots | head -n 1)"; else snap="未挂载(需 mount-shared.sh --snapshot-uuid,见设计 R2)"; fi
+  if findmnt -rn /snapshots >/dev/null 2>&1; then
+    snap="$(findmnt -rn -o SOURCE,FSTYPE,SIZE /snapshots | head -n 1)"
+  else
+    # first-boot 的顺序是 hardening 在 mount-shared 之前,首次 --apply 时 /snapshots 必然未挂载;
+    # 此时 R2 判据(设计 4.7)未达成,不能记 ok,否则用户会误以为快照已就绪
+    record "$name" fail "/snapshots 未挂载:R2 判据未达成;本项需在 mount-shared.sh --snapshot-uuid 完成后再复跑 bash scripts/linux/hardening.sh --apply"
+    return
+  fi
   apt_install timeshift; st=$?
   if [ "$st" = 9 ]; then record "$name" skip "DBK_SKIP_APT=1:跳过安装;/snapshots=$snap;口径:保留 3 份、只在变更前手动创建"; return; fi
   if [ "$st" != 0 ]; then record "$name" fail "安装 timeshift 失败;/snapshots=$snap"; return; fi

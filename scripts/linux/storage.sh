@@ -5,7 +5,7 @@
 #   默认 dry-run:只打印将执行的动作与判据,不改动系统。
 #   --apply(需要 root)按序执行:fallocate -l <size> <file> -> chmod 600 -> mkswap -> swapon
 #   -> 校验 /etc/fstab 的 swapfile 行,缺则先备份为 /etc/fstab.dbk.bak 再追加
-#   -> 安装 templates/zram-generator.conf 到 /etc/systemd/zram-generator.conf(内容不同则先备份)
+#   -> 确保 systemd-zram-generator 已安装(缺则 apt-get install,DBK_SKIP_APT=1 跳过)-> 安装 templates/zram-generator.conf 到 /etc/systemd/zram-generator.conf(内容不同则先备份)
 #   -> systemctl daemon-reload 并启动 systemd-zram-setup@zram0.service
 #   -> 打印 swapon --show 与 zramctl 作为实测验证,并顺带报告 systemd-oomd(R6)。
 # 重跑幂等:swapfile 已存在则跳过创建、已在交换列表则跳过 swapon;fstab/zram 配置只补不覆盖。
@@ -19,8 +19,10 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 [ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
+[ -r "$HERE/dbk-apt.sh" ] || { echo "错误: 缺少 $HERE/dbk-apt.sh" >&2; exit 1; }
 LOG="${DBK_LOG:-/var/log/dbk/storage.log}"
 source "$HERE/dbk-log.sh"
+source "$HERE/dbk-apt.sh"
 
 FSTAB="${DBK_FSTAB:-/etc/fstab}"
 FSTAB_BAK="$FSTAB.dbk.bak"
@@ -28,6 +30,8 @@ SWAPFILE="${DBK_SWAPFILE:-/swapfile}"
 SWAP_SIZE="${DBK_SWAP_SIZE:-4G}"
 ZRAM_CONF="${DBK_ZRAM_CONF:-/etc/systemd/zram-generator.conf}"
 ZRAM_TPL="${DBK_ZRAM_TPL:-$ROOT/templates/zram-generator.conf}"
+ZRAM_PKG="${DBK_ZRAM_PKG:-systemd-zram-generator}"
+SKIP_APT="${DBK_SKIP_APT:-0}"
 APPLY=0
 RC=0
 
@@ -55,6 +59,7 @@ done
 
 case "$SWAPFILE" in /*) ;; *) die "--swapfile 需要绝对路径: $SWAPFILE" ;; esac
 case "$SWAP_SIZE" in *[!0-9GgMmKk]*|"") die "--size 只允许数字与单位 G/M/K: $SWAP_SIZE" ;; esac
+case "$SKIP_APT" in 1|0) ;; *) die "DBK_SKIP_APT 只接受 0/1: $SKIP_APT" ;; esac
 [ -r "$ZRAM_TPL" ] || die "缺少 zram 模板 $ZRAM_TPL"
 for key in 'zram-size' 'compression-algorithm' 'swap-priority'; do
   grep -qE "^[[:space:]]*$key[[:space:]]*=" "$ZRAM_TPL" || die "模板 $ZRAM_TPL 缺少 $key(决策 3.8)"
@@ -63,8 +68,8 @@ grep -qF 'min(ram / 2, 8192)' "$ZRAM_TPL" || log "警告: 模板 zram-size 不�
 
 log "=== 交换空间计划(决策 3.8:不做休眠、不建 swap 分区)==="
 log "1) $SWAPFILE($SWAP_SIZE):fallocate -l -> chmod 600 -> mkswap -> swapon"
-log "2) $FSTAB:缺 swapfile 行时先备份为 $FSTAB_BAK 再追加 '$SWAPFILE none swap sw 0 0'"
-log "3) 安装 $ZRAM_TPL -> $ZRAM_CONF(内容不同时先备份为 $ZRAM_CONF.dbk.bak)"
+log "2) $FSTAB:缺 swapfile 行时先备份为 $FSTAB_BAK 再追加 '$SWAPFILE none swap sw,nofail 0 0'"
+log "3) 确保 $ZRAM_PKG 已安装(缺则 apt-get install -y;DBK_SKIP_APT=1 跳过),再安装 $ZRAM_TPL -> $ZRAM_CONF(内容不同时先备份为 $ZRAM_CONF.dbk.bak)"
 log "4) systemctl daemon-reload && systemctl start systemd-zram-setup@zram0.service(zram 约 8GiB)"
 log "5) 验证:swapon --show 列出 $SWAPFILE、zramctl 列出 zram0;并报告 systemd-oomd 状态"
 log "6) 回退:swapoff $SWAPFILE && rm -f $SWAPFILE;删该 fstab 行与 $ZRAM_CONF(都不动分区表)"
@@ -74,6 +79,12 @@ if [ "$APPLY" -ne 1 ]; then
   exit 0
 fi
 [ "$(id -u)" -eq 0 ] || die "--apply 需要 root:sudo bash $0 --apply"
+
+# 0) zram 依赖包:zram 单元由该包提供;缺包则 systemd-zram-setup@zram0.service 起不来(R6 半项失效)
+#    先查后装(重跑不重复下载);DBK_SKIP_APT=1 时只跳过安装,便于无 apt 环境做静态校验
+apt_ensure "$ZRAM_PKG" "sudo apt install -y $ZRAM_PKG"; pkg_st=$?
+if [ "$pkg_st" -eq 1 ]; then RC=1; fi
+if [ "$pkg_st" -eq 9 ]; then log "DBK_SKIP_APT=1:未安装 $ZRAM_PKG,按静态校验继续(下面 zram 判据会因缺包记 fail)"; fi
 
 # 1) swapfile:不存在则创建;存在则跳过创建(重跑幂等),未启用时补 swapon
 if [ ! -e "$SWAPFILE" ]; then
@@ -104,11 +115,13 @@ if [ -e "$SWAPFILE" ]; then
 fi
 
 # 2) fstab:已有该路径的条目则跳过;否则备份后追加(备份只在不存在时创建)
-SWAP_LINE="$SWAPFILE  none  swap  sw  0 0"
-cur="$(grep -F "$SWAPFILE" "$FSTAB" 2>/dev/null | grep -v '^[[:space:]]*#' || true)"
+SWAP_LINE="$SWAPFILE  none  swap  sw,nofail  0 0"
+# 按首个字段精确匹配(不用 grep -F:否则 /swapfile2、/swapfile.bak 会被误判为已有条目而静默不落盘)
+cur="$(awk -v p="$SWAPFILE" '!/^[[:space:]]*#/ && $1==p' "$FSTAB" 2>/dev/null || true)"
 if [ -n "$cur" ]; then
   log "fstab 已有 $SWAPFILE 条目,跳过写入: $(printf '%s' "$cur" | head -n 1)"
   case "$cur" in *swap*) ;; *) log "警告: 该条目未见 swap 关键字,请手工核对 $FSTAB" ;; esac
+  case "$cur" in *nofail*) ;; *) log "警告: 该条目缺 nofail(设计第 8 节 F 组判据:非 root 条目均带 nofail),请手工核对 $FSTAB" ;; esac
 else
   if [ ! -e "$FSTAB_BAK" ]; then
     cp -a "$FSTAB" "$FSTAB_BAK" && log "已备份 $FSTAB -> $FSTAB_BAK(重跑不覆盖首次备份)" || { log "错误: 备份 $FSTAB 失败"; RC=1; }
@@ -169,7 +182,7 @@ $(printf '%s\n' "$zr_out" | sed 's/^/  /')"
   if [ "$st" -eq 0 ] && printf '%s\n' "$zr_out" | grep -q '^zram0'; then
     log "DBK-RESULT ok zram0 已建立(swap-priority=100,优先于 swapfile)"
   else
-    log "DBK-RESULT fail zramctl 未列出 zram0(确认已装 systemd-zram-generator)"; RC=1
+    log "DBK-RESULT fail zramctl 未列出 zram0(硬前置: 必须先执行 sudo apt install -y $ZRAM_PKG 再重跑本脚本)"; RC=1
   fi
 else
   log "DBK-RESULT fail zram 无 zramctl 命令,无法验证(可看 /dev/zram0 与 lsblk)"; RC=1
