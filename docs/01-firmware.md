@@ -14,9 +14,9 @@
 | Secure Boot | 保持开启,不关闭、不换密钥 | `SECURE_BOOT` |
 | Fast Boot | 关闭(指固件里的 Fast Boot,不是 Windows 的"快速启动") | 无(固件项,不单列参数) |
 | CSM / Legacy 引导 | 关闭(仅 UEFI) | 无 |
-| 启动顺序 | 本阶段不改动;`BootOrder` 首位仍是 Windows Boot Manager | 不变量 I1、I2 |
+| 启动顺序 | 本阶段不改动;**若设备上已有 Windows**:`BootOrder` 首位为 `Windows Boot Manager`;**若磁盘为空 / 尚未安装 Windows**:只需确认不存在排在首位的 `ubuntu` 条目,且本阶段未执行过 `efibootmgr -o` | 不变量 I1、I2 |
 | 目标磁盘 | 型号与容量与参数表一致 | `DISK_MODEL`、`DISK_SIZE` |
-| 安装介质 | 官方镜像 + 已核对 SHA256 | 无 |
+| 安装介质 | 官方镜像;Ubuntu 侧已核对官方 SHA256,Windows 侧来自微软官方下载域(官方未发布镜像哈希,不做 SHA256 比对) | 无 |
 
 完成判据:固件设定值与介质校验值记录齐全(`baseline/00-firmware.md` 字段无空缺),且在 Ubuntu live 环境中通过"验证"一节的全部检查点。
 
@@ -31,7 +31,7 @@
 - 一块 ≥8GiB 的 U 盘(两个系统建议各用一块,或用 Ventoy 一盘多 ISO);U 盘会被清空,先备份其中数据。
 - 官方 Windows 11 ISO 与 Ubuntu 26.04 LTS ISO 的下载途径,以及一台可用于下载与写盘的联网电脑。
 - 先核对"不适用"情形,命中就停下:存储控制器模式被 OEM 锁定且不可改,或设备无法整盘格式化(见[入口文档](00-overview.md)偏离表)。
-- 设备上已有的 Windows 是在 RAID On / VMD 模式下装好的:不要直接改模式,先读本文件末尾的"附录分支:已按 RAID On / VMD 装好系统时"。
+- 设备上已有的 Windows 是在 RAID On / VMD 模式下装好的,**且需要保留该系统(不走 L1 整盘重装)时**:不要直接改模式,先读本文件末尾的"附录分支:已按 RAID On / VMD 装好系统时"。**若走 L1 整盘重装**(本方案主路径),旧系统不需要保持可用,直接在步骤 2 把模式改成 AHCI / NVMe(关闭 VMD / RAID On)后进 live 环境即可,不需要驱动预置与安全模式切换。
 
 ## 步骤
 
@@ -89,7 +89,9 @@
 | Windows 11 ISO | 微软官方下载页 https://www.microsoft.com/software-download/windows11 | 无,不走第三方 |
 | Ubuntu 26.04 LTS ISO | 官方发布页 https://releases.ubuntu.com/ | 华为云镜像 https://repo.huaweicloud.com/ubuntu-releases/ |
 
-**信任模型固定为一条**:镜像站只当下载加速器,不当信任源。ISO 的 SHA256 必须与**官方发布值**逐字符一致;唯一判据是官方发布页的 `SHA256SUMS`(路径形如 `https://releases.ubuntu.com/<版本号>/SHA256SUMS`)及其签名 `SHA256SUMS.gpg`。
+**信任模型固定为一条**:镜像站只当下载加速器,不当信任源。**Ubuntu ISO** 的 SHA256 必须与**官方发布值**逐字符一致;唯一判据是官方发布页的 `SHA256SUMS`(路径形如 `https://releases.ubuntu.com/<版本号>/SHA256SUMS`)及其签名 `SHA256SUMS.gpg`。
+
+**Windows ISO 官方校验值的获取途径**:微软官方下载页(https://www.microsoft.com/software-download/windows11)不发布 Windows 11 ISO 的 SHA256 值,也没有 `SHA256SUMS` 一类的官方摘要页,所以 **Windows ISO 不做 SHA256 比对(理由:官方未发布该镜像哈希)**,改用两项替代约束保证来源可信:(1) ISO 必须从微软官方下载域(`microsoft.com` / `download.microsoft.com`)直接取得,不经任何第三方盘中转;(2) 以官方安装器自身的完整性校验为准——写入 U 盘后能正常引导进入安装界面并完成安装即为可用。若不满足 (1),或引导阶段报介质损坏,一律从官方域重新下载。日后若微软发布该镜像的官方哈希,以官方发布值为准并补做比对。
 
 校验命令(Linux 侧):
 
@@ -99,7 +101,7 @@ grep ' ubuntu-26.04-desktop-amd64.iso' SHA256SUMS | sha256sum -c -
 # 期望输出:ubuntu-26.04-desktop-amd64.iso: OK
 ```
 
-校验命令(Windows 侧):
+校验命令(Windows 侧,校验上面那个 Ubuntu ISO):
 
 ```powershell
 Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil -hashfile <iso> SHA256
@@ -111,9 +113,10 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 
 - 分盘写:Windows 用 Rufus(https://rufus.ie/,分区类型选 GPT、目标系统选 UEFI);Ubuntu 也可用 Rufus 或 `dd if=<iso> of=/dev/sdX bs=4M status=progress oflag=sync`。
 - 一盘多 ISO:Ventoy(https://www.ventoy.net/)。Ventoy 安装包自身的 SHA256 同样要核对,官方下载页提供校验值。
+- **Ventoy + Secure Boot 注意**:Secure Boot 全程开启(步骤 3)时,Ventoy 首次引导会进入 MOK 界面,需按提示完成密钥注册(选 `Enroll key` / `Enroll MOK`,设一次密码,重启后在 MOK 界面再确认一次),否则引导被拒并报 `Verification failed: (0x1A) Security Violation`。不接受该流程,就改用 Rufus / 官方工具写入(见上一行)。
 - 无论哪种方式,启动菜单里都应出现带 `UEFI:` 前缀的 U 盘条目。
 
-验证:两个 ISO 的 SHA256 均比对通过;U 盘在启动菜单里显示为 UEFI 条目(与步骤 6 一起做)。
+验证:Ubuntu ISO 的 SHA256 与官方发布值逐字符一致;Windows ISO 满足替代约束(来自微软官方下载域、官方安装器可正常引导安装);U 盘在启动菜单里显示为 UEFI 条目(与步骤 6 一起做)。
 
 ### 5. 安装前核对目标磁盘(防选错盘)
 
@@ -129,11 +132,11 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 
 ### 6. 记录厂商启动菜单键
 
-做什么:开机自检阶段按厂商键进入**一次性启动菜单**,确认它既能列出安装 U 盘、也能列出 `Windows Boot Manager`。这个键就是参数表的 `BOOT_MENU_KEY`,也是不变量 I2 的落地手段(用它替代改 `BootOrder`)。
+做什么:开机自检阶段按厂商键进入**一次性启动菜单**,确认它既能列出安装 U 盘,也能列出设备上已有的可引导条目(已有 Windows 时应列出 `Windows Boot Manager`;磁盘为空或尚未安装 Windows 时列不出该条目属正常)。这个键就是参数表的 `BOOT_MENU_KEY`,也是不变量 I2 的落地手段(用它替代改 `BootOrder`)。
 
 按键取值见下方"厂商差异表";有的机型需要先在固件里启用启动菜单(如 Acer 的 `F12 Boot Menu`,默认可能关闭)。
 
-验证:能在菜单里选中 U 盘并成功引导一次;按键值写入参数表。本步**不改启动顺序**,`BootOrder` 首位保持 Windows Boot Manager(I1)。
+验证:能在菜单里选中 U 盘并成功引导一次;按键值写入参数表。本步**不改启动顺序**(I1):设备上已有 Windows 时,`BootOrder` 首位仍是 `Windows Boot Manager`;磁盘为空或尚未安装 Windows 时,只需确认不存在排在首位的 `ubuntu` 条目,且本阶段未执行过 `efibootmgr -o`。
 
 ### 7. 生成 L0 产物 `baseline/00-firmware.md`
 
@@ -152,7 +155,7 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 | 启动菜单键 | 步骤 6 | 即参数表 `BOOT_MENU_KEY` |
 | CPU / GPU / 网卡型号 | 固件界面或系统信息 | 与 [baseline/README.md](../baseline/README.md) 列出的 L0 内容一致 |
 | 目标磁盘型号与容量 | 步骤 5 | 即参数表 `DISK_MODEL` / `DISK_SIZE` |
-| 安装介质校验值 | 步骤 4 | 每个 ISO 一行:文件名 + SHA256 值 + 校验值来源 |
+| 安装介质校验值 | 步骤 4 | 每个 ISO 一行:文件名 + 校验方式 + 校验值来源。Ubuntu ISO 填 SHA256 值与官方发布值来源;Windows ISO 填"来自微软官方下载域 + 官方安装器校验(官方未发布该镜像哈希)" |
 
 验证:`baseline/00-firmware.md` 存在且上表字段无空缺;`baseline/` 下除 `README.md` 外的产物一律不入库。
 
@@ -163,7 +166,7 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 | 厂商 | 启动菜单键 | 存储模式项名 | Secure Boot 项名 | 能否从第二块盘引导 | 备注 |
 |---|---|---|---|---|---|
 | Dell | `F12`(一次性启动菜单 One-Time Boot Menu);固件设置 `F2` | `SATA Operation`(取值 `AHCI` / `RAID On`);NVMe 机型在 `Storage` 下 | `Secure Boot`(位于 `Security` 或 `Boot` 菜单) | 以实际固件为准(多数机型启动菜单会枚举两块盘) | 键位与项名以实际固件为准。来源:Dell 官方 KB |
-| HP | `Esc`(Startup Menu)→ `F9`(`Boot Device Options`);固件设置 `F10` | `SATA Emulation` / `Storage` 下的 SATA 模式项;Intel 平台另有 `VMD` 开关 | `Secure Boot`(位于 `Security` / `Boot Options`) | **否:官方不支持从第二块盘启动** → 双盘分支下 ESP 必须留在第一块盘 | 硬约束,直接决定分区落盘位置,见[入口文档](00-overview.md)偏离表与[设计文档](design/00-design.md) 11.1 第 8 条。来源:HP 官方文档 |
+| HP | `Esc`(Startup Menu)→ `F9`(`Boot Device Options`);固件设置 `F10` | `SATA Emulation` / `Storage` 下的 SATA 模式项;Intel 平台另有 `VMD` 开关 | `Secure Boot`(位于 `Security` / `Boot Options`) | **否(据用户报告:惠普官方口径不支持从第二块盘启动;未获厂商一手文档确认,按最坏情况处理)** → 双盘分支下 ESP 必须留在第一块盘 | 硬约束,直接决定分区落盘位置,见[入口文档](00-overview.md)偏离表与[设计文档](design/00-design.md) 11.1 第 8 条(该条在设计文档 3.20 标注为社区报告,无厂商一手文档支撑)。因此本行按最坏情况处理:上台实测确认前,不得按"能用第二块盘引导"规划。来源:HP 官方支持文档,仅支撑 `Esc` / `F9` / `F10` 键位,不支撑本列结论 |
 | Lenovo | `F12`(部分机型 `Fn + F12`);部分消费机型用 Novo 键;固件设置 `F2` | `Storage` 下的 `SATA Controller Mode` / `Controller Mode`(取值含 `AHCI` / `Intel RST` / `RAID`) | `Secure Boot`(位于 `Security` / `Boot`) | 以实际固件为准(须在启动菜单里实测) | Novo 键机型从关机状态按 Novo 键,再选 `BIOS Setup` / `Boot Menu`。来源:Lenovo 官方支持文章 |
 | ASUS | `Esc`(部分机型 `F8`);固件设置 `F2` / `Del` | `SATA Configuration` / `SATA Mode Selection`;Intel 机型另有 `VMD setup menu`(`Intel VMD Controller`) | `Secure Boot`(位于 `Boot` / `Security`,项名可能是 `Secure Boot Control`) | 以实际固件为准 | 来源:ASUS 官方 FAQ |
 | Acer | `F12`(需先在固件里启用 `F12 Boot Menu`,默认可为关闭);固件设置 `F2` | `SATA Mode`(取值含 `AHCI` / `Intel RST with Optane` / `RAID`) | `Secure Boot`(位于 `Boot` / `Security`) | 以实际固件为准 | 若 `F12` 无反应,先回固件打开 `F12 Boot Menu`。来源:Acer 官方社区知识库 |
@@ -204,20 +207,22 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 | 2 | `mokutil --sb-state` | `SecureBoot enabled`(live 环境通常自带 `mokutil`) |
 | 3 | `lsblk -d -o NAME,MODEL,SIZE` | 出现 `nvme0n1`,型号与参数表 `DISK_MODEL` 一致、容量约 `953G` |
 | 4 | `sudo dmesg \| grep -i -E 'nvme\|ahci' \| head` | NVMe 控制器已被枚举、AHCI 驱动已绑定;**看不到任何磁盘**即控制器不是 AHCI / NVMe → 回步骤 2 |
-| 5 | `grep ' ubuntu-26.04-desktop-amd64.iso' SHA256SUMS \| sha256sum -c -` | 输出 `OK`(`SHA256SUMS` 取自官方发布页);Windows ISO 的校验值在 L1 的 Windows 侧用 `Get-FileHash` 复核 |
-| 6 | `sudo efibootmgr` | `BootOrder` 首位是 `Windows Boot Manager`;本阶段**未**执行过 `efibootmgr -o`(I1、I2) |
+| 5 | `grep ' ubuntu-26.04-desktop-amd64.iso' SHA256SUMS \| sha256sum -c -` | 输出 `OK`(`SHA256SUMS` 取自官方发布页);Windows ISO 官方未发布镜像哈希,不做 SHA256 比对,只复核其来自微软官方下载域(见步骤 4) |
+| 6 | `sudo efibootmgr` | 条件判据:**若设备上已有 Windows**,则 `BootOrder` 首位是 `Windows Boot Manager`;**若磁盘为空 / 尚未安装 Windows**(L0 早于 L1,`efibootmgr` 里可能根本没有 Windows 条目),只需确认不存在排在首位的 `ubuntu` 条目,且本阶段**未**执行过 `efibootmgr -o`(I1、I2) |
 | 7 | 人工复核 `baseline/00-firmware.md` | 步骤 7 的字段清单全部有值,无空缺 |
 
-7 项全部通过 = L0 完成,可进入 L1(`02-windows.md`)。任一项不通过则按"失败处理"解决后再进 L1。
+7 项全部通过 = L0 完成,可进入 L1(`02-windows.md`);第 6 行按上述条件判据计"通过",设备上不存在 Windows 条目本身不算失败。任一项不通过则按"失败处理"解决后再进 L1。
 
 ## 失败处理
 
 | 现象 | 处置 |
 |---|---|
 | live 环境 `lsblk` 看不到任何磁盘(或只看到 U 盘) | 控制器不是 AHCI / NVMe。回步骤 2 确认 `VMD` / `RAID On` / `Intel RST` 已关闭且已保存退出;固件里没有该选项则按偏离表判"不适用" |
-| Secure Boot 开着时 U 盘无法启动,或启动菜单里没有 UEFI 条目 | 介质写入模式不对:重新以 GPT + UEFI 方式写入(步骤 4);同时确认固件里 `Fast Boot` 为 `Disabled`、`CSM` 为 `Disabled` |
+| Secure Boot 开着时 U 盘无法启动,或启动菜单里没有 UEFI 条目 | 先排除 Secure Boot 拒绝(见下一行,尤其 Ventoy 的 MOK 注册),再查介质写入模式:重新以 GPT + UEFI 方式写入(步骤 4);同时确认固件里 `Fast Boot` 为 `Disabled`、`CSM` 为 `Disabled` |
+| 启动菜单里能选到 U 盘,但被 Secure Boot 拒绝(报 `Verification failed` / `Security Violation`) | 先查该 U 盘是不是 Ventoy:Ventoy 在 Secure Boot 下必须先完成 MOK 密钥注册(步骤 4);不是 Ventoy、或不愿走 MOK 流程,就改用 Rufus / 官方工具重新写入。**不要为绕过它关闭 Secure Boot**(步骤 3、回滚第 3 条) |
 | 启动菜单里同一 U 盘出现两个条目 | 一个是 legacy、一个是 `UEFI:`;只选带 `UEFI:` 前缀的那个,选错会装成 MBR 引导,与 L1 的 GPT 分区表冲突 |
-| SHA256 与官方发布值不一致 | 不要使用该 ISO:重新下载或换镜像站重下;仍不一致时检查下载链路(代理、断点续传工具) |
+| `sudo efibootmgr` 里看不到 `Windows Boot Manager` 条目 | 属正常情形:L0 早于 L1(Windows 全新安装),设备可能尚未安装 Windows(裸机 / 已抹盘 / 待装)。按验证第 6 行的条件判据,只要不存在排在首位的 `ubuntu` 条目即通过;**不得为"凑判据"去改动 `BootOrder`**(I1、I2)——本阶段绝不执行 `efibootmgr -o` |
+| Ubuntu ISO 的 SHA256 与官方发布值不一致 | 不要使用该 ISO:重新下载或换镜像站重下;仍不一致时检查下载链路(代理、断点续传工具) |
 | 改完控制器模式后原系统蓝屏 `INACCESSIBLE_BOOT_DEVICE` | 属于"已按 RAID On 装好系统"的情形:走"附录分支",先恢复原模式再预置驱动;不要反复强断电源 |
 | 固件里的存储模式项被锁定 / 置灰 | 先尝试清除固件管理员密码或更新固件(注意步骤 3 的复查要求);仍不可改则该设备不适用本方案,按[入口文档](00-overview.md)偏离表处置 |
 | `mokutil` 报 `SecureBoot disabled` | 回步骤 3 打开 `Secure Boot`,并把 `Secure Boot Mode` 从 `Custom` 改回 `Standard`;L3 的 shim 与 L4 的 NVIDIA 预签名包都以 Secure Boot 开启为前提 |
