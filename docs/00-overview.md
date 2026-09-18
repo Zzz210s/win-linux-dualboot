@@ -127,9 +127,11 @@
 
 注:产物名前缀 = 所在阶段号。L1 定稿分区表(`baseline/01-partitions.txt`)并记录激活状态(`baseline/01-activation.md`);ESP 文件树备份(`baseline/02-esp-backup/`,含 `manifest.sha256`)与固件启动项快照(`baseline/02-firmware-entries.txt`)是 **L2 生成的基线产物**(设计文档 4.3),L2 另产出分区快照 `baseline/02-partitions.txt`;四项是否齐备统一由 `baseline/02-preflight-report.md` 判定。
 
+逐项执行时的勾选记录:L0-L4 用 [checklists/deploy.md](../checklists/deploy.md),L5 的退役、引导救援、原地重装两法与基线回滚用 [checklists/rollback.md](../checklists/rollback.md)。
+
 **从哪一节开始读**:
 
-1. 第一次在本设备上部署:先读完本文件,然后严格按 L0 → L1 → L2 → L3 → L4 顺序推进,每阶段完成后再进入下一阶段。
+1. 第一次在本设备上部署:先读完本文件,然后严格按 L0 → L1 → L2 → L3 → L4 顺序推进,每阶段完成后再进入下一阶段;动手时对照 [checklists/deploy.md](../checklists/deploy.md) 逐行勾选。
 2. 只想确认"能不能用这套方案":读本文件的"适用设备类"与"目标分区表",再读 [设计文档](design/00-design.md) 第 1、3 节。
 3. 正在装、卡在某一步:回到对应阶段的文档;L2 报红项时不要跳过,先解决再进 L3。
 4. 机器出问题了:先 [07-rescue.md](07-rescue.md)(判断是引导层还是系统盘),**不要直接重装**。

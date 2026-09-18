@@ -35,7 +35,7 @@
 - **回 Windows 的入口可用**(设计第 6 节交接规则第 6 条):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1);二者任一可用即可。**任何情况下不得用 `efibootmgr -o` / `displayorder` 调整永久顺序**(I2)。
 - **另一台可 SSH 的机器**(用于 F6):F6 要求"从另一台机器 SSH 登录",需要第二台设备与目标机同网段。确无第二台设备时,按 [07-rescue.md](07-rescue.md) 第 8 节用本地 TTY 对照执行,并把"无第二台设备"记为**不阻塞的已知例外**(影响面:只能证明本地登录可用)。
 - **时间与重启预算**:本清单包含 A2(连续重启 3 次)、C 组(至少 3 轮双系统切换)、F1(回滚演练)、D 组(退役与重装推演),建议单独安排一次连续会话,**中途不要插入 Windows 更新**(一旦更新,基线即失效,见第 6 节规则 4 与 7.1 节巡检)。
-- **逐条执行记录**:本清单按勾选项给出判据,逐条动作用 `checklists/deploy.md` 记录(该清单属 Task 15 交付;交付前以各阶段手册的"验证"节与 [checklists/rollback.md](../checklists/rollback.md) 代替);高频疑问速查见 [docs/10-faq.md](10-faq.md)(同为 Task 15 交付)。
+- **逐条执行记录**:本清单按勾选项给出判据,逐条动作用 [checklists/deploy.md](../checklists/deploy.md)(L0-L4)与 [checklists/rollback.md](../checklists/rollback.md)(L5)记录;高频疑问速查见 [docs/10-faq.md](10-faq.md)。
 - **口径**:验收期间**不改分区表、不改固件设置**;若某项处置确实要动分区表或固件(如 `fstab` 之外的存储设置),先按 I4 重做基线备份再动手(见 [L2 手册](03-preflight.md)的基线生成步骤)。
 
 ## 步骤
