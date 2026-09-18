@@ -4,8 +4,9 @@
 # 用法:mount-shared.sh --uuid <SHARED_PART_UUID> [--apply] [--snapshot-uuid <UUID>]
 #                      [--user <name>] [--template <path>] [--log <path>]
 #   默认 dry-run:只打印将追加到 /etc/fstab 的两行,不改动系统。
-#   加 --apply 才真正改系统(需要 root),顺序为:备份 fstab(.dbk.bak)-> mkdir -p /mnt/shared
-#   -> 追加 fstab 行 -> systemctl daemon-reload -> mount -a -> 校验挂载 + 写测试(.dbk-write-test)
+#   加 --apply 才真正改系统(需要 root):备份 fstab(.dbk.bak,已存在则不覆盖)-> mkdir -p /mnt/shared
+#   -> 逐行核对后补写缺失的 fstab 行(共享盘行与快照分区行各自独立判定,重跑只补缺的那一行)
+#   -> systemctl daemon-reload -> mount -a(返回非零只警告)-> 校验挂载 + 写测试(.dbk-write-test)
 #   -> 调 xdg-redirect.sh --apply 完成文档类家目录重定向(家目录部分独立成脚本,可单独运行)。
 # 日志追加到 /var/log/dbk/mount-shared.log(该目录不可写时只输出到终端)。
 # 设计依据:设计文档 3.16 / 4.5 / 5.3(共享盘与四条前提)、第 7 节 L4 fstab 行。
@@ -13,10 +14,10 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-FSTAB=/etc/fstab
-FSTAB_BAK=/etc/fstab.dbk.bak
-SHARED_MNT=/mnt/shared
-SNAP_MNT=/snapshots
+FSTAB="${DBK_FSTAB:-/etc/fstab}"
+FSTAB_BAK="$FSTAB.dbk.bak"
+SHARED_MNT="${DBK_SHARED_MNT:-/mnt/shared}"
+SNAP_MNT="${DBK_SNAP_MNT:-/snapshots}"
 WRITE_TEST="$SHARED_MNT/.dbk-write-test"
 NTFS_OPTS_DEFAULT='rw,uid=1000,gid=1000,umask=022,windows_names,nofail,noatime'
 SNAP_OPTS='defaults,nofail,noatime'
@@ -29,17 +30,9 @@ TARGET_USER="${SUDO_USER:-${USER:-}}"
 FSTAB_TPL="${DBK_FSTAB_SNIPPET:-$ROOT/templates/fstab.snippet}"
 LOG="${DBK_LOG:-/var/log/dbk/mount-shared.log}"
 
-log() {
-  local line dir
-  line="$(date '+%Y-%m-%d %H:%M:%S%z') $*"
-  printf '%s\n' "$line"
-  dir="$(dirname "$LOG")"
-  if mkdir -p "$dir" 2>/dev/null && [ -w "$dir" ]; then
-    printf '%s\n' "$line" >>"$LOG" 2>/dev/null || true
-  fi
-}
-
-die() { log "错误: $*"; exit 1; }
+# 日志与报错实现与 xdg-redirect.sh 共用(见 dbk-log.sh);缺失时立刻停下(否则后续动作没有输出通道)
+[ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
+source "$HERE/dbk-log.sh"
 
 usage() { sed -n '2,11p' "$0"; }
 
@@ -113,6 +106,7 @@ SNAP_LINE=""
 if [ -n "$SNAPSHOT_UUID" ]; then
   SNAP_LINE="UUID=$SNAPSHOT_UUID  $SNAP_MNT  ext4  $SNAP_OPTS  0 2"
 fi
+[ -n "$SNAP_LINE" ] || log "警告: 快照分区行未写入(未提供 --snapshot-uuid);该行缺失会导致 R1/R2 无落点"
 
 if [ -n "$TARGET_USER" ] && id -u "$TARGET_USER" >/dev/null 2>&1; then
   uid="$(id -u "$TARGET_USER")"
@@ -130,8 +124,8 @@ log "=== dry-run:以下动作不会被执行 ==="
 log "将追加到 $FSTAB :"
 printf '%s\n' "$SHARED_LINE"
 if [ -n "$SNAP_LINE" ]; then printf '%s\n' "$SNAP_LINE"; fi
-log "将备份 $FSTAB -> $FSTAB_BAK(若备份不存在)"
-log "将执行: mkdir -p $SHARED_MNT -> systemctl daemon-reload -> mount -a -> 写测试 $WRITE_TEST"
+log "将备份 $FSTAB -> $FSTAB_BAK(只在备份不存在时创建:重跑不会覆盖首次备份)"
+log "将执行: mkdir -p $SHARED_MNT -> 逐行核对后补写缺失的 fstab 行(各缺各补)-> systemctl daemon-reload -> mount -a -> 写测试 $WRITE_TEST"
 log "随后调用: $XDG_SCRIPT --user $TARGET_USER --apply(dry-run 阶段只打印该命令)"
 
 if [ "$APPLY" -ne 1 ]; then
@@ -152,26 +146,34 @@ else
   log "备份已存在,保留不覆盖: $FSTAB_BAK"
 fi
 
-existing="$(grep -F " $SHARED_MNT " "$FSTAB" | grep -v '^[[:space:]]*#' | head -n 1 || true)"
-if [ "$existing" = "$SHARED_LINE" ]; then
-  log "fstab 已含目标行,跳过写入"
-elif [ -n "$existing" ]; then
-  die "fstab 已含 $SHARED_MNT 的其他条目,请先手工处理: $existing"
-else
+# 两行各自独立判定:重跑时哪一行缺就补哪一行(典型场景:第一次只给 --uuid,第二次才补 --snapshot-uuid)
+fstab_pairs=("$SHARED_MNT|$SHARED_LINE")
+[ -z "$SNAP_LINE" ] || fstab_pairs+=("$SNAP_MNT|$SNAP_LINE")
+add_lines=()
+for pair in "${fstab_pairs[@]}"; do
+  mnt="${pair%%|*}"; want="${pair#*|}"
+  # 取全部匹配行(不带 head -n 1):同一挂载点出现两条时按冲突处理,而不是静默认下第一条
+  cur="$(grep -F " $mnt " "$FSTAB" | grep -v '^[[:space:]]*#' || true)"
+  if [ "$cur" = "$want" ]; then log "fstab 已含 $mnt 的目标行,跳过写入"
+  elif [ -n "$cur" ]; then die "fstab 已含 $mnt 的其他条目,请先手工处理: $cur"
+  else add_lines+=("$want"); log "fstab 缺少 $mnt 的行,本次补写"; fi
+done
+if [ "${#add_lines[@]}" -gt 0 ]; then
   {
     printf '\n# L4 共享数据盘(D:)与快照分区,由 scripts/linux/mount-shared.sh 写入\n'
-    printf '%s\n' "$SHARED_LINE"
-    if [ -n "$SNAP_LINE" ]; then printf '%s\n' "$SNAP_LINE"; fi
+    printf '%s\n' "${add_lines[@]}"
   } >>"$FSTAB"
-  log "已追加 fstab 行"
+  log "已追加 fstab 行 ${#add_lines[@]} 条(重跑只补缺失行:已存在的行既不重复也不覆盖)"
 fi
 
-mkdir -p "$SHARED_MNT"
-if [ -n "$SNAPSHOT_UUID" ]; then mkdir -p "$SNAP_MNT"; fi
+mkdir -p "$SHARED_MNT" || log "警告: 无法创建挂载点 $SHARED_MNT(下面由 findmnt 校验给出结论)"
+if [ -n "$SNAPSHOT_UUID" ]; then mkdir -p "$SNAP_MNT" || log "警告: 无法创建挂载点 $SNAP_MNT"; fi
 systemctl daemon-reload
-mount -a
+if ! mount -a; then
+  log "警告: mount -a 返回非零(带 nofail 的条目失败不致命),继续做挂载校验"
+fi
 if ! findmnt -rn -S "UUID=$UUID" >/dev/null 2>&1; then
-  die "分区未挂载,$SHARED_MNT 仍是本地目录;fstab 行已保留(nofail 不阻断启动),修正后重跑本脚本"
+  die "分区未挂载,$SHARED_MNT 仍是本地目录;fstab 行已保留(带 nofail,不阻断启动),回退见文档回滚第 1 节;修正后重跑本脚本"
 fi
 if touch "$WRITE_TEST" 2>/dev/null; then
   rm -f "$WRITE_TEST"
@@ -183,10 +185,10 @@ fi
 # 用 bash 显式调用:共享盘/外置盘上的仓库副本可能丢失可执行位(Windows 侧尤其常见)
 if [ -f "$XDG_SCRIPT" ]; then
   log "调用 bash $XDG_SCRIPT --user $TARGET_USER --apply"
-  bash "$XDG_SCRIPT" --user "$TARGET_USER" --apply --log "$(dirname "$LOG")/xdg-redirect.log"
+  bash "$XDG_SCRIPT" --user "$TARGET_USER" --apply --log "$(dirname "$LOG")/xdg-redirect.log" \
+    || die "家目录重定向失败(共享盘已挂载、写测试已通过),修好后可单独重跑 xdg-redirect.sh"
+  log "完成:共享盘已挂载 + 写测试通过 + 家目录重定向已交由 $XDG_SCRIPT 处理"
 else
-  die "找不到 $XDG_SCRIPT;家目录重定向未执行,请手工运行它"
+  log "提示: 找不到 $XDG_SCRIPT;共享盘已就绪,仅家目录重定向未执行,请手工运行它"
 fi
-
-log "完成:共享盘已挂载 + 写测试通过 + 家目录重定向已交由 $XDG_SCRIPT 处理"
-log "回退:恢复 $FSTAB_BAK 后 mount -a;家目录回退见 $XDG_SCRIPT 的提示"
+log "回退:恢复 $FSTAB_BAK 后 mount -a(回滚第 1 节);家目录回退见 $XDG_SCRIPT 打印的提示"

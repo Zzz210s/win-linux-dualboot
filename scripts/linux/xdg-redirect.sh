@@ -4,9 +4,10 @@
 # 用法:xdg-redirect.sh [--user <name>] [--apply] [--template <path>] [--log <path>]
 #                      [--skip-mount-check]
 #   默认 dry-run:只打印将写入 ~/.config/user-dirs.dirs 的内容,不改动任何文件。
-#   加 --apply 才真正改系统(需要 root):备份 ~/.config/user-dirs.dirs(user-dirs.dirs.dbk.bak)
+#   加 --apply 才真正改系统(需要 root):备份 ~/.config/user-dirs.dirs 为 user-dirs.dirs.dbk.bak
+#   (备份只在不存在时创建,重跑不覆盖首次备份,与 mount-shared.sh 的 fstab 备份同策略)
 #   -> 按模板写入六条 XDG_*_DIR -> 以该用户身份执行 xdg-user-dirs-update --force
-#   -> 建好缺失的目标目录 -> 逐条回读并打印核对结果。
+#   -> 建好缺失的目标目录(chown 被 NTFS 拒绝只警告)-> 逐条回读并打印核对结果。
 #   只重定向文档类目录(桌面/文档/下载/图片/视频/音乐);~/.config、~/.ssh、~/.gnupg 与代码仓库
 #   一律留在本地 root —— NTFS 无 POSIX 权限语义(设计文档 3.6 / 3.16 / 4.5 / 5.3)。
 # 日志追加到 /var/log/dbk/xdg-redirect.log(该目录不可写时只输出到终端)。
@@ -15,7 +16,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-SHARED_MNT=/mnt/shared
+SHARED_MNT="${DBK_SHARED_MNT:-/mnt/shared}"
 KEYS='XDG_DESKTOP_DIR XDG_DOWNLOAD_DIR XDG_DOCUMENTS_DIR XDG_PICTURES_DIR XDG_MUSIC_DIR XDG_VIDEOS_DIR'
 TARGET_USER="${SUDO_USER:-${USER:-}}"
 APPLY=0
@@ -23,17 +24,9 @@ SKIP_MOUNT_CHECK=0
 XDG_TPL="${DBK_XDG_SNIPPET:-$ROOT/templates/user-dirs.dirs.snippet}"
 LOG="${DBK_LOG:-/var/log/dbk/xdg-redirect.log}"
 
-log() {
-  local line dir
-  line="$(date '+%Y-%m-%d %H:%M:%S%z') $*"
-  printf '%s\n' "$line"
-  dir="$(dirname "$LOG")"
-  if mkdir -p "$dir" 2>/dev/null && [ -w "$dir" ]; then
-    printf '%s\n' "$line" >>"$LOG" 2>/dev/null || true
-  fi
-}
-
-die() { log "错误: $*"; exit 1; }
+# 日志与报错实现与 mount-shared.sh 共用(见 dbk-log.sh);缺失时立刻停下(否则后续动作没有输出通道)
+[ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
+source "$HERE/dbk-log.sh"
 
 usage() { sed -n '2,14p' "$0"; }
 
@@ -72,7 +65,7 @@ fi
 log "=== dry-run:以下内容将写入 ~/.config/user-dirs.dirs ==="
 printf '%s\n' "$XDG_BODY"
 log "目标用户: $TARGET_USER;模板: $XDG_TPL"
-log "将执行: 备份 ~/.config/user-dirs.dirs -> user-dirs.dirs.dbk.bak -> 写入上述六行"
+log "将执行: 备份 ~/.config/user-dirs.dirs -> user-dirs.dirs.dbk.bak(仅首次;已存在则保留)-> 写入上述六行"
 log "         -> sudo -u $TARGET_USER xdg-user-dirs-update --force -> 建目录 -> 逐条回读核对"
 
 if [ "$APPLY" -ne 1 ]; then
@@ -99,10 +92,13 @@ fi
 
 CONFIG_DIR="$HOMEDIR/.config"
 UDIRS="$CONFIG_DIR/user-dirs.dirs"
-mkdir -p "$CONFIG_DIR"
-if [ -e "$UDIRS" ]; then
-  cp -a "$UDIRS" "$UDIRS.dbk.bak"
-  log "已备份 $UDIRS -> $UDIRS.dbk.bak"
+UDIRS_BAK="$UDIRS.dbk.bak"
+mkdir -p "$CONFIG_DIR" || log "警告: 无法创建 $CONFIG_DIR"
+if [ -e "$UDIRS_BAK" ]; then
+  log "备份已存在,保留不覆盖(重跑不会覆盖首次备份): $UDIRS_BAK"
+elif [ -e "$UDIRS" ]; then
+  cp -a "$UDIRS" "$UDIRS_BAK"
+  log "已备份 $UDIRS -> $UDIRS_BAK"
 else
   log "原文件不存在($UDIRS),无需备份"
 fi
@@ -110,7 +106,7 @@ fi
   printf '# 由 scripts/linux/xdg-redirect.sh 写入(模板: %s)\n' "$XDG_TPL"
   printf '%s\n' "$XDG_BODY"
 } >"$UDIRS"
-chown "$TARGET_USER:$GROUP" "$UDIRS"
+chown "$TARGET_USER:$GROUP" "$UDIRS" 2>/dev/null || log "警告: chown $UDIRS 未成功(属主未改;必要时手工 chown),文件内容已写入"
 log "已写入 $UDIRS"
 
 run_as_user() {
@@ -124,8 +120,11 @@ run_as_user() {
 }
 
 if command -v xdg-user-dirs-update >/dev/null 2>&1; then
-  run_as_user xdg-user-dirs-update --force
-  log "已执行(以 $TARGET_USER 身份): xdg-user-dirs-update --force"
+  if run_as_user xdg-user-dirs-update --force; then
+    log "已执行(以 $TARGET_USER 身份): xdg-user-dirs-update --force"
+  else
+    log "警告: xdg-user-dirs-update --force 返回非零(六行已写入,注销重登后再核对)"
+  fi
 else
   log "警告: 未安装 xdg-user-dirs,跳过该步(文件已写入;建议 sudo apt install -y xdg-user-dirs)"
 fi
@@ -137,8 +136,8 @@ while IFS= read -r line; do
       dir_val="${dir_val%\"}"
       dir_val="${dir_val#\"}"
       dir_val="${dir_val/#\$HOME/$HOMEDIR}"
-      mkdir -p "$dir_val"
-      chown "$TARGET_USER:$GROUP" "$dir_val"
+      mkdir -p "$dir_val" || log "警告: 无法创建 $dir_val(重定向目标缺失,相关应用可能仍写本地目录)"
+      chown "$TARGET_USER:$GROUP" "$dir_val" 2>/dev/null || log "警告: chown $dir_val 被文件系统拒绝(属主由 uid/gid 挂载选项固定),可忽略"
       log "已准备目录 $dir_val"
       ;;
   esac
@@ -149,4 +148,4 @@ EOF
 log "=== 核对:回读 $UDIRS ==="
 while IFS= read -r line; do log "$line"; done <"$UDIRS"
 log "完成:文档类家目录已重定向到 $SHARED_MNT"
-log "回退:cp -a $UDIRS.dbk.bak $UDIRS && sudo -u $TARGET_USER xdg-user-dirs-update --force(或删掉该文件后重跑)"
+log "回退:cp -a $UDIRS_BAK $UDIRS && sudo -u $TARGET_USER xdg-user-dirs-update --force($UDIRS_BAK 始终是首次运行前的内容,重跑不会覆盖它;或删掉该文件后重跑)"

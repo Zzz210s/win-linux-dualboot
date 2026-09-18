@@ -80,7 +80,9 @@ sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --snapshot-uui
 sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID> --apply
 ```
 
-`--apply` 的实际动作顺序:备份 `/etc/fstab` 为 `/etc/fstab.dbk.bak`(已存在则不覆盖)→ `mkdir -p /mnt/shared` → 追加共享盘行与快照分区行(两行都带 `nofail`)→ `systemctl daemon-reload` → `mount -a` → 校验挂载 → **写测试** → 调用 `xdg-redirect.sh --apply`。日志追加到 `/var/log/dbk/mount-shared.log`。
+`--apply` 的实际动作顺序:备份 `/etc/fstab` 为 `/etc/fstab.dbk.bak`(只在备份不存在时创建,重跑不会覆盖首次备份)→ `mkdir -p /mnt/shared` → 逐行核对后补写缺失的挂载行(**共享盘行与快照分区行各自独立判定**,重跑既不会重复也不会覆盖;第一次只给 `--uuid`、第二次才补 `--snapshot-uuid` 时会补上快照分区行)→ `systemctl daemon-reload` → `mount -a`(返回非零只告警,带 `nofail` 的条目失败不致命)→ 校验挂载 → **写测试** → 调用 `xdg-redirect.sh --apply`。日志追加到 `/var/log/dbk/mount-shared.log`。
+
+未提供 `--snapshot-uuid` 时,脚本会显式提示"快照分区行未写入(未提供 `--snapshot-uuid`);该行缺失会导致 R1/R2 无落点"——此时步骤 6 的快照功能没有存放位置,要么补上该 UUID 重跑,要么按步骤 6 另行安排快照落点并记录偏差。
 
 `nofail` 不是可选项:万一分区缺失或写坏,启动过程不能被它卡住(设计文档 4.5、第 7 节"`fstab` 写坏"行)。
 
@@ -107,6 +109,9 @@ NTFS 没有 POSIX 权限语义(设计 5.3 与第 9 节"POSIX 语义差异"行),�
 - **不把代码仓库或任何依赖符号链接 / 硬链接 / 可执行位 / 大小写敏感重命名的工程放上去**——这类工具在 NTFS 上不可靠;
 - **不在 Linux 侧对共享盘做批量重命名或大目录移动**(风险表"`ntfs3` 写入导致数据损坏"行的主要触发动作);
 - **不把需要权限位或 setuid 语义的脚本、服务数据放在上面**;
+- **同卷容量竞争**:`D:` 同时承载游戏库、容器镜像、WSL 发行版与桌面/下载/图片/文档,所以"共享盘要满了"的容量告警必须与游戏、镜像的安装计划一起看,不要只盯某一类文件;
+- **跨系统产物混入**:Linux 侧在共用目录产生的 `.desktop`、dotfile、`~$` 开头的 Office 临时文件在 Windows 资源管理器里会显形,Windows 侧的 `desktop.ini`、`Thumbs.db` 会出现在 Linux 目录里——因此共用目录里不要放依赖命名约定或扩展名的临时产物(脚本、构建中间产物、按后缀匹配的清理规则);
+- **下载目录合流**:同一个 `D:\Downloads` 被两边浏览器共用,Windows 侧的清理工具与搜索索引会扫到 Linux 产物(反过来也一样),清理前先确认文件来自哪个系统,不要按"最近下载"一把梭;
 - **关键目录在别处保留第二份备份**(云端或外置盘)——共享盘上的办公文件是本方案唯一的"两系统都能写"的区域,也是最需要冗余的区域;
 - 遇到"设备忙 / 目录非空"时,先在 Windows 侧关掉资源管理器预览、搜索索引或同步客户端(如 OneDrive),再回 Linux 操作。
 
@@ -131,7 +136,7 @@ sudo bash scripts/linux/xdg-redirect.sh --user <用户名>
 sudo bash scripts/linux/xdg-redirect.sh --user <用户名> --apply
 ```
 
-脚本行为:校验模板 [templates/user-dirs.dirs.snippet](../templates/user-dirs.dirs.snippet) 里六条 `XDG_*_DIR` 齐备且**全部指向 `/mnt/shared`**→ 确认 `/mnt/shared` 已挂载(未挂载时拒绝执行,避免目标落在本地 root)→ 备份原文件为 `user-dirs.dirs.dbk.bak` → 写入六行 → 以该用户身份执行 `xdg-user-dirs-update --force` → 建好缺失的目标目录并 `chown` → 逐条回读打印。日志追加到 `/var/log/dbk/xdg-redirect.log`。挂载脚本在 `--apply` 时会自动调用它,所以正常路径下不需要手工再跑一次。
+脚本行为:校验模板 [templates/user-dirs.dirs.snippet](../templates/user-dirs.dirs.snippet) 里六条 `XDG_*_DIR` 齐备且**全部指向 `/mnt/shared`**→ 确认 `/mnt/shared` 已挂载(未挂载时拒绝执行,避免目标落在本地 root)→ 备份原文件为 `user-dirs.dirs.dbk.bak`(**只在备份不存在时创建,重跑不会覆盖首次备份**,所以它始终是改动前的内容,下方回退命令随时可用)→ 写入六行 → 以该用户身份执行 `xdg-user-dirs-update --force` → 建好缺失的目标目录并 `chown`(`chown` 被 NTFS 拒绝时只打印警告并继续——共享盘的属主由 `uid=`/`gid=` 挂载选项固定,这种情况属正常,不影响使用)→ 逐条回读打印。日志追加到 `/var/log/dbk/xdg-redirect.log`。挂载脚本在 `--apply` 时会自动调用它,所以正常路径下不需要手工再跑一次;若调用失败,挂载脚本会明确报出"家目录重定向失败(共享盘已挂载、写测试已通过)",修好后可单独重跑本脚本。
 
 **留在本地 root 的东西**(与共享盘清单互为镜像):
 
@@ -152,6 +157,8 @@ cp -a ~/.config/user-dirs.dirs.dbk.bak ~/.config/user-dirs.dirs
 sudo -u <用户名> xdg-user-dirs-update --force
 xdg-user-dir DOCUMENTS     # 应回到 /home/<用户名>/Documents
 ```
+
+该备份是**首次 `--apply` 之前**的内容——重跑脚本不会覆盖它,所以随时可以按上面三行回到改动前(而不是回到"上一轮重定向"的状态)。
 
 更彻底的回退:删掉 `~/.config/user-dirs.dirs` 后以该用户执行 `xdg-user-dirs-update --force`,即可回到发行版默认目录。
 
