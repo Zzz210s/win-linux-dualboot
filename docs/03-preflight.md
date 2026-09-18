@@ -1,6 +1,6 @@
 # L2:预检与基线(硬闸门)
 
-本文件是 L2 阶段的手册。目标状态、四条不变量与参数名在[入口文档](00-overview.md)中定义;前提由 [L1 手册](02-windows.md)交付;动机与依据见[设计文档](design/00-design.md) 4.3 节(L2 步骤)、第 2 节(I4)、第 6 节(阶段产物与交接规则)、第 7 节(L2 两行)与第 9 节(风险登记)。本阶段的工具是 `scripts/windows/preflight.ps1` 与 `scripts/windows/backup-esp.ps1` 两个 PowerShell 脚本,产物落盘到 `baseline/`。
+本文件是 L2 阶段的手册。目标状态、四条不变量与参数名在[入口文档](00-overview.md)中定义;前提由 [L1 手册](02-windows.md)交付;动机与依据见[设计文档](design/00-design.md) 4.3 节(L2 步骤)、第 2 节(I4)、第 6 节(阶段产物与交接规则)、第 7 节(L2 两行)与第 9 节(风险登记)。本阶段的工具是 [scripts/windows/preflight.ps1](../scripts/windows/preflight.ps1) 与 [scripts/windows/backup-esp.ps1](../scripts/windows/backup-esp.ps1) 两个 PowerShell 脚本,产物落盘到 `baseline/`。
 
 ## 目标
 
@@ -120,7 +120,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\preflight.ps1 `
 
 ### 6. 读结论,确认闸门
 
-打开报告,只认最后一行:`结论: 允许进入 L3` 或 `结论: 禁止进入 L3`。**不要手工改写判定列**——要改状态就改系统,然后重跑脚本。确认"允许"之后,再目视核对一遍产物齐备(目标表第 3 行)与 BitLocker 行,然后进入 L3(`04-ubuntu.md`)。
+打开报告,只认最后一行:`结论: 允许进入 L3` 或 `结论: 禁止进入 L3`。**不要手工改写判定列**——要改状态就改系统,然后重跑脚本。确认"允许"之后,再目视核对一遍产物齐备(目标表第 3 行)与 BitLocker 行,然后进入 L3([04-ubuntu.md](04-ubuntu.md))。
 
 ## 验证
 
@@ -142,7 +142,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\preflight.ps1 `
 | 12 | ESP 未被改动 | 报告"固件启动项"行与 `baseline\02-esp-backup\manifest.sha256` | 备份期间只挂载与读取;备份后 `mountvol` 输出里不再有那个临时盘符 |
 | 13 | 启动顺序基准可比对 | 报告"L0 基准:启动顺序原值"行 | `已记录:<值>`;对照 `baseline/00-firmware.md` 的值一致 |
 | 14 | L1 记录已核验且隔离结论已转记 | 报告"L1 产物复核"与"L1 隔离核对结论"两行 | 两行均为绿(或黄项已在"补充说明"里登记) |
-| 15 | 产物未入库 | `git status` | `baseline/` 下的产物一个都不出现(`baseline/README.md` 除外) |
+| 15 | 产物未入库 | `git status` | `baseline/` 下的产物一个都不出现([baseline/README.md](../baseline/README.md) 除外) |
 
 ## 失败处理
 

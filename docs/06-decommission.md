@@ -1,6 +1,6 @@
 # L5:退役(安全撤除 Linux,Windows 仍自动启动)
 
-本文件是 L5 阶段的手册之一(另一份是 `07-rescue.md`,覆盖故障救援与原地重装)。目标状态、四条不变量(下称 I1-I4)与参数名在[入口文档](00-overview.md)中定义;前提由 [L4 手册](05-first-boot.md)交付;动机与依据见[设计文档](design/00-design.md)第 2 节(I1-I4)、4.6 节(L5 退役五步,**顺序不可更换**)、4.8 节(崩溃后原地重装两法与"第三选择")、第 7 节(故障矩阵 L5 三行)、7.2 节(回滚三粒度)与 8-D 组(可撤除性验收)。
+本文件是 L5 阶段的手册之一(另一份是 [07-rescue.md](07-rescue.md),覆盖故障救援与原地重装)。目标状态、四条不变量(下称 I1-I4)与参数名在[入口文档](00-overview.md)中定义;前提由 [L4 手册](05-first-boot.md)交付;动机与依据见[设计文档](design/00-design.md)第 2 节(I1-I4)、4.6 节(L5 退役五步,**顺序不可更换**)、4.8 节(崩溃后原地重装两法与"第三选择")、第 7 节(故障矩阵 L5 三行)、7.2 节(回滚三粒度)与 8-D 组(可撤除性验收)。
 
 执行时配套使用勾选清单 [checklists/rollback.md](../checklists/rollback.md)(退役、引导救援、原地重装、基线回滚四节),清单逐项有"判据 / 如何确认"列。
 
@@ -30,7 +30,7 @@
 
 ## 前置条件
 
-- **L4 已收尾**:`docs/08-verification.md` 的 B、F 组全绿;`baseline/04-first-boot.md`、`baseline/04-robustness.md` 在位。带着"系统还没收敛"的状态退役,会把"退役出错"与"系统本来就有病"两件事混在一起。
+- **L4 已收尾**:[docs/08-verification.md](08-verification.md) 的 B、F 组全绿;`baseline/04-first-boot.md`、`baseline/04-robustness.md` 在位。带着"系统还没收敛"的状态退役,会把"退役出错"与"系统本来就有病"两件事混在一起。
 - **先盘点 Linux 侧要留的东西——这是本阶段唯一不可逆的损失来源**:退役会一并删掉 **root 上的本地数据**与 **`/snapshots` 里的全部快照**。按设计 5.3,代码仓库、`~/.ssh`、dotfile 等依赖 POSIX 权限语义的东西**本来就不在共享盘上**,它们只存在于 root 分区;而 `~/.config/user-dirs.dirs` 只把文档/下载/图片/桌面指向共享盘。动手前逐项确认:
   - `~` 下有无未同步的代码、密钥、笔记(需要就 `rsync -a` 到 `/mnt/shared/` 或外置盘);
   - `/snapshots` 里有无"还想要的旧版本"(快照会随分区一起消失);
@@ -41,7 +41,7 @@
 - **回 Linux 的入口已知**(L4 步骤 7 已配):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。退役期间**标准路径**只在步骤 1 需要进一次 Linux,之后**再也不需要**;偏差分支见步骤 1 的说明(需两次 Linux 会话:记录现状 + 删条目)。
 - **参数表已填**:`DISK`、`DISK_MODEL` / `DISK_SIZE`、`ESP_SIZE = 2GiB`、`WINDOWS_SYSTEM_SIZE = 200GiB`、`WINDOWS_DATA_SIZE ≈ 635GiB`、`ROOT_SIZE = 100GiB`、`SNAPSHOT_SIZE = 15GiB`、`BOOT_MENU_KEY`。删分区时靠它与 `baseline/02-partitions.txt` 的偏移/大小逐项对账。
 - **最后一次进 Linux 时收尾干净**:共享盘写入已落盘(`sync` 后 `sudo umount /mnt/shared`),不要在 Windows 处于休眠状态时让 Linux 挂载过共享盘(设计 5.3 前置条件第 1、2 条)。
-- **口径:L5 只做"主动退役"**,不做新装、不做救援。若现状是"引导层损坏而系统分区完好",那是设计 4.8 的"第三选择",走 `07-rescue.md`,不要顺手重装,也不要顺手删分区。
+- **口径:L5 只做"主动退役"**,不做新装、不做救援。若现状是"引导层损坏而系统分区完好",那是设计 4.8 的"第三选择",走 [07-rescue.md](07-rescue.md),不要顺手重装,也不要顺手删分区。
 
 ## 步骤
 
@@ -74,7 +74,7 @@ sudo lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT | tee ~/l5-before-lsblk.txt
 
 1. **第一段:回 Windows 做备份**。在当前的 Ubuntu 会话里先完成步骤 0 的只读取证与 `sudo efibootmgr -v` 记录(步骤 1 第 2 条),然后重启回 Windows,按步骤 2 把 NVRAM 与 ESP 现状备份到 `D:\dbk-l5-backup\`。**这份备份没做完,就不要往下走**;
 2. **第二段:回 Ubuntu 删条目**。在 Windows 里按 `BOOT_MENU_KEY` 选 `ubuntu`,或执行 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 BootNext,不改顺序),回 Ubuntu 后执行 `sudo efibootmgr -b <ubuntu 条目编号> -B` 删除 `ubuntu` 条目,让固件回落到 `Windows Boot Manager`(设计 4.8 第三选择与 [L3 手册](04-ubuntu.md)同一手段);删完用 `sudo efibootmgr -v` 确认条目已消失;
-3. **第三段:重启回 Windows,接着做步骤 3**。此后**再也不需要进 Linux**。条目删掉后,"残留清理"就等于步骤 4 已完成,清单上照勾并在备注里写明;最后按 `07-rescue.md` 与 L2 基线(`baseline/02-firmware-entries.txt`)核对现场,并把这个偏差记进清单。
+3. **第三段:重启回 Windows,接着做步骤 3**。此后**再也不需要进 Linux**。条目删掉后,"残留清理"就等于步骤 4 已完成,清单上照勾并在备注里写明;最后按 [07-rescue.md](07-rescue.md) 与 L2 基线(`baseline/02-firmware-entries.txt`)核对现场,并把这个偏差记进清单。
 
 怎么知道成功了:
 
@@ -184,7 +184,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 | 做法 | 后果与代价 |
 |---|---|
 | **A. 只做步骤 1**:`BootOrder` 首位回到 Windows,`ubuntu` 条目**保留**在列表里 | 日常开机直接进 Windows;要用 Linux 时按 `BOOT_MENU_KEY` 选 `ubuntu`,或从 Windows 跑 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性,不改顺序)。分区、`/snapshots`、配置全部保留,随时可回到"两个系统都能用"。代价:Windows 大版本更新或 SBAT 更新仍可能改写 ESP 导致 **Linux** 引导失效(设计 7.1),但那**不会**影响 Windows 启动 |
-| **B. 步骤 1 + 步骤 4**(删掉 `ubuntu` 条目,分区保留) | 固件列表更干净,启动路径里没有任何失效项,日常体验等同"已退役"。代价:下次要用 Linux 得从 live U 盘重建条目(设计 4.8 第三选择、`07-rescue.md`),或干脆重装;Windows 更新再动 ESP 时也没有自动恢复的余地 |
+| **B. 步骤 1 + 步骤 4**(删掉 `ubuntu` 条目,分区保留) | 固件列表更干净,启动路径里没有任何失效项,日常体验等同"已退役"。代价:下次要用 Linux 得从 live U 盘重建条目(设计 4.8 第三选择、[07-rescue.md](07-rescue.md)),或干脆重装;Windows 更新再动 ESP 时也没有自动恢复的余地 |
 
 两种做法下都**不要**出现"删了分区却把条目留在首位"这种半程状态——它就是 `grub rescue>` 的成因。走 A 却还想顺手清掉旧条目时,严格按步骤 4 做(删除条目,不改顺序)。
 
@@ -194,7 +194,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 
 | # | 检查项 | 命令 / 来源 | 期望 |
 |---|---|---|---|
-| 1 | 五步顺序未跳序 | `checklists/rollback.md` 第一节的勾选记录与备注 | 勾选顺序为 1 → 2 → 3 → 4 →(5);记录里没有"先删分区再修引导"的动作;走了步骤 1 的偏差分支时,其"先备份 → 回 Ubuntu 删条目 → 再回 Windows"的三段次序也写进备注(该分支在清单上排在步骤 2 之后,属步骤 1 的完成方式,不算跳序) |
+| 1 | 五步顺序未跳序 | [checklists/rollback.md](../checklists/rollback.md) 第一节的勾选记录与备注 | 勾选顺序为 1 → 2 → 3 → 4 →(5);记录里没有"先删分区再修引导"的动作;走了步骤 1 的偏差分支时,其"先备份 → 回 Ubuntu 删条目 → 再回 Windows"的三段次序也写进备注(该分支在清单上排在步骤 2 之后,属步骤 1 的完成方式,不算跳序) |
 | 2 | `BootOrder` 首位是 `Windows Boot Manager` | Windows 侧 `bcdedit /enum firmware`;或 live 环境 `sudo efibootmgr -v` | `BootOrder` 第一项对应 `Windows Boot Manager` |
 | 3 | "动手前"备份已生成 | `D:\dbk-l5-backup\02-esp-backup\manifest.sha256`、`02-firmware-entries.txt`、`02-partitions.txt` | 三份在位、可读;备份树含 `EFI\Microsoft\` 与 `EFI\ubuntu\` 两棵子树 |
 | 4 | 动手前现场与 L2 基线一致 | `powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -BaselineDir baseline` | ①②③ 三项"通过";④ 若有差异属预期(L3 已恢复 BitLocker 保护),已记入清单 |
@@ -212,7 +212,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 | 现象 | 立即动作 |
 |---|---|
 | 步骤 1 改完顺序,重启仍进 Linux | 先确认"保存"真的生效(部分固件要按 `F10` 再确认一次退出)。仍不进 Windows 就别急着往下走:**回到固件设置界面再设一次**;固件确实不支持顺序调整时,按步骤 1 的偏差分支处理(三段重启的次序:**先**回 Windows 做步骤 2 备份,**再**用 `BOOT_MENU_KEY` 回 Ubuntu `efibootmgr -b <n> -B` 删条目让固件回落,**然后**重启进 Windows 做步骤 3)。**不得**改用 `efibootmgr -o`(I2) |
-| 重启停在 `grub>` / `grub rescue>` | 说明引导没有先归位,或 `ubuntu` 条目指向的引导文件已损坏。**立即停手,不要再删任何分区**。按 `07-rescue.md` 的两条路现场处置:`ls` 找分区 → `set prefix` → `insmod normal` → `normal`;或直接回 Windows:`search --file --set=root /EFI/Microsoft/Boot/bootmgfw.efi` → `chainloader` → `boot`。之后用基线复原(见"回滚"第 3 条)并复查四不变量 |
+| 重启停在 `grub>` / `grub rescue>` | 说明引导没有先归位,或 `ubuntu` 条目指向的引导文件已损坏。**立即停手,不要再删任何分区**。按 [07-rescue.md](07-rescue.md) 的两条路现场处置:`ls` 找分区 → `set prefix` → `insmod normal` → `normal`;或直接回 Windows:`search --file --set=root /EFI/Microsoft/Boot/bootmgfw.efi` → `chainloader` → `boot`。之后用基线复原(见"回滚"第 3 条)并复查四不变量 |
 | 磁盘管理里认不出哪块是 Linux 分区 | **停下,不要猜**。用 `baseline/02-partitions.txt` 与 `D:\dbk-l5-backup\02-partitions.txt` 的偏移/大小逐项对账;或在 `diskpart` 里 `select disk 0` → `list partition` 看大小与位置。两块 ext4 分区是 100GiB 与 15GiB、无盘符;`D:` 是 ≈635GiB。**宁可停,不可试** |
 | 误删了 `D:` 或 ESP | 立刻停止一切写盘动作(尤其不要再建分区、不要跑安装器)。ESP 被删:按"回滚"第 3 条用 ESP 备份 + `bcdboot` 复原;`D:` 被删:数据恢复优先于系统修复,先评估是否需要专业恢复,不要在原盘写入新数据 |
 | 想删的 ext4 分区删不掉("删除卷"灰) | 确认选中的是那两块无盘符分区而不是"未分配空间";确认没有第三方分区工具正占用磁盘(关闭它们);若仍灰,用 `diskpart`:`select disk 0` → `select partition <编号>` → `delete partition override`(编号按 `list partition` 的实际输出;**只对这一块**执行,`clean` 是绝对禁止的) |
@@ -251,7 +251,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 2. 挂载 ESP(`mountvol S: /s`),把 `baseline\02-esp-backup\EFI\` 复制回 ESP(`robocopy baseline\02-esp-backup\EFI S:\EFI /E`;清单文件本身不复制);
 3. 重建 Windows 引导:`bcdboot C:\Windows /s S: /f UEFI`;
 4. 卸载 ESP(`mountvol S: /d`);
-5. 复查四条不变量并重跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 复核;GRUB 命令行的现场处置见 `07-rescue.md`。
+5. 复查四条不变量并重跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 复核;GRUB 命令行的现场处置见 [07-rescue.md](07-rescue.md)。
 
 完整命令与判据以 [L2 手册](03-preflight.md)"回滚"第 1 条为准(本节只做指向,避免同一段命令两处维护)。
 

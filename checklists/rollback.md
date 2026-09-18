@@ -50,7 +50,7 @@
 | `[ ]` | `chainloader /EFI/Microsoft/Boot/bootmgfw.efi` | 提示载入成功(无 `invalid signature` 之类报错;Secure Boot 下应能通过,因为用的是微软签名链) |
 | `[ ]` | `boot` | 进入 Windows,不需要任何手工选择 |
 | `[ ]` | 进 Windows 后查固件条目:`bcdedit /enum firmware` | `BootOrder` 首位是 `Windows Boot Manager`;若失效的 `ubuntu` 条目仍在最前,进固件设置界面把它调后或删除(仍**不得**用 `efibootmgr -o` / `displayorder`) |
-| `[ ]` | 若引导文件已损坏、上面两步走不通 | 走第 4 节"基线回滚"(ESP 还原 + `bcdboot`),或按 `docs/07-rescue.md` 的完整救援流程;**不要**在没确认分区表状态前就开始重装 |
+| `[ ]` | 若引导文件已损坏、上面两步走不通 | 走第 4 节"基线回滚"(ESP 还原 + `bcdboot`),或按 [docs/07-rescue.md](../docs/07-rescue.md) 的完整救援流程;**不要**在没确认分区表状态前就开始重装 |
 
 ## 3. 原地重装两法(只格一块分区)
 

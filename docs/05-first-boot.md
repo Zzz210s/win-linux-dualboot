@@ -29,7 +29,7 @@ L4 完成后,这台设备应当达到:
 - `baseline/04-first-boot.md`:六项字段——会话类型、GPU 模块状态、共享盘挂载与写测试结果、XDG 重定向核对、`timedatectl` 输出、蓝牙同步结论;由本文步骤 8 采集;
 - `baseline/04-robustness.md`:健壮性核对——快照可用性与回滚演练、journald 持久化、SSH 可达、更新策略、SMART 状态;由本文步骤 6 的脚本产出整理而成。
 
-多设备时按 [baseline/README.md](../baseline/README.md) 的布局落盘到 `baseline/<设备别名>/`;`baseline/*` 被 `.gitignore` 排除(仅 `baseline/README.md` 例外)。
+多设备时按 [baseline/README.md](../baseline/README.md) 的布局落盘到 `baseline/<设备别名>/`;`baseline/*` 被 `.gitignore` 排除(仅 [baseline/README.md](../baseline/README.md) 例外)。
 
 执行顺序上有一处交叉,必须先说清:**R1 要求"任何内核/驱动变更之前先有可回滚的快照点",而快照工具在步骤 6 才配置。** 因此实际操作时,先执行步骤 6 的第 1 小节(快照与旧内核)再回来做步骤 3(显卡驱动),或至少确认 GRUB "Advanced options" 里的旧内核可选、`/snapshots` 可写。本文正文仍按 1-8 编号,执行时按这句话调整先后。
 
@@ -37,7 +37,7 @@ L4 完成后,这台设备应当达到:
 
 - **L3 已收尾且 11 项全绿**:`baseline/03-efi-layout.txt` 在位,`BootOrder` 首位仍是 `Windows Boot Manager`,`ubuntu` 条目在末尾(I1、I2 未被破坏)。L4 不修引导,带引导问题进来只会把两件事混在一起。
 - **BitLocker 保护已恢复**:L3 步骤 8 的 `manage-bde -protectors -enable C:` 已完成。L4 不改分区表与固件,但共享盘方案的前提是 `D:` **不加密**,该状态要与 [L2 手册](03-preflight.md)的记录一致。
-- **回 Windows 的入口可用**(设计文档交接规则第 6 条):`BOOT_MENU_KEY` 能调出一次性启动菜单(见 [L0 手册](01-firmware.md) 厂商差异表);或 `scripts/linux/reboot-to-windows.sh`、`scripts/windows/set-bootnext.ps1`(由后续任务交付)| 二者任一可用即可,**不允许**用 `efibootmgr -o` 代替(I2)。
+- **回 Windows 的入口可用**(设计文档交接规则第 6 条):`BOOT_MENU_KEY` 能调出一次性启动菜单(见 [L0 手册](01-firmware.md) 厂商差异表);或 [scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)、[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(由后续任务交付)| 二者任一可用即可,**不允许**用 `efibootmgr -o` 代替(I2)。
 - **快照能力已就绪**(R1、R2):`/snapshots` 分区可写;Timeshift 由步骤 6 配置(目标为 `/snapshots`、保留 3 份(可调))。在第一次内核/驱动变更之前必须已有至少一个快照点,否则**不得**执行该变更。
 - **参数表已填**(每台设备一份,见[入口文档](00-overview.md)):`SHARED_PART_UUID`(Windows `D:` 分区 UUID)、`SNAPSHOT_PART_UUID`(L3 建的 15GiB ext4 快照分区)、`GPU`(是否混合显卡)、`BOOT_MENU_KEY`、`DISK`。两个 UUID 的取值来源是 `baseline/02-partitions.txt` 与 L3 分区表交叉核对,**不要凭记忆填写**。
 - **Windows 侧重定向清单已固化且不得再改名**(L1 的隐含约定,见 [L1 手册](02-windows.md) 第 4 节):`D:\Desktop`、`D:\Documents`、`D:\Downloads`、`D:\Pictures`、`D:\Videos`、`D:\Music` 与办公约定目录 `D:\Shared\`。Linux 侧逐项对应为 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}` 与 `/mnt/shared/Shared/`。
@@ -164,7 +164,7 @@ xdg-user-dir DOCUMENTS     # 应回到 /home/<用户名>/Documents
 
 ### 3. 显卡驱动与显示策略
 
-做什么:按设计 4.5 与决策 3.3 / 3.17 / 3.18 / 3.19 收敛显示栈。**本步骤的全部动作由 `scripts/linux/graphics.sh` 承载**(已交付);下面只写口径与判据,排障时可单独重跑 `sudo bash scripts/linux/graphics.sh --apply`(默认 dry-run:不加 `--apply` 只打印采集结果、将执行的动作与回退指引,不改动系统)。
+做什么:按设计 4.5 与决策 3.3 / 3.17 / 3.18 / 3.19 收敛显示栈。**本步骤的全部动作由 [scripts/linux/graphics.sh](../scripts/linux/graphics.sh) 承载**(已交付);下面只写口径与判据,排障时可单独重跑 `sudo bash scripts/linux/graphics.sh --apply`(默认 dry-run:不加 `--apply` 只打印采集结果、将执行的动作与回退指引,不改动系统)。
 
 驱动路径(不可偏离):
 
@@ -231,7 +231,7 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeI
 
 - **上游工具**:`KeyofBlueS/bt-keys-sync`(https://github.com/KeyofBlueS/bt-keys-sync),依赖 `chntpw`。本仓库只调用上游脚本,**不内置其代码**(第 11 节的引用结论);
 - **方向:以 Windows 侧密钥为准**,用上游的 `--windows-keys` 路径导入到 Linux;**不做反向写入 Windows 注册表**——上游自己的建议也是这个方向,反向写风险更高(4.5 回滚列:"注册表有备份,可还原");
-- **包装脚本**:`scripts/linux/bt-keys-sync-wrapper.sh`(由后续任务交付)负责装 `chntpw`、确认 Windows 分区可读(只读即可读取注册表文件)、下载上游脚本到 `/opt/bt-keys-sync/`、按下面顺序提示操作;
+- **包装脚本**:[scripts/linux/bt-keys-sync-wrapper.sh](../scripts/linux/bt-keys-sync-wrapper.sh)(由后续任务交付)负责装 `chntpw`、确认 Windows 分区可读(只读即可读取注册表文件)、下载上游脚本到 `/opt/bt-keys-sync/`、按下面顺序提示操作;
 - **操作顺序**(顺序错了就得重来):
   1. 先在 **Ubuntu** 里完成一次正常配对(生成 Linux 侧记录);
   2. 重启进 **Windows**,对同一设备**重新配对一次**(让 Windows 侧成为权威来源);
@@ -241,7 +241,7 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeI
 
 ### 6. 健壮性配置(设计 3.14 与 4.7 的 R1-R9)
 
-做什么:按九项措施把"不会因为一次升级、一个驱动或一块盘的问题而失去可用系统"落到机器上。全部动作由 `scripts/linux/storage.sh`(交换空间与 zram)、`scripts/linux/hardening.sh`(R1-R9 六项)承载,由 `scripts/linux/first-boot.sh` 依次编排(四个脚本 storage / hardening / mount-shared / graphics 均已交付,位于 `scripts/linux/`);手动执行的等价命令见下表的"判据"列。
+做什么:按九项措施把"不会因为一次升级、一个驱动或一块盘的问题而失去可用系统"落到机器上。全部动作由 [scripts/linux/storage.sh](../scripts/linux/storage.sh)(交换空间与 zram)、[scripts/linux/hardening.sh](../scripts/linux/hardening.sh)(R1-R9 六项)承载,由 [scripts/linux/first-boot.sh](../scripts/linux/first-boot.sh) 依次编排(四个脚本 storage / hardening / mount-shared / graphics 均已交付,位于 `scripts/linux/`);手动执行的等价命令见下表的"判据"列。
 
 四个脚本都**默认 dry-run**:不加 `--apply` 只打印计划、不改系统。先看计划,再执行:
 
@@ -279,8 +279,8 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 
 做什么:确认本机有一条"一键回 Windows"的路径,并且它是**一次性**的(I2)。
 
-- **Ubuntu 侧**:`scripts/linux/reboot-to-windows.sh`(由后续任务交付)用 `efibootmgr -n <Windows 条目编号>` 设置一次性启动项,执行后重新读取并断言 `BootOrder` 未变,再 `systemctl reboot`;
-- **Windows 侧**:`scripts/windows/set-bootnext.ps1`(由后续任务交付)用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做等价的一次性切换,执行后同样断言第一条仍是 Windows Boot Manager;
+- **Ubuntu 侧**:[scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)(由后续任务交付)用 `efibootmgr -n <Windows 条目编号>` 设置一次性启动项,执行后重新读取并断言 `BootOrder` 未变,再 `systemctl reboot`;
+- **Windows 侧**:[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(由后续任务交付)用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做等价的一次性切换,执行后同样断言第一条仍是 Windows Boot Manager;
 - **厂商菜单键**:开机按 `BOOT_MENU_KEY`(参数表)选 `Windows Boot Manager`,这是零副作用的兜底路径,也是 L3 进 Linux 用的同一条路径(见 [L0 手册](01-firmware.md) 厂商差异表)。
 
 三条纪律:
@@ -329,7 +329,7 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 
 命令只读(写测试会创建并立即删除一个临时文件);`~/04-first-boot.md` 的内容取回 Windows 侧落盘。字段固定六项:会话类型、GPU 模块状态、共享盘挂载与写测试结果、XDG 重定向核对、`timedatectl` 输出、蓝牙同步结论——与 [baseline/README.md](../baseline/README.md) 的命名规范一致。
 
-`baseline/04-robustness.md` 由步骤 6 的同名核对整理:快照可用性与回滚演练、journald 持久化、SSH 可达、更新策略、SMART 状态五项。两份产物都**不入库**(`baseline/*` 已被 `.gitignore` 排除,仅 `baseline/README.md` 例外);跑完 L4 后把与[入口文档](00-overview.md)设备参数表的**偏差**回写进产物,这是"同规格设备"适配表迭代的唯一输入来源。
+`baseline/04-robustness.md` 由步骤 6 的同名核对整理:快照可用性与回滚演练、journald 持久化、SSH 可达、更新策略、SMART 状态五项。两份产物都**不入库**(`baseline/*` 已被 `.gitignore` 排除,仅 [baseline/README.md](../baseline/README.md) 例外);跑完 L4 后把与[入口文档](00-overview.md)设备参数表的**偏差**回写进产物,这是"同规格设备"适配表迭代的唯一输入来源。
 
 ## 验证
 
@@ -351,9 +351,9 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 | 12 | 健壮性 R1-R9 就绪 | 见步骤 6 的判据列:`findmnt /snapshots`、`ls -d /var/log/journal`、`ss -tlnp \| grep :22`、`grep -A3 Package-Blacklist /etc/apt/apt.conf.d/*`、`systemctl is-active smartd`、`swapon --show`、`zramctl` | 快照分区可写且有至少一份快照;`/var/log/journal` 存在;22 端口在听;黑名单含 `linux-` 与 `nvidia-`;`smartd` active;swapfile 与 zram 生效 |
 | 13 | 回 Windows 入口可用且 `BootOrder` 未变 | `sudo scripts/linux/reboot-to-windows.sh`(或 `BOOT_MENU_KEY`);`sudo efibootmgr` | 重启进入 Windows;`BootOrder` 首位仍是 `Windows Boot Manager`,`ubuntu` 仍在末尾;全程未执行 `efibootmgr -o` |
 | 14 | 产物六项字段齐备 | `baseline/04-first-boot.md`(多设备时 `baseline/<别名>/`) | 含会话类型、GPU 模块状态、共享盘挂载与写测试、XDG 重定向核对、`timedatectl`、蓝牙同步结论六节,内容为本次实测 |
-| 15 | 产物未入库 | `git status`(Windows 侧仓库) | `baseline/` 下变化一个都不出现(`baseline/README.md` 除外) |
+| 15 | 产物未入库 | `git status`(Windows 侧仓库) | `baseline/` 下变化一个都不出现([baseline/README.md](../baseline/README.md) 除外) |
 
-15 项全部通过 = L4 完成,可进入 L5(`docs/06-decommission.md` 与 `docs/07-rescue.md`)。任一项不通过按"失败处理"解决后再推进;**第 1-4 行不通过时,共享盘上的数据不可信,先停下把 Windows 侧前提改对**。
+15 项全部通过 = L4 完成,可进入 L5([docs/06-decommission.md](06-decommission.md) 与 [docs/07-rescue.md](07-rescue.md))。任一项不通过按"失败处理"解决后再推进;**第 1-4 行不通过时,共享盘上的数据不可信,先停下把 Windows 侧前提改对**。
 
 ## 失败处理
 

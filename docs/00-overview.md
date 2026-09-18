@@ -100,7 +100,7 @@
 | `SECURE_BOOT` | Secure Boot 目标状态 | 全程保持开启,不关闭、不换密钥 | 开启 |
 | `DISK_MODEL` | 目标磁盘型号(安装前核对,**防装错盘**) | 与整盘格式化前的分区表输出核对 | Samsung MZVLQ1T0HBLB |
 | `DISK_SIZE` | 目标磁盘容量 | 用于验证"容量偏离"是否需要走偏离分支 | 标称 1TB / 约 953GiB |
-| `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | L1 只记录 `D:` 的卷标与分区位置(不含 UUID);UUID 在 L3/L4 由 `blkid` 取得后回填本表,并写入 `templates/fstab.snippet` | 例如 `blkid` 输出的 UUID 值 |
+| `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | L1 只记录 `D:` 的卷标与分区位置(不含 UUID);UUID 在 L3/L4 由 `blkid` 取得后回填本表,并写入 [templates/fstab.snippet](../templates/fstab.snippet) | 例如 `blkid` 输出的 UUID 值 |
 
 说明:
 
@@ -115,15 +115,15 @@
 | 阶段 | 名称 | 手册文档 | 该阶段结束时该有的产物 |
 |---|---|---|---|
 | 入口 | 目标与契约 | 本文件 | 无(读,不执行) |
-| **L0** | 装机前准备 | `01-firmware.md` | `baseline/00-firmware.md` |
-| **L1** | Windows 全新安装 | `02-windows.md` | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) |
-| **L2** | 预检与基线(硬闸门) | `03-preflight.md` | `baseline/02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` |
-| **L3** | Ubuntu 安装 | `04-ubuntu.md` | `baseline/03-efi-layout.txt` |
-| **L4** | 首启收敛 | `05-first-boot.md` | `baseline/04-first-boot.md`、`04-robustness.md`(首启收敛与健壮性核对) |
-| **L5** | 退役与救援 | `06-decommission.md` + `07-rescue.md` | `checklists/rollback.md` |
-| 验收 | 唯一判据 | `08-verification.md` | 验收清单(A-F 组)全绿 |
-| 风险 | 风险登记表 | `09-risks.md` | 无(查,不执行) |
-| 附录 | 高频疑问速查 | `10-faq.md` | 无(查,不执行) |
+| **L0** | 装机前准备 | [01-firmware.md](01-firmware.md) | `baseline/00-firmware.md` |
+| **L1** | Windows 全新安装 | [02-windows.md](02-windows.md) | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) |
+| **L2** | 预检与基线(硬闸门) | [03-preflight.md](03-preflight.md) | `baseline/02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` |
+| **L3** | Ubuntu 安装 | [04-ubuntu.md](04-ubuntu.md) | `baseline/03-efi-layout.txt` |
+| **L4** | 首启收敛 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`04-robustness.md`(首启收敛与健壮性核对) |
+| **L5** | 退役与救援 | [06-decommission.md](06-decommission.md) + [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |
+| 验收 | 唯一判据 | [08-verification.md](08-verification.md) | 验收清单(A-F 组)全绿 |
+| 风险 | 风险登记表 | [09-risks.md](09-risks.md) | 无(查,不执行) |
+| 附录 | 高频疑问速查 | [10-faq.md](10-faq.md) | 无(查,不执行) |
 
 注:产物名前缀 = 所在阶段号。L1 定稿分区表(`baseline/01-partitions.txt`)并记录激活状态(`baseline/01-activation.md`);ESP 文件树备份(`baseline/02-esp-backup/`,含 `manifest.sha256`)与固件启动项快照(`baseline/02-firmware-entries.txt`)是 **L2 生成的基线产物**(设计文档 4.3),L2 另产出分区快照 `baseline/02-partitions.txt`;四项是否齐备统一由 `baseline/02-preflight-report.md` 判定。
 
@@ -132,9 +132,9 @@
 1. 第一次在本设备上部署:先读完本文件,然后严格按 L0 → L1 → L2 → L3 → L4 顺序推进,每阶段完成后再进入下一阶段。
 2. 只想确认"能不能用这套方案":读本文件的"适用设备类"与"目标分区表",再读 [设计文档](design/00-design.md) 第 1、3 节。
 3. 正在装、卡在某一步:回到对应阶段的文档;L2 报红项时不要跳过,先解决再进 L3。
-4. 机器出问题了:先 `07-rescue.md`(判断是引导层还是系统盘),**不要直接重装**。
-5. 想删掉 Linux:直接 `06-decommission.md`,并先读本文档的"阶段产物与交接规则"与四条不变量。
-6. 只想查一件事:先 `10-faq.md`;风险与已知事故看 `09-risks.md`。
+4. 机器出问题了:先 [07-rescue.md](07-rescue.md)(判断是引导层还是系统盘),**不要直接重装**。
+5. 想删掉 Linux:直接 [06-decommission.md](06-decommission.md),并先读本文档的"阶段产物与交接规则"与四条不变量。
+6. 只想查一件事:先 [10-faq.md](10-faq.md);风险与已知事故看 [09-risks.md](09-risks.md)。
 7. 想改设计:先 [设计文档](design/00-design.md),再回来改手册与参数名。
 
 ---
@@ -179,7 +179,7 @@
 
 `01-*` 至 `09-*` 各文档统一遵守下列约定:
 
-1. **六段式章节**:每份手册依次包含 `## 目标`、`## 前置条件`、`## 步骤`、`## 验证`、`## 失败处理`、`## 回滚`。本文件不受此约束;`10-faq.md` 为附录,已按同构的六段标题书写,`check-docs.sh` 仍在白名单里排除它(只跳过六段式校验,链接与 emoji 检查照常执行)。
+1. **六段式章节**:每份手册依次包含 `## 目标`、`## 前置条件`、`## 步骤`、`## 验证`、`## 失败处理`、`## 回滚`。本文件不受此约束;[10-faq.md](10-faq.md) 为附录,已按同构的六段标题书写,`check-docs.sh` 仍在白名单里排除它(只跳过六段式校验,链接与 emoji 检查照常执行)。
 2. **步骤级粒度**:每步写清"做什么 + 关键命令 + 怎么知道成功了";不追求逐条可复制的命令级,也不写只有结论的说明级。
 3. **禁用 emoji**:文档、脚本、提交信息一律不用 emoji;需要视觉区分时用文字符号。
 4. **步骤编号从 1 开始**:每份文档内的步骤独立编号,不跨文档连续编号。
@@ -212,7 +212,7 @@
 
 缓解手段两条:
 
-1. **清理 SBAT 策略**:在 Windows 侧清除固件下发的 SBAT 策略(注册表中 `SbatLevel` 相关值),重启后固件不再因 SBAT 版本过旧而拒绝 Linux 引导器;随后按 `07-rescue.md` 复原引导。
+1. **清理 SBAT 策略**:在 Windows 侧清除固件下发的 SBAT 策略(注册表中 `SbatLevel` 相关值),重启后固件不再因 SBAT 版本过旧而拒绝 Linux 引导器;随后按 [07-rescue.md](07-rescue.md) 复原引导。
 2. **常备安装 U 盘**:Ubuntu 安装 U 盘在装机结束后不回收,保持"已验证可用"状态;引导被拒时从 U 盘进入 live 环境修复,而不是原地重装。
 
-其余事故类型(Windows 更新重写 ESP、BitLocker 恢复提示、Secure Boot 下 NVIDIA 模块签名、两系统间时间与蓝牙状态分裂等)与完整缓解手段登记在 `09-risks.md`。
+其余事故类型(Windows 更新重写 ESP、BitLocker 恢复提示、Secure Boot 下 NVIDIA 模块签名、两系统间时间与蓝牙状态分裂等)与完整缓解手段登记在 [09-risks.md](09-risks.md)。

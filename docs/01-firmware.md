@@ -14,7 +14,7 @@
 | Secure Boot | 保持开启,不关闭、不换密钥 | `SECURE_BOOT` |
 | Fast Boot | 关闭(指固件里的 Fast Boot,不是 Windows 的"快速启动") | 无(固件项,不单列参数) |
 | CSM / Legacy 引导 | 关闭(仅 UEFI) | 无 |
-| 启动顺序 | 本阶段不改动。判据(**可自证**):`BootOrder` 首位与步骤 1 记录的原值一致(即本阶段未改动过 `BootOrder`),且本阶段未执行过 `efibootmgr -o`。首位是谁不参与判断:已有 Windows 时原值通常就是 `Windows Boot Manager`;**设备此前部署过、刚做过整盘重装时,固件 NVRAM 里可能仍留有排在首位的旧 `ubuntu` 条目——照原样保留即可,该残留条目不属 L0 处理范围**(处置指引见 `docs/07-rescue.md` 与 L2 基线) | 不变量 I1、I2 |
+| 启动顺序 | 本阶段不改动。判据(**可自证**):`BootOrder` 首位与步骤 1 记录的原值一致(即本阶段未改动过 `BootOrder`),且本阶段未执行过 `efibootmgr -o`。首位是谁不参与判断:已有 Windows 时原值通常就是 `Windows Boot Manager`;**设备此前部署过、刚做过整盘重装时,固件 NVRAM 里可能仍留有排在首位的旧 `ubuntu` 条目——照原样保留即可,该残留条目不属 L0 处理范围**(处置指引见 [docs/07-rescue.md](07-rescue.md) 与 L2 基线) | 不变量 I1、I2 |
 | 目标磁盘 | 型号与容量与参数表一致 | `DISK_MODEL`、`DISK_SIZE` |
 | 安装介质 | 官方镜像;Ubuntu 侧已核对官方 SHA256,Windows 侧来自微软官方下载域(官方未发布镜像哈希,不做 SHA256 比对) | 无 |
 
@@ -203,7 +203,7 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 
 适用:设备上已有的 Windows 是在 `RAID On` / `Intel RST` / `VMD` 模式下装好的,且不能整盘重装。这是附录分支,不属于本方案主路径。
 
-简版流程(细节在 `02-windows.md` 与 `07-rescue.md` 中补齐):
+简版流程(细节在 [02-windows.md](02-windows.md) 与 [07-rescue.md](07-rescue.md) 中补齐):
 
 1. **先预置驱动,再改模式**:在 Windows 中把对应控制器的驱动装入系统(厂商驱动包 / `pnputil /add-driver <inf> /install`),使系统具备在 AHCI 下启动的能力;顺带备份 BitLocker 恢复密钥(若已启用)。
 2. **改固件模式**:回到步骤 2,把 `RAID On` / `VMD` 改为 `AHCI`,保存退出。
@@ -223,10 +223,10 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 | 3 | `lsblk -d -o NAME,MODEL,SIZE` | 出现 `nvme0n1`,型号与参数表 `DISK_MODEL` 一致、容量约 `953G` |
 | 4 | `sudo dmesg \| grep -i -E 'nvme\|ahci' \| head` | NVMe 控制器已被枚举、AHCI 驱动已绑定;**看不到任何磁盘**即控制器不是 AHCI / NVMe → 回步骤 2 |
 | 5 | `grep ' ubuntu-26.04-desktop-amd64.iso' SHA256SUMS \| sha256sum -c -` | 输出 `OK`(`SHA256SUMS` 取自官方发布页);Windows ISO 官方未发布镜像哈希,不做 SHA256 比对,只复核其来自微软官方下载域(见步骤 4) |
-| 6 | `sudo efibootmgr` | 判据(**可自证**):`BootOrder` 首位与步骤 1 记录的原值一致(即本阶段未改动过 `BootOrder`),且本阶段**未**执行过 `efibootmgr -o`(I1、I2)。首位是谁不参与判断——已有 Windows 时原值通常是 `Windows Boot Manager`;而 `efibootmgr` 里没有 Windows 条目(裸机 / 已抹盘 / 待装),或首位是前次部署残留的旧 `ubuntu` 条目(刚整盘重装:磁盘虽空,固件 NVRAM 里旧条目仍在),同样算通过;**残留条目保留原样,不属 L0 处理范围**,处置指引见 `docs/07-rescue.md` 与 L2 基线(固件启动项快照 `baseline/02-firmware-entries.txt`) |
+| 6 | `sudo efibootmgr` | 判据(**可自证**):`BootOrder` 首位与步骤 1 记录的原值一致(即本阶段未改动过 `BootOrder`),且本阶段**未**执行过 `efibootmgr -o`(I1、I2)。首位是谁不参与判断——已有 Windows 时原值通常是 `Windows Boot Manager`;而 `efibootmgr` 里没有 Windows 条目(裸机 / 已抹盘 / 待装),或首位是前次部署残留的旧 `ubuntu` 条目(刚整盘重装:磁盘虽空,固件 NVRAM 里旧条目仍在),同样算通过;**残留条目保留原样,不属 L0 处理范围**,处置指引见 [docs/07-rescue.md](07-rescue.md) 与 L2 基线(固件启动项快照 `baseline/02-firmware-entries.txt`) |
 | 7 | 人工复核 `baseline/00-firmware.md` | 步骤 7 的字段清单全部有值,无空缺 |
 
-7 项全部通过 = L0 完成,可进入 L1(`02-windows.md`);第 6 行按上述判据计"通过",设备上不存在 Windows 条目、或首位是残留的旧 `ubuntu` 条目,本身都不算失败。任一项不通过则按"失败处理"解决后再进 L1。
+7 项全部通过 = L0 完成,可进入 L1([02-windows.md](02-windows.md));第 6 行按上述判据计"通过",设备上不存在 Windows 条目、或首位是残留的旧 `ubuntu` 条目,本身都不算失败。任一项不通过则按"失败处理"解决后再进 L1。
 
 ## 失败处理
 
@@ -236,7 +236,7 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 | Secure Boot 开着时 U 盘无法启动,或启动菜单里没有 UEFI 条目 | 先排除 Secure Boot 拒绝(见下一行,尤其 Ventoy 的 MOK 注册),再查介质写入模式:重新以 GPT + UEFI 方式写入(步骤 4);同时确认固件里 `Fast Boot` 为 `Disabled`、`CSM` 为 `Disabled` |
 | 启动菜单里能选到 U 盘,但被 Secure Boot 拒绝(报 `Verification failed` / `Security Violation`) | 先查该 U 盘是不是 Ventoy:Ventoy 在 Secure Boot 下必须先完成 MOK 密钥注册(步骤 4);不是 Ventoy、或不愿走 MOK 流程,就改用 Rufus / 官方工具重新写入。**不要为绕过它关闭 Secure Boot**(步骤 3、回滚第 3 条) |
 | 启动菜单里同一 U 盘出现两个条目 | 一个是 legacy、一个是 `UEFI:`;只选带 `UEFI:` 前缀的那个,选错会装成 MBR 引导,与 L1 的 GPT 分区表冲突 |
-| `sudo efibootmgr` 里看不到 `Windows Boot Manager` 条目,或首位是前次部署残留的旧 `ubuntu` 条目 | 两种都属正常情形:L0 早于 L1(Windows 全新安装),设备可能尚未安装 Windows(裸机 / 已抹盘 / 待装);也可能磁盘虽已抹,固件 NVRAM 里的旧 `ubuntu` 条目仍在。按验证第 6 行的判据,`BootOrder` 首位与步骤 1 记录的原值一致即通过;**不得为"凑判据"去改动 `BootOrder`、也不得顺手删除旧条目**(I1、I2)——本阶段绝不执行 `efibootmgr -o`。残留条目本身不属 L0 处理范围,处置指引见 `docs/07-rescue.md` 与 L2 基线(固件启动项快照 `baseline/02-firmware-entries.txt`) |
+| `sudo efibootmgr` 里看不到 `Windows Boot Manager` 条目,或首位是前次部署残留的旧 `ubuntu` 条目 | 两种都属正常情形:L0 早于 L1(Windows 全新安装),设备可能尚未安装 Windows(裸机 / 已抹盘 / 待装);也可能磁盘虽已抹,固件 NVRAM 里的旧 `ubuntu` 条目仍在。按验证第 6 行的判据,`BootOrder` 首位与步骤 1 记录的原值一致即通过;**不得为"凑判据"去改动 `BootOrder`、也不得顺手删除旧条目**(I1、I2)——本阶段绝不执行 `efibootmgr -o`。残留条目本身不属 L0 处理范围,处置指引见 [docs/07-rescue.md](07-rescue.md) 与 L2 基线(固件启动项快照 `baseline/02-firmware-entries.txt`) |
 | Ubuntu ISO 的 SHA256 与官方发布值不一致 | 不要使用该 ISO:重新下载或换镜像站重下;仍不一致时检查下载链路(代理、断点续传工具) |
 | 改完控制器模式后原系统蓝屏 `INACCESSIBLE_BOOT_DEVICE` | 属于"已按 RAID On 装好系统"的情形:走"附录分支",先恢复原模式再预置驱动;不要反复强断电源 |
 | 固件里的存储模式项被锁定 / 置灰 | 先尝试清除固件管理员密码或更新固件(注意步骤 3 的复查要求);仍不可改则该设备不适用本方案,按[入口文档](00-overview.md)偏离表处置 |
@@ -249,4 +249,4 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 2. **对"已完成安装的系统"把模式改回原值会导致系统无法启动**——此时必须配套驱动预置(见"附录分支"),不能只改固件项。L1 装完 Windows 之后本项尤其如此:它已经不再是"随便改回去"的设置。
 3. **`Secure Boot` 不作为可回滚项**:本方案从 L0 到 L5 全程保持开启(关闭它会破坏 L3 / L4 的签名链前提)。
 4. 安装介质(U 盘)可整盘清空,无副作用;Ubuntu 安装 U 盘按健壮性设计 R4 保留为常备救援介质,装机结束后不回收。
-5. **I4 复核**:若该设备此前已有 `baseline/` 产物,回滚固件设置后固件启动项与分区表状态可能发生变化,需重新核对并更新基线(固件启动项快照归 L2 生成,见 `03-preflight.md`),之后再做任何分区或固件变更。
+5. **I4 复核**:若该设备此前已有 `baseline/` 产物,回滚固件设置后固件启动项与分区表状态可能发生变化,需重新核对并更新基线(固件启动项快照归 L2 生成,见 [03-preflight.md](03-preflight.md)),之后再做任何分区或固件变更。

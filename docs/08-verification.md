@@ -2,7 +2,7 @@
 
 本文件是整套方案的**唯一判据**:不以"装完了"为准,只以本清单全绿为准。设计依据是[设计文档](design/00-design.md)第 8 节(验收标准)与第 2 节(I1-I4)、第 3 节(关键决策)、4.7 节(健壮性 R1-R9)、4.8 节(原地重装两法)、7.1 节(周期性巡检)、11.1 节(评论区实战证据);执行依据是已交付手册 [00 入口](00-overview.md)、[L0](01-firmware.md)、[L1](02-windows.md)、[L2](03-preflight.md)、[L3](04-ubuntu.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)、[L5 救援](07-rescue.md)与 [checklists/rollback.md](../checklists/rollback.md)。
 
-**记录载体**:每台设备把本文件复制一份、就地填写勾选与证据,落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`)。产物名前缀 = 所在阶段号;`baseline/` 全部内容不入库(仅 `baseline/README.md` 例外),规则见 [baseline/README.md](../baseline/README.md)。
+**记录载体**:每台设备把本文件复制一份、就地填写勾选与证据,落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`)。产物名前缀 = 所在阶段号;`baseline/` 全部内容不入库(仅 [baseline/README.md](../baseline/README.md) 例外),规则见 [baseline/README.md](../baseline/README.md)。
 
 **执行顺序建议**:A(引导安全)-> B(系统功能)-> C(双系统切换)-> F(健壮性)-> D(可撤除性)-> E(记录归档)。理由:D 组含"真做一次退役"与"真做一次原地重装",做完这台设备上可能已没有 Linux 或已被格式化,所以必须排在最后;E 组是归档,放最后一位。F 组要放在 D 组真做之前,否则快照分区已随退役消失,回滚演练无从谈起。
 
@@ -35,7 +35,7 @@
 - **回 Windows 的入口可用**(设计第 6 节交接规则第 6 条):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1);二者任一可用即可。**任何情况下不得用 `efibootmgr -o` / `displayorder` 调整永久顺序**(I2)。
 - **另一台可 SSH 的机器**(用于 F6):F6 要求"从另一台机器 SSH 登录",需要第二台设备与目标机同网段。确无第二台设备时,按 [07-rescue.md](07-rescue.md) 第 8 节用本地 TTY 对照执行,并把"无第二台设备"记为**不阻塞的已知例外**(影响面:只能证明本地登录可用)。
 - **时间与重启预算**:本清单包含 A2(连续重启 3 次)、C 组(至少 3 轮双系统切换)、F1(回滚演练)、D 组(退役与重装推演),建议单独安排一次连续会话,**中途不要插入 Windows 更新**(一旦更新,基线即失效,见第 6 节规则 4 与 7.1 节巡检)。
-- **逐条执行记录**:本清单按勾选项给出判据,逐条动作用 `checklists/deploy.md` 记录(该清单属 Task 15 交付;交付前以各阶段手册的"验证"节与 [checklists/rollback.md](../checklists/rollback.md) 代替);高频疑问速查见 `docs/10-faq.md`(同为 Task 15 交付)。
+- **逐条执行记录**:本清单按勾选项给出判据,逐条动作用 `checklists/deploy.md` 记录(该清单属 Task 15 交付;交付前以各阶段手册的"验证"节与 [checklists/rollback.md](../checklists/rollback.md) 代替);高频疑问速查见 [docs/10-faq.md](10-faq.md)(同为 Task 15 交付)。
 - **口径**:验收期间**不改分区表、不改固件设置**;若某项处置确实要动分区表或固件(如 `fstab` 之外的存储设置),先按 I4 重做基线备份再动手(见 [L2 手册](03-preflight.md)的基线生成步骤)。
 
 ## 步骤
@@ -71,7 +71,7 @@
   - 设计依据:第 8 节 A 组第 4 行前半;**I1**。
 
 - [ ] **A6 全程未使用 `efibootmgr -o`**
-  - 怎么做:复核本次部署的全部操作记录([L2](03-preflight.md)、[L3](04-ubuntu.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)各步骤的执行记录与 `checklists/rollback.md` 备注);辅助检查 `git grep -n 'efibootmgr -o'` 的输出只出现在各文档/脚本的"禁止"表述里。
+  - 怎么做:复核本次部署的全部操作记录([L2](03-preflight.md)、[L3](04-ubuntu.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)各步骤的执行记录与 [checklists/rollback.md](../checklists/rollback.md) 备注);辅助检查 `git grep -n 'efibootmgr -o'` 的输出只出现在各文档/脚本的"禁止"表述里。
   - 判据:没有任何一次用 `efibootmgr -o` 或 `bcdedit /set {fwbootmgr} displayorder ...` 调整过永久顺序;进 Linux 全部走一次性入口。
   - 设计依据:第 8 节 A 组第 4 行后半;**I2**。
 
@@ -256,13 +256,13 @@
 ### E. 记录组(E1-E5)
 
 - [ ] **E1 `baseline/` 产物齐全**
-  - 怎么做:逐项确认在位且可读:`00-firmware.md`、`01-partitions.txt`、`01-activation.md`、`02-preflight-report.md`(结论行必须是"结论: 允许进入 L3")、`02-esp-backup/`(含 `manifest.sha256`)、`02-firmware-entries.txt`、`02-partitions.txt`、`03-efi-layout.txt`、`04-first-boot.md`、`04-robustness.md`,以及本次填写版 `08-verification.md`;多设备时都在 `baseline/<设备别名>/` 下。
+  - 怎么做:逐项确认在位且可读:`00-firmware.md`、`01-partitions.txt`、`01-activation.md`、`02-preflight-report.md`(结论行必须是"结论: 允许进入 L3")、`02-esp-backup/`(含 `manifest.sha256`)、`02-firmware-entries.txt`、`02-partitions.txt`、`03-efi-layout.txt`、`04-first-boot.md`、`04-robustness.md`,以及本次填写版 [08-verification.md](08-verification.md);多设备时都在 `baseline/<设备别名>/` 下。
   - 判据:逐项在位、内容为本次实测而非模板文字;`baseline/02-esp-backup/manifest.sha256` 能逐行校验(与备份树哈希一致)。
   - 设计依据:第 8 节 E 组、第 6 节规则 1-2、[baseline/README.md](../baseline/README.md)。
 
 - [ ] **E2 `baseline/` 未入库**
   - 怎么做:仓库根 `git status --porcelain`;`git ls-files baseline/`;`git check-ignore -v baseline/02-partitions.txt`。
-  - 判据:`git status --porcelain` 无输出(或输出里不含任何 `baseline/` 条目);`git ls-files baseline/` 只列出 `baseline/README.md`;`check-ignore` 命中 `.gitignore` 的 `baseline/*` 规则。
+  - 判据:`git status --porcelain` 无输出(或输出里不含任何 `baseline/` 条目);`git ls-files baseline/` 只列出 [baseline/README.md](../baseline/README.md);`check-ignore` 命中 `.gitignore` 的 `baseline/*` 规则。
   - 设计依据:第 8 节 E 组、第 6 节规则 2。
 
 - [ ] **E3 本次与设备参数表的偏差已回写**

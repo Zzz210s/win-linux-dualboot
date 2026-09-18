@@ -201,7 +201,7 @@ Get-CimInstance -ClassName SoftwareLicensingProduct -Filter "PartialProductKey I
 
 1. **`baseline/01-partitions.txt`**:步骤 1 的 `list disk` / `list partition` 原始输出 + 分区表定稿值 + WinRE 落点与未分配空间的实测偏差 + 各分区卷标 + 步骤 4 的重定向核对结果与 C: 内容核对结果(注记段)。
 2. **`baseline/01-activation.md`**:`slmgr /dlv` 与 `slmgr /xpr` 输出 + 执行日期 + 上游项目版本号。
-3. 两份产物**不入库**(`baseline/*` 已被 `.gitignore` 排除,只保留 `baseline/README.md`)。
+3. 两份产物**不入库**(`baseline/*` 已被 `.gitignore` 排除,只保留 [baseline/README.md](../baseline/README.md))。
 4. **紧接着进入 L2**:装完 Windows 后不要长时间停留,L1 与 L2 必须在同一次会话内连续完成(交接规则第 4 条),L2 会把这里的记录当作复核对象,并生成基线(`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt`)。
 
 不变量复核(I1-I4):
@@ -210,7 +210,7 @@ Get-CimInstance -ClassName SoftwareLicensingProduct -Filter "PartialProductKey I
 bcdedit /enum firmware
 ```
 
-- **I1**:`BootOrder` 首位为 `Windows Boot Manager`(L1 新建的条目,默认就在首位)。照实记录即可;若固件 NVRAM 里仍有前次部署残留的 `ubuntu` 条目,**保留原样**——该条目不属 L1 处理范围,处置指引见 `07-rescue.md` 与 L2 的 `02-firmware-entries.txt`。
+- **I1**:`BootOrder` 首位为 `Windows Boot Manager`(L1 新建的条目,默认就在首位)。照实记录即可;若固件 NVRAM 里仍有前次部署残留的 `ubuntu` 条目,**保留原样**——该条目不属 L1 处理范围,处置指引见 [07-rescue.md](07-rescue.md) 与 L2 的 `02-firmware-entries.txt`。
 - **I2**:本阶段未执行任何 `efibootmgr -o`,也未改过 `BootOrder`。
 - **I3**:`\EFI\Microsoft\` 与 `{bootmgr}` 的 path 未被动过。Windows 安装程序自己写入这两处属正常,不算违反 I3——I3 约束的是"我们与第三方工具不去覆盖它",这条约束在 L3 才真正进入日常操作。
 - **I4**:首次装机时 L1 之前没有基线是允许的;基线由紧接着的 L2 生成。
@@ -231,7 +231,7 @@ bcdedit /enum firmware
 | 8 | 四条不变量未破 | `bcdedit /enum firmware` | `BootOrder` 首位为 `Windows Boot Manager`;本阶段未执行 `efibootmgr -o`;`\EFI\Microsoft\` 未被第三方覆盖;残留的旧 `ubuntu` 条目保留原样 |
 | 9 | L1 产物齐备且未入库 | 人工复核 + `git status` | `baseline/01-partitions.txt`、`baseline/01-activation.md` 存在、字段无空缺;`git status` 中不出现 `baseline/` 下的产物 |
 
-9 项全部通过 = L1 完成,可进入 L2(`03-preflight.md`);第 7 行按"激活未成功不阻塞"的例外计——若确实失败,须在 `baseline/01-activation.md` 里留下失败记录与报错,并在 L2 的闸门报告里作为黄项登记。
+9 项全部通过 = L1 完成,可进入 L2([03-preflight.md](03-preflight.md));第 7 行按"激活未成功不阻塞"的例外计——若确实失败,须在 `baseline/01-activation.md` 里留下失败记录与报错,并在 L2 的闸门报告里作为黄项登记。
 
 ## 失败处理
 
@@ -245,7 +245,7 @@ bcdedit /enum firmware
 | 装完之后 Windows 自动启用了设备加密 / BitLocker | 先备份 48 位恢复密钥,再对 C: 与 D: 执行 `manage-bde -off`,待解密完成再继续;D: 处于加密状态时 Linux 侧无法挂载共享盘,共享方案直接失效(设计文档 5.3 与第 9 节) |
 | 已知文件夹重定向后个别程序不认新路径 | 只重定向文档类目录;把该程序的工作目录改到 D: 下对应子目录,或按其设置单独指定;仍出问题就按"回滚"第 3 条把这个文件夹改回默认路径。依据:设计文档第 9 节"家目录重定向后的应用不兼容" |
 | `powercfg /h off` 后 `HiberbootEnabled` 仍为 1 | 重跑步骤 3 的 `reg add` 命令;确认是在管理员权限的命令行里执行;再查一次 `powercfg /a`。仍未生效时核对组策略 / 厂商电源管理软件是否把它改回 |
-| 固件启动项里出现残留的 `ubuntu` 条目 | 保留原样,不改 `BootOrder`(I1、I2);L2 会为固件启动项留档,处置指引见 `07-rescue.md` |
+| 固件启动项里出现残留的 `ubuntu` 条目 | 保留原样,不改 `BootOrder`(I1、I2);L2 会为固件启动项留档,处置指引见 [07-rescue.md](07-rescue.md) |
 | `bcdedit /enum firmware` 看不到 `Windows Boot Manager` | 检查启动模式是否被装成 Legacy / MBR(回[L0 手册](01-firmware.md)验证第 1 行与步骤 3);确认为 UEFI 后重启一次再查。仍看不到则按"回滚"第 1 条重装 |
 
 ## 回滚

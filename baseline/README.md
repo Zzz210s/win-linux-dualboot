@@ -35,4 +35,4 @@ baseline/
 ├─ device-b/01-partitions.txt
 ```
 
-跑完 L4 后,把与 `docs/00-overview.md` 设备参数表的**偏差**回写进去:这是"同规格设备"适配表迭代的唯一输入来源。
+跑完 L4 后,把与 [docs/00-overview.md](../docs/00-overview.md) 设备参数表的**偏差**回写进去:这是"同规格设备"适配表迭代的唯一输入来源。

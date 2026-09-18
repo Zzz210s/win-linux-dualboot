@@ -10,8 +10,8 @@
 
 | 文档 | 作用 |
 |---|---|
-| 本文件 `docs/design/00-design.md` | **为什么**这样设计:目标、不变量、决策记录、风险依据 |
-| `docs/00-overview.md` ~ `docs/09-risks.md` | **怎么做**:按执行顺序编号的分步手册 |
+| 本文件 [docs/design/00-design.md](00-design.md) | **为什么**这样设计:目标、不变量、决策记录、风险依据 |
+| [docs/00-overview.md](../00-overview.md) ~ [docs/09-risks.md](../09-risks.md) | **怎么做**:按执行顺序编号的分步手册 |
 | `README.md` / `README.zh-CN.md` | 面向第一次接触者的入口 |
 
 阅读顺序:先本文件第 1、2 节(目标与不变量),再进入手册的 `00-overview.md`。
@@ -128,16 +128,16 @@
 
 | 阶段 | 手册文档 |
 |---|---|
-| 入口 | `docs/00-overview.md`(目标、四条不变量、设备参数表) |
-| L0 | `docs/01-firmware.md` |
-| L1 | `docs/02-windows.md`(含系统盘隔离、激活与重装前提) |
-| L2 | `docs/03-preflight.md` |
-| L3 | `docs/04-ubuntu.md` |
-| L4 | `docs/05-first-boot.md`(含健壮性配置) |
-| L5 | `docs/06-decommission.md` + `docs/07-rescue.md`(引导救援与**原地重装两法**) |
-| 验收 | `docs/08-verification.md` |
-| 风险 | `docs/09-risks.md` |
-| 附录 | `docs/10-faq.md`(高频疑问与排障速查,六段式同构书写) |
+| 入口 | [docs/00-overview.md](../00-overview.md)(目标、四条不变量、设备参数表) |
+| L0 | [docs/01-firmware.md](../01-firmware.md) |
+| L1 | [docs/02-windows.md](../02-windows.md)(含系统盘隔离、激活与重装前提) |
+| L2 | [docs/03-preflight.md](../03-preflight.md) |
+| L3 | [docs/04-ubuntu.md](../04-ubuntu.md) |
+| L4 | [docs/05-first-boot.md](../05-first-boot.md)(含健壮性配置) |
+| L5 | [docs/06-decommission.md](../06-decommission.md) + [docs/07-rescue.md](../07-rescue.md)(引导救援与**原地重装两法**) |
+| 验收 | [docs/08-verification.md](../08-verification.md) |
+| 风险 | [docs/09-risks.md](../09-risks.md) |
+| 附录 | [docs/10-faq.md](../10-faq.md)(高频疑问与排障速查,六段式同构书写) |
 
 | 阶段 | 名称 | 目的 | 产物 | 完成判据 |
 |---|---|---|---|---|
@@ -146,7 +146,7 @@
 | **L2** | 预检与基线 | 只读体检 + 建立可回滚基线 | `baseline/02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` | 报告结论为"允许进入 L3"(无红项) |
 | **L3** | Ubuntu 安装 | 装 Linux 且不侵犯 Windows 引导 | `baseline/03-efi-layout.txt` | Ubuntu 可启动;`\EFI\Microsoft\` 与基线一致;BootOrder 首项仍为 Windows |
 | **L4** | 首启收敛 | 驱动、Wayland、挂载、时间、蓝牙 | `baseline/04-first-boot.md`、`04-robustness.md`(首启收敛与健壮性核对) | 验收 B 组与 F 组全绿 |
-| **L5** | 退役与救援 | 安全撤除与故障恢复 | `checklists/rollback.md` | L5 流程可执行(参考设备需真跑一次) |
+| **L5** | 退役与救援 | 安全撤除与故障恢复 | [checklists/rollback.md](../../checklists/rollback.md) | L5 流程可执行(参考设备需真跑一次) |
 
 ### 4.1 L0 装机前准备
 
@@ -305,7 +305,7 @@
 | 3 | 挂载选项固定 uid/gid/umask 并使用 `windows_names` | `ntfs3` 没有 POSIX 权限位;`windows_names` 阻止 Linux 侧创建 Windows 非法文件名 |
 | 4 | 不把依赖 POSIX 语义的工作流放在共享盘 | 符号链接、硬链接、大小写敏感重命名、权限位相关脚本在 NTFS 上都不可靠 |
 
-推荐挂载参数(实现时落到 `templates/fstab.snippet`):
+推荐挂载参数(实现时落到 [templates/fstab.snippet](../../templates/fstab.snippet)):
 
 ```
 UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,windows_names,nofail,noatime  0 0
@@ -386,7 +386,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 
 ## 8. 验收标准
 
-唯一判据是 `docs/08-verification.md` 全绿;不以"装完了"为准。
+唯一判据是 [docs/08-verification.md](../08-verification.md) 全绿;不以"装完了"为准。
 
 **A. 引导安全组**
 
@@ -410,7 +410,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 原地重装两法可用 | 两法各至少完整推演一次(参考设备至少真做一法);重装后 A 组四条不变量复检通过 |
 | 非重装逃生路径可用 | 引导层损坏场景已验证:ESP 镜像还原 + `bcdboot` 能恢复引导 |
 
-**E. 记录组**:`baseline/` 产物齐全且未入库(`git status` 干净);记录本次与设备参数表的偏差,回写到 `docs/00-overview.md`。
+**E. 记录组**:`baseline/` 产物齐全且未入库(`git status` 干净);记录本次与设备参数表的偏差,回写到 [docs/00-overview.md](../00-overview.md)。
 
 **F. 健壮性组(防崩溃)**
 

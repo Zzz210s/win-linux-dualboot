@@ -23,7 +23,7 @@
 
 - `baseline/03-efi-layout.txt`:四节固定内容——`\EFI\` 目录树、`efibootmgr -v`、`BootOrder`、`lsblk` 输出。
 
-多设备时按 [baseline/README.md](../baseline/README.md) 的布局落盘到 `baseline/<设备别名>/03-efi-layout.txt`;该产物不入库(`baseline/*` 被 `.gitignore` 排除,仅 `baseline/README.md` 例外)。
+多设备时按 [baseline/README.md](../baseline/README.md) 的布局落盘到 `baseline/<设备别名>/03-efi-layout.txt`;该产物不入库(`baseline/*` 被 `.gitignore` 排除,仅 [baseline/README.md](../baseline/README.md) 例外)。
 
 三条边界,越界即视为设计缺陷:
 
@@ -187,9 +187,9 @@ L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;�
 | 8 | ESP 未被格式化 | 第 2 行同一证据 + `ls -la /boot/efi/EFI` | `Microsoft` 与 `ubuntu` 两个目录同时存在;`Microsoft` 内容与基线一致 |
 | 9 | Secure Boot 仍开启 | `mokutil --sb-state` | `SecureBoot enabled` |
 | 10 | 产物在位且四节齐备 | `baseline/03-efi-layout.txt`(多设备时 `baseline/<别名>/`) | 含 `\EFI\` 目录树、`efibootmgr -v`、`BootOrder`、`lsblk` 四节,内容为本次实测 |
-| 11 | 产物未入库 | `git status`(Windows 侧仓库) | `baseline/` 下变化一个都不出现(`baseline/README.md` 除外) |
+| 11 | 产物未入库 | `git status`(Windows 侧仓库) | `baseline/` 下变化一个都不出现([baseline/README.md](../baseline/README.md) 除外) |
 
-11 项全部通过 = 可进入 L4(首启收敛:`05-first-boot.md`)。任一项不通过则按"失败处理"解决后再推进;**第 2 行不通过是最严重的一种,先修复 Windows 引导,再谈 L4**。
+11 项全部通过 = 可进入 L4(首启收敛:[05-first-boot.md](05-first-boot.md))。任一项不通过则按"失败处理"解决后再推进;**第 2 行不通过是最严重的一种,先修复 Windows 引导,再谈 L4**。
 
 ## 失败处理
 
@@ -197,8 +197,8 @@ L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;�
 |---|---|
 | 安装器看不到磁盘(分区界面空白,或只列出 U 盘) | 回 [L0 手册](01-firmware.md) 步骤 2 核查存储控制器模式:必须是 AHCI / NVMe,且 VMD / RAID On 关闭。可在 live 环境用 `lsblk -d -o NAME,MODEL,SIZE` 复核(`nvme0n1` 是否出现)。仍看不到则该设备不适用本方案(设计文档 1.2 偏离表),不要在安装器里反复重试 |
 | 重启后直接进 Windows(没看到 Ubuntu 入口) | 这**通常是正常形态**:`BootOrder` 首位未变,I1 成立。用 `BOOT_MENU_KEY` 调出一次性启动菜单,选 `ubuntu` 进入;同时核对固件条目列表:`ubuntu` 条目是否存在、其 EFI 路径是否指向 `\EFI\ubuntu\shimx64.efi`。条目缺失时从 live 环境用显式盘/分区新建:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(盘/分区按 `baseline/02-partitions.txt` 替换;不给盘/分区时默认 loader 未必指向 `\EFI\ubuntu\` 的 shim/grub)。命令只新建条目,**绝不用 `-o` 调顺序**;随后立刻 `sudo efibootmgr` 复读并断言"`BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾",不满足则按下一行处置并把偏差写进 L4 记录;也可直接重跑安装器的引导安装部分 |
-| 重启默认进了 Ubuntu(启动顺序被改) | 违反 I1,立即修:**只在固件设置界面**把 `Windows Boot Manager` 改回首位(与 `baseline/02-firmware-entries.txt` 记下的顺序一致)。固件没有顺序选项时,**不要用 `efibootmgr -o`**(I2 与交接规则第 5 条禁止):先记录当前 `BootOrder` 与偏差,再按 `docs/07-rescue.md` 与 L2 基线复原(必要时用 `efibootmgr -b <ubuntu 条目编号> -B` 删除该条目,让固件回落到 Windows),并把这次修动写进 L4 记录的偏差项 |
-| 停在 `grub>` / `grub rescue>` | 引导层问题,**不要重装**:按 `07-rescue.md` 的 GRUB 恢复流程处置(`ls` 找分区 → `set prefix` → `insmod normal` → `normal`;或 `chainloader` 回 Windows)。同时确认 `\EFI\Microsoft\` 未被改动、`BootOrder` 首位仍是 `Windows Boot Manager`;修完按验证段第 2、3 行复查 |
+| 重启默认进了 Ubuntu(启动顺序被改) | 违反 I1,立即修:**只在固件设置界面**把 `Windows Boot Manager` 改回首位(与 `baseline/02-firmware-entries.txt` 记下的顺序一致)。固件没有顺序选项时,**不要用 `efibootmgr -o`**(I2 与交接规则第 5 条禁止):先记录当前 `BootOrder` 与偏差,再按 [docs/07-rescue.md](07-rescue.md) 与 L2 基线复原(必要时用 `efibootmgr -b <ubuntu 条目编号> -B` 删除该条目,让固件回落到 Windows),并把这次修动写进 L4 记录的偏差项 |
+| 停在 `grub>` / `grub rescue>` | 引导层问题,**不要重装**:按 [07-rescue.md](07-rescue.md) 的 GRUB 恢复流程处置(`ls` 找分区 → `set prefix` → `insmod normal` → `normal`;或 `chainloader` 回 Windows)。同时确认 `\EFI\Microsoft\` 未被改动、`BootOrder` 首位仍是 `Windows Boot Manager`;修完按验证段第 2、3 行复查 |
 | Secure Boot 拒载(`Verification failed` / `Security Violation` / `bad shim signature`) | 先核查 `mokutil --sb-state`(应为 `enabled`),再确认用的是官方 ISO(其 shim 在微软签名链内)。**不要自签密钥、不要关闭 Secure Boot**;显卡/驱动类模块签名被拒时,回退 nouveau 并把问题留给 L4 的预签名包路径(设计文档第 7 节 L3/L4 行)。若 live 环境也被拒,先查固件里 `Secure Boot Mode` 是否被改成 `Custom`(应保持 `Standard`) |
 | 安装界面或首启黑屏 | 步骤 5(a):引导菜单按 `e`,内核行加 `nomodeset` 临时启动。它关掉 KMS,**与默认的 Wayland 会话冲突**,只是应急手段;能进系统后立即装好显卡驱动并移除该参数(`/etc/default/grub` 去掉 + `sudo update-grub`),不要把它当长期配置 |
 | 混合显卡模式下安装器/首启反复点不亮 | 步骤 5(b):按设计文档 3.17 走 MUX 分支,固件切**独显直连**先拿到可用系统。记录代价:显存被显示输出占用、续航变差、日后本地推理显存不足;切回混合模式的评估放在 L4,不要在这里反复试 |
@@ -233,7 +233,7 @@ ESP 被改动、Windows 引导异常、或要放弃这次 Ubuntu 安装时:**用
 
 ### 4. 整体撤除 Linux
 
-要彻底删掉 Ubuntu:走 `06-decommission.md` 的五步顺序——先把 `BootOrder` 首项改回 Windows Boot Manager → 备份 NVRAM 与 ESP 现状 → 再从 Windows 删除 Linux 分区 → 清理残留 `ubuntu` 条目 → 可选:扩展 `D:`(见 `06-decommission.md` 步骤 5;`C:` 与未分配空间不相邻,扩不了)。**顺序不可更换**:**明确禁止**"先格式化 Linux 分区再修引导"——那正是 `grub rescue>` 事故的成因。在 L5 之前不要手工删 Linux 分区。
+要彻底删掉 Ubuntu:走 [06-decommission.md](06-decommission.md) 的五步顺序——先把 `BootOrder` 首项改回 Windows Boot Manager → 备份 NVRAM 与 ESP 现状 → 再从 Windows 删除 Linux 分区 → 清理残留 `ubuntu` 条目 → 可选:扩展 `D:`(见 [06-decommission.md](06-decommission.md) 步骤 5;`C:` 与未分配空间不相邻,扩不了)。**顺序不可更换**:**明确禁止**"先格式化 Linux 分区再修引导"——那正是 `grub rescue>` 事故的成因。在 L5 之前不要手工删 Linux 分区。
 
 ### 5. 显卡模式回滚(MUX 分支)
 
