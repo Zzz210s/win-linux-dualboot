@@ -180,11 +180,12 @@ else
   die "写测试失败: $SHARED_MNT 不可写(核对 D: 未加密、Windows 已关 Fast Startup 与休眠)"
 fi
 
-if [ -x "$XDG_SCRIPT" ]; then
-  log "调用 $XDG_SCRIPT --user $TARGET_USER --apply"
-  "$XDG_SCRIPT" --user "$TARGET_USER" --apply --log "$(dirname "$LOG")/xdg-redirect.log"
+# 用 bash 显式调用:共享盘/外置盘上的仓库副本可能丢失可执行位(Windows 侧尤其常见)
+if [ -f "$XDG_SCRIPT" ]; then
+  log "调用 bash $XDG_SCRIPT --user $TARGET_USER --apply"
+  bash "$XDG_SCRIPT" --user "$TARGET_USER" --apply --log "$(dirname "$LOG")/xdg-redirect.log"
 else
-  die "找不到可执行脚本 $XDG_SCRIPT;家目录重定向未执行,请手工运行它"
+  die "找不到 $XDG_SCRIPT;家目录重定向未执行,请手工运行它"
 fi
 
 log "完成:共享盘已挂载 + 写测试通过 + 家目录重定向已交由 $XDG_SCRIPT 处理"
