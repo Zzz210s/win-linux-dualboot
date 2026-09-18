@@ -19,7 +19,7 @@
 - 已读 [00 入口](00-overview.md)的四条不变量与设备参数表,以及 [设计文档](design/00-design.md)第 2、3、4、5、7、9 节;不变量是理解"为什么某条缓解是这样"的前提。
 - 手上有当前设备的 `baseline/` 产物(至少 `02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt`):多条风险的缓解依赖它们可读,见 [baseline/README.md](../baseline/README.md)。
 - 知道当前处在哪个阶段(L0-L5 或验收):不同阶段要盯的风险不同,见"步骤 1"的对照表。
-- 救援介质(R4)在位:第 3、6、17、27 条的兜底路径都要靠 Ubuntu 安装 U 盘或 Windows 安装 U 盘进恢复环境,见 [07-rescue.md](07-rescue.md)。
+- 救援介质(R4)在位:第 3、6、27 条的兜底路径要靠 Ubuntu 安装 U 盘或 Windows 安装 U 盘进恢复环境(第 17 条引导菜单黑屏不需要 U 盘:进系统后开 `GRUB_TERMINAL=console` + 日常改用一次性 `BootNext`/厂商菜单键即可),见 [07-rescue.md](07-rescue.md)。
 - 口径:本文件只登记与分发**流程说明与外链**;第 23 条(激活合规)明确要求公开仓库不分发激活脚本本体。
 
 ## 步骤

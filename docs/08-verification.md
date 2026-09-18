@@ -26,7 +26,7 @@
 ## 前置条件
 
 - **L0-L4 已全部收尾**:`baseline/` 产物齐备(L2 报告结论为"允许进入 L3"、L3 的 `03-efi-layout.txt`、L4 的 `04-first-boot.md` 与 `04-robustness.md` 在位);L2 的硬闸门已经过一次复核,见 [L2 手册](03-preflight.md)。
-- **设备参数表已填**([00 入口](00-overview.md)的设备参数表):`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`FIRMWARE_MODE`、`GPU`、`ESP_SIZE`、`ROOT_SIZE`、`SNAPSHOT_SIZE`、`SECURE_BOOT`、`DISK_MODEL`、`DISK_SIZE`、`SHARED_PART_UUID`。验收中每一个"与基线/与目标值一致"的判据都要求先有这些取值,不允许现场凭记忆填。
+- **设备参数表已填**([00 入口](00-overview.md)的设备参数表):`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`FIRMWARE_MODE`、`GPU`、`ESP_SIZE`、`WINDOWS_SYSTEM_SIZE`、`WINDOWS_DATA_SIZE`、`ROOT_SIZE`、`SNAPSHOT_SIZE`、`SECURE_BOOT`、`DISK_MODEL`、`DISK_SIZE`、`SHARED_PART_UUID`。验收中每一个"与基线/与目标值一致"的判据都要求先有这些取值,不允许现场凭记忆填。其中 `WINDOWS_SYSTEM_SIZE`/`WINDOWS_DATA_SIZE` 是 D2/D3"只格 `C:`"尺寸核对的目标值,缺任一项该条判据无法执行。
 - **L2 基线可读**:`baseline/02-esp-backup/manifest.sha256`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` 三份都在且能逐行校验;A3/A4/A7、D3/D5/D6 全部依赖它们。
 - **脚本在位**(全部 dry-run 优先):
   - Windows 侧:[verify-baseline.ps1](../scripts/windows/verify-baseline.ps1)(周期性巡检,A3/A4)、[set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性进 Linux,C1)、[backup-esp.ps1](../scripts/windows/backup-esp.ps1)(基线重做时用);
@@ -56,7 +56,7 @@
 - [ ] **A3 `\EFI\Microsoft\` 与 L2 基线逐文件一致**
   - 怎么做:Windows 管理员会话执行 `powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -BaselineDir baseline`(见 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1));需要人工核对时再 `mountvol S: /s` 后对比。
   - 判据:输出第 ② 项"通过"(ESP 上的 `\EFI\Microsoft\` 相对 `baseline/02-esp-backup/manifest.sha256` 无差异)。
-  - 例外口径:若刚做过 D6(基线还原 + `bcdboot`),`bootmgfw.efi` 与 `BCD` 的差异属**预期**(见 [07-rescue.md](07-rescue.md) 第 2 节第 3 条),改判"Windows 能正常启动 + `{bootmgr}` 的 path 与基线一致 + `BootOrder` 首位未变"。
+  - 例外口径:若刚做过 **D6 或 D3 真做**(D6 的基线还原 + `bcdboot`,或 D3 真做时安装器重建 `\EFI\Microsoft\` 与 `BCD`、并可能覆盖 `\EFI\BOOT\bootx64.efi`),`bootmgfw.efi` 与 `BCD` 的差异属**预期**(D6 见 [07-rescue.md](07-rescue.md) 第 2 节第 3 条,D3 见以下 D3 的判据),改判"Windows 能正常启动 + `{bootmgr}` 的 path 与基线一致 + `BootOrder` 首位未变"。D5 复检 A3 时沿用本口径。
   - 设计依据:第 8 节 A 组第 2 行;**I3**。
 
 - [ ] **A4 `{bootmgr}` 的 `path` 与基线一致**
@@ -202,7 +202,7 @@
 
 - [ ] **F7 OOM 防护:`systemd-oomd` 启用且 zram 生效**
   - 怎么做:`systemctl is-enabled systemd-oomd`;`systemctl is-active systemd-oomd`;`zramctl`;`swapon --show`;`free -h`。
-  - 判据:`systemd-oomd` 为 `enabled`(或 `enabled-runtime`)且 `active`;`zramctl` 有 `/dev/zram0` 且大小约 8GiB;`swapon --show` 有 4GiB swapfile;`free -h` 的 swap 总量约 12GiB。
+  - 判据:`systemd-oomd` 为 `enabled`(或 `enabled-runtime`)且 `active`;`zramctl` 有 `/dev/zram0` 且大小约 `min(RAM/2, 8GiB)`(配置表达式见 [templates/zram-generator.conf](../templates/zram-generator.conf);16GiB 及以上内存的机器即约 8GiB,内存更小的机器按一半取值,不要按固定 8GiB 判);`swapon --show` 有 4GiB swapfile;`free -h` 的 swap 总量约 `4GiB + min(RAM/2, 8GiB)`(16GiB 及以上内存时即约 12GiB)。
   - 设计依据:第 8 节 F 组第 7 行、决策 3.8、4.7 节 R6、[templates/zram-generator.conf](../templates/zram-generator.conf)。
 
 - [ ] **F8 磁盘健康:`smartd` 运行且 `smartctl -H` 报告 PASSED**
@@ -210,14 +210,15 @@
   - 判据:`smartd` 为 `active`;`smartctl -H` 输出 `SMART overall-health self-assessment test result: PASSED`;`smartd` 日志里没有已升级的属性告警(有告警则按硬件问题处理,见"失败处理")。
   - 设计依据:第 8 节 F 组第 8 行、4.7 节 R9。
 
-- [ ] **F9 挂载稳健:`fstab` 中所有非 root 条目均带 `nofail`**
-  - 怎么做:`awk '!/^[[:space:]]*#/ && NF>=4 && $2!="/" {print $1, $2, $4}' /etc/fstab` 逐行核对;`findmnt --verify`;`grep -c nofail /etc/fstab`。
-  - 判据:共享盘行、`/snapshots` 行、swapfile 行、`/boot/efi` 行(若在 `fstab` 中列出)的挂载选项里都有 `nofail`;`findmnt --verify` 不报 error;计数 `>= 2`(L4 口径;含 ESP 与 swapfile 时应更高)。缺 `nofail` 的条目按"失败处理"补齐后复测,并把补齐动作记入偏差。
+- [ ] **F9 挂载稳健:L4 写入的 `fstab` 条目均带 `nofail`**
+  - 怎么做:`awk '!/^[[:space:]]*#/ && NF>=4 && $2!="/" {print $1, $2, $4}' /etc/fstab` 逐行核对(每一行都要判"该不该带 `nofail`",ESP 行按本条判据判"不加");`findmnt --verify`;`grep -c nofail /etc/fstab`(仅作辅助计数)。
+  - 判据:**逐行核对是唯一判据**。L4 写入的三条——共享盘行、`/snapshots` 行、swapfile 行——挂载选项里都必须带 `nofail`(计数 `>= 3` 只作辅助;不足 3 条即说明有缺项);`/boot/efi` 属系统必需挂载,**不加** `nofail`(给 ESP 加 `nofail` 是负收益:ESP 挂载失败被静默跳过时 `/boot/efi` 退化成 root 上的空目录,内核/grub 更新"写入成功"而真实 ESP 陈旧;若发现已加,记偏差并说明理由);`findmnt --verify` 不报 error。缺 `nofail` 的条目按"失败处理"补齐后复测,并把补齐动作记入偏差。
+  - 口径说明:本条是对设计第 8 节 F 组"`fstab` 中所有非 root 条目均带 `nofail`"**字面口径的收窄**——设计未区分"方案写入的条目"与"安装器生成的系统必需挂载",按 E3 的**方案级偏差**通道回写设计。
   - 设计依据:第 8 节 F 组第 9 行、4.5 节共享盘行、第 7 节 L4 `fstab` 行。
 
 ### D. 可撤除性组(D1-D6)
 
-顺序说明:D1 真做之后这台设备上不再有 Linux;D3/D4 是原地重装(至少真做一法)。所以:先做 D6(D6 依赖 ESP 与 Windows 引导,和是否有 Linux 无关)、再做 D2、然后 D3/D4 推演、最后 D1 真做退役/D5 复检与归档。**动手前把 A-C、F 组的全部证据落盘**。
+顺序说明:D1 真做之后这台设备上不再有 Linux(退役会按 [L5 手册](06-decommission.md) 步骤 3/4 删掉 Linux 分区并清理 `ubuntu` 条目,`\EFI\ubuntu\` 也随之消失);D3/D4 是原地重装(至少真做一法)。所以**次序固定为:D6 -> D2 -> D3/D4 推演 -> D5 复检 -> D1 真做退役(全部动作的最后一步)**。理由:D6 依赖 ESP 与 Windows 引导,和是否有 Linux 无关;D5 的判据要求"`\EFI\ubuntu\` 与 `\EFI\Microsoft\` 两棵子树并存、Ubuntu 仍可经一次性入口启动",只有排在 D1 之前才可能成立。**动手前把 A-C、F 组的全部证据落盘**。
 
 - [ ] **D1 按 L5 五步完整推演(参考设备真做一次)**
   - 怎么做:按 [L5 退役手册](06-decommission.md)与 [checklists/rollback.md](../checklists/rollback.md) 第 1 节执行,顺序为 1 -> 2 -> 3 -> 4 -> (5) 不可更换;第 5 步(扩展分区)可选。
@@ -240,8 +241,9 @@
   - 设计依据:第 8 节 D 组表格第 2 行、4.8 节办法二、决策 3.3。
 
 - [ ] **D5 重装(或推演)后 A 组四条不变量复检**
-  - 怎么做:重装或推演完成后重跑 A1、A3、A4、A5;并复核"本次没有出现过 `efibootmgr -o`"。
-  - 判据:四条全部通过;`\EFI\ubuntu\` 与 `\EFI\Microsoft\` 两棵子树并存且互不影响;Ubuntu 仍可经一次性入口启动。
+  - 怎么做:重装或推演完成后重跑 A1、A3、A4、A5(A3 按 A3 的**例外口径**判读:刚做过 D3 真做或 D6 时,`\EFI\Microsoft\`/`BCD` 的差异属预期);并复核"本次没有出现过 `efibootmgr -o`"。
+  - 判据:四条**逐项判据**通过(A3/A4 只认 `verify-baseline.ps1` 的 ① ② ③ 三项对应行,不认脚本整体退出码,见"验证"节);`\EFI\ubuntu\` 与 `\EFI\Microsoft\` 两棵子树并存且互不影响;Ubuntu 仍可经一次性入口启动。
+  - 兜底口径:若本设备**已真做 D1**(即 D5 排在 D1 之后复检),则本条降级为只复检 A1/A3/A4,A5 与"两棵子树并存""Ubuntu 仍可经一次性入口启动"三项标为**不适用**并写明理由(退役后 `\EFI\ubuntu\` 与 `ubuntu` 条目按设计已被清理,不存在"并存"可言)。
   - 设计依据:第 8 节 D 组表格第 2 行末句、4.8 节两法的第 5 步。
 
 - [ ] **D6 非重装逃生路径可用(引导层损坏场景)**
@@ -263,7 +265,7 @@
   - 设计依据:第 8 节 E 组、第 6 节规则 2。
 
 - [ ] **E3 本次与设备参数表的偏差已回写**
-  - 怎么做:把实测值与[00 入口](00-overview.md)的设备参数表逐项对账(容量、`ESP_SIZE` 实测尺寸、`SHARED_PART_UUID`、`VENDOR`/`BOOT_MENU_KEY`、`DISK_MODEL`/`DISK_SIZE`、`FIRMWARE_MODE`);然后按归属分流:
+  - 怎么做:把实测值与[00 入口](00-overview.md)的设备参数表逐项对账(容量、`ESP_SIZE` 实测尺寸、`WINDOWS_SYSTEM_SIZE`/`WINDOWS_DATA_SIZE` 实测容量、`SHARED_PART_UUID`、`VENDOR`/`BOOT_MENU_KEY`、`DISK_MODEL`/`DISK_SIZE`、`FIRMWARE_MODE`);然后按归属分流:
     - **设备级偏差**(分区表偏移与大小、UUID、实测容量、固件无顺序选项等):写进 `baseline/`(见 [baseline/README.md](../baseline/README.md) 的"多设备用法");
     - **方案级偏差**(影响适用设备类或"偏离项处置"的,如固件只认第一块盘、WinRE 占用预留空间、Windows 更新重写 ESP):追加到 [00 入口](00-overview.md)的"偏离项处置"表,并在 `baseline/08-verification.md` 里写明改哪一行。
   - 判据:本设备的每一条偏差都有明确归属与落盘位置,**没有只记在口头或聊天里的偏差**。
@@ -284,7 +286,7 @@
 - **逐组按勾选判定**:A、B、C、D、E、F 六组各自"全勾"即该组通过;六组全通过且 E4 的例外清单核对无误,**该设备验收通过**。
 - **通过定义**(逐字保留):任一组存在未勾选项且无在案记录的"已知例外" → 该设备判为未完成。至少一台设备完整跑通,方可称为"参考实现"。
 - **结论落盘**:在 `baseline/08-verification.md` 末尾写四行:① 六组逐组结论(A-F:通过/未通过);② 已知例外条数与编号;③ 参考实现判定(是/否,否的话列出缺口);④ 验收日期与执行人。
-- **证据可复核**:每一项的"怎么做"命令都能在本次设备上复跑并得到同一结论;脚本类判据以退出码为准(如 `verify-baseline.ps1` 的"巡检通过"= 0、"需人工介入"= 1)。
+- **证据可复核**:每一项的"怎么做"命令都能在本次设备上复跑并得到同一结论;**逐项判据优先于整体退出码**:`verify-baseline.ps1` 的"巡检通过"= 0、"需人工介入"= 1 只作参考,**退出码 1 也可能只是第 ④ 项 BitLocker 状态在 L3/L4 恢复保护后的预期差异**(口径见 [06-decommission.md](06-decommission.md) 步骤 2 与 [07-rescue.md](07-rescue.md) 第 2 节:判据是"三项引导判据通过、差异被记录",不是"退出码必须为 0");A3/A4/D6 只认 ① ② ③ 三项对应行的"通过"。
 - **维持条件(不属于勾选范围)**:每次 Windows 大版本更新或累积更新之后,按 7.1 节重跑巡检——`BootOrder` 首项、`\EFI\Microsoft\` 与基线比对、`{bootmgr}` 的 `path`、BitLocker 状态(即 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 的四项,见 [07-rescue.md](07-rescue.md) 第 7 节)。验收通过不等于永久通过。
 - **文档自检**:本文件改动后运行 `bash scripts/repo/check-docs.sh docs/08-verification.md`,期望 `check-docs: OK`;同时 `git status --porcelain` 里不得出现 `baseline/`。
 
@@ -292,10 +294,10 @@
 
 | 现象 | 立即动作 |
 |---|---|
-| A 组任一项不过 | **停手**,不进入 D 组真做(退役/重装)。`BootOrder` 首位不是 Windows Boot Manager 时,先进固件设置界面把它设回首位(**I1**);**不得**改用 `efibootmgr -o` 调整顺序(I2)。引导本身有问题时按 [07-rescue.md](07-rescue.md) 分类处置 |
+| A 组任一项**逐项判据**不过(不是"脚本整体退出码非 0",见"验证"节) | **停手**,不进入 D 组真做(退役/重装)。`BootOrder` 首位不是 Windows Boot Manager 时,先进固件设置界面把它设回首位(**I1**);**不得**改用 `efibootmgr -o` 调整顺序(I2)。引导本身有问题时按 [07-rescue.md](07-rescue.md) 分类处置。注意:`verify-baseline.ps1` 退出码 1 若只来自第 ④ 项 BitLocker 的预期差异,不算 A 组不过(口径见 [06-decommission.md](06-decommission.md) 步骤 2 与 [07-rescue.md](07-rescue.md) 第 2 节) |
 | A2/A7 出现 `grub>` 或 `grub rescue>` | 按 [07-rescue.md](07-rescue.md) 第 1 节两条路现场处置;若是 A7 演练中出现的,说明 I1 被破坏(固件仍在优先选失效的 `ubuntu` 条目),处置后按 [07-rescue.md](07-rescue.md) 第 6 节复原启动顺序,并**重做** A7 |
 | A7 演练后 `\EFI\ubuntu\` 还原不回去 | 用副本拷回失败时改走 live chroot:`grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`,再 `efibootmgr -c ...` 建条目(两条来源见 [07-rescue.md](07-rescue.md) 3.1 节)。**不要**为了"能启动"去改 `{bootmgr}` 的 `path`(I3) |
-| A3 报 `\EFI\Microsoft\` 与基线不一致,且不是 D6 演练所致 | 先判断是不是 Windows 更新重写了 ESP(设计第 9 节、7.1 节):按 [07-rescue.md](07-rescue.md) 第 3 节做基线还原 + `bcdboot`;若差异只涉及 `bootmgfw.efi` 与 `BCD`,按"预期差异"解释并留档 |
+| A3 报 `\EFI\Microsoft\` 与基线不一致,且不是 D6/D3 真做所致 | 先判断是不是 Windows 更新重写了 ESP(设计第 9 节、7.1 节):按 [07-rescue.md](07-rescue.md) 第 3 节做基线还原 + `bcdboot`;若差异只涉及 `bootmgfw.efi` 与 `BCD`,按"预期差异"解释并留档 |
 | B4/B5 挂载失败、只读或中文乱码 | 回 [L4 手册](05-first-boot.md)步骤 1 核对四条前提(Windows 已关 Fast Startup 与休眠、`D:` 未加密、`uid/gid/umask` 与 `windows_names`、未把 POSIX 语义工作流放上共享盘)。**数据可疑时立即停用共享盘并做第二份备份**,不要继续写入(设计第 9 节 `ntfs3` 写入风险) |
 | B6 重定向指向错误目录,或某程序不认自定义 XDG 目录 | 按 [xdg-redirect.sh](../scripts/linux/xdg-redirect.sh) 的口径回退:`~/.config/user-dirs.dirs.dbk.bak` 换回去;只重定向文档类目录,**不要**把 `~/.config`、`~/.ssh`、代码仓库搬上 NTFS(设计第 9 节家目录兼容性) |
 | B2/B3 出现模块签名被拒或 Secure Boot 被关 | 卸掉专有驱动回 `nouveau` 兜底,改走仓库预签名包;**不**做 DKMS、**不**自签密钥(决策 3.3)。检查是否有人执行过 `mokutil --import` 或关闭 Secure Boot |
@@ -306,7 +308,7 @@
 | F5 发现内核/驱动会被自动更新 | 立即修回 [templates/unattended-upgrades.snippet](../templates/unattended-upgrades.snippet) 的策略(黑名单 `linux-`/`nvidia-`),`systemctl restart unattended-upgrades`;在修回前**不要**做内核/驱动变更 |
 | F6 从另一台机器无法 SSH | 检查 `systemctl is-active ssh`、防火墙、地址与网段、`PermitRootLogin` 口径;桌面会话相关故障时优先确认"不登桌面也能连"。仍不通则登记为已知例外并在排障前先解决(它是 L4 故障矩阵里"桌面进入不了"的主要通道) |
 | F8 `smartctl -H` 非 PASSED 或 `smartd` 日志有告警 | 按硬件问题处理:先备份数据、评估更换;把它记入已知例外并**暂停** D 组真做(带故障盘做重装会放大风险) |
-| F9 `fstab` 缺 `nofail` | 先 `cp /etc/fstab /etc/fstab.dbk.bak`,给缺项补 `nofail`,然后 `sudo systemctl daemon-reload`、`sudo findmnt --verify` 复测;补齐动作记入偏差。若补完仍进不去系统,在 GRUB 中追加 `systemd.unit=emergency.target` 进急救(第 7 节 L4 `fstab` 行) |
+| F9 `fstab` 缺 `nofail`(限 L4 写入的共享盘/`/snapshots`/swapfile 三条) | 先 `cp /etc/fstab /etc/fstab.dbk.bak`,给缺项补 `nofail`,然后 `sudo systemctl daemon-reload`、`sudo findmnt --verify` 复测;补齐动作记入偏差。若缺的是 `/boot/efi` 的反向情形(ESP 行被加了 `nofail`),按同样备份口径**去掉**该选项并记偏差说明理由(见 F9 判据)。若补完仍进不去系统,在 GRUB 中追加 `systemd.unit=emergency.target` 进急救(第 7 节 L4 `fstab` 行) |
 | D1 推演中途想反悔 | 按 [06-decommission.md](06-decommission.md) 的"变体:只想暂时停用 Linux"处理:分区与 `ubuntu` 条目保留、日常用一次性入口进 Linux;**不要**把 `BootOrder` 改成 Ubuntu 优先(I1) |
 | D 组真做(退役/重装)后想恢复 Linux | 按设计 4.8 办法二重装:[07-rescue.md](07-rescue.md) 第 5 节。只格 root、ESP 复用且**绝不勾选格式化**、Windows 各分区不动;`/snapshots` 随退役消失,需按 [L3 手册](04-ubuntu.md)从预留空间重建(本方案不提供在已有系统上缩容的路径,决策 3.5) |
 | D3/D4 发现误格了 `D:` 或 Linux 分区 | 立刻停止一切写盘动作(不再建分区、不跑安装器)。ESP 被破坏走 D6/D1 的基线还原;`D:` 被删以数据恢复优先,不要再写入原盘 |
