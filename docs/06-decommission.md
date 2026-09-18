@@ -36,7 +36,7 @@
   - `/snapshots` 里有无"还想要的旧版本"(快照会随分区一起消失);
   - 共享盘上是否有"半成品"目录(如已 `mv` 到共享盘的家文件)。把结论记进清单。
 - **基线可用**(I4):`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` 在位可读。退役要删分区、可能还要扩分区,属"分区表变更",**没有可用基线就没有回滚点**。
-- **BitLocker 状态已知且恢复密钥在手**:48 位恢复密钥已备份(设计第 9 节)。若 `C:` 当前处于保护开启状态,步骤 5 扩展 `C:` 之前先挂起保护(`manage-bde -protectors -disable C: -rebootcount 0`),扩展后按"回滚"第 4 条恢复。删除 Linux 分区不改动 `C:` 本身,但分区表变更整体属 BitLocker 的触发场景之一,不确认状态就不要动手。
+- **BitLocker 状态已知且恢复密钥在手**:48 位恢复密钥已备份(设计第 9 节)。**只有走步骤 5 的例外路径**(离线重排给 `C:` 扩容)才有必要先挂起保护:`manage-bde -protectors -disable C: -rebootcount 0`,扩容完成后按"回滚"第 4 条恢复。**标准路径不需要挂起**:它只删两块 ext4 分区并扩 `D:`,不改动 `C:` 的偏移。但分区表变更**整体**属于 BitLocker 的触发场景,所以"恢复密钥在手"是硬前提——不确认状态就不要动手。
 - **救援 U 盘在位**(设计 4.7 的 R4):常备的 Ubuntu 安装 U 盘是"删到一半发现不对"时唯一可靠的入口,也是步骤 4 第三条路径要用到的工具。
 - **回 Linux 的入口已知**(L4 步骤 7 已配):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。退役期间只在步骤 1 需要进一次 Linux,之后**再也不需要**。
 - **参数表已填**:`DISK`、`DISK_MODEL` / `DISK_SIZE`、`ESP_SIZE = 2GiB`、`WINDOWS_SYSTEM_SIZE = 200GiB`、`WINDOWS_DATA_SIZE ≈ 635GiB`、`ROOT_SIZE = 100GiB`、`SNAPSHOT_SIZE = 15GiB`、`BOOT_MENU_KEY`。删分区时靠它与 `baseline/02-partitions.txt` 的偏移/大小逐项对账。
@@ -62,16 +62,19 @@ sudo lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT | tee ~/l5-before-lsblk.txt
 
 1. **进 Linux**:按 `BOOT_MENU_KEY` 在一次性启动菜单里选 `ubuntu`;或从 Windows 侧执行 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(默认空跑,确认后去掉 `-WhatIf`),它是**一次性** BootNext,不改 `BootOrder`;
 2. **记录现状**:`sudo efibootmgr -v`,抄下 `BootOrder:` 整行、`Windows Boot Manager` 的条目编号、`ubuntu` 条目的编号与 loader 路径(`\EFI\ubuntu\shimx64.efi` 或 `grubx64.efi`;通常 shim 与 grub 各一条);
-3. **重启并进固件设置**(是 `Setup`,不是启动菜单):在 `Boot Order` / `Boot Sequence` 里把 `Windows Boot Manager` 移到第一位。不同固件的操作方式不同(方向键 + `+`/`-`、`F5`/`F6`、或用下拉框选中后 `Enter`),以"保存后 `BootOrder` 首位是 Windows"为准;
-4. **保存退出**并重启,确认开机直接进 Windows。
+3. **进固件设置界面**(是 `Setup`,不是启动菜单)。两条入口,优先用第一条:
+   - **在 Ubuntu 里直接重启进固件设置**:`sudo systemctl reboot --firmware-setup`(不用记键位,也不会错过按键时机);
+   - **该命令不被支持时**(少数固件/内核组合会直接普通重启,或报内核不支持该操作):关机后按厂商的固件设置键开机——键位见 [L1 手册](01-firmware.md) 的"厂商差异表",该表的"启动菜单键"列在每个厂商格内同时给出固件设置键(如 Dell `F2`、HP `F10`、Lenovo `F2`、ASUS `F2` / `Del`、Acer `F2`、MSI `Del`、通用 `Del` 或 `F2`)。
+4. 在 `Boot Order` / `Boot Sequence` 里把 `Windows Boot Manager` 移到第一位。不同固件的操作方式不同(方向键 + `+`/`-`、`F5`/`F6`、或用下拉框选中后 `Enter`),以"保存后 `BootOrder` 首位是 Windows"为准;
+5. **保存退出**:保存退出后机器会**直接进 Windows**,步骤 2 就在这个 Windows 会话里做,**不要再回 Ubuntu 一趟**。
 
 **只能用固件设置界面**——不得用 `efibootmgr -o`。理由不只是纪律:改永久顺序这件事,固件自己是唯一的权威,NVRAM 与固件的 BootOrder 视图不一致时会被固件在下一次开机时改回去,用工具"赢了"只是暂时现象(I2)。
 
-**固件没有顺序选项时**(部分机型只给"删除条目",不给顺序调整):这不算违规,按偏差处置,并按下面的次序调整执行——
+**固件没有顺序选项时**(部分机型只给"删除条目",不给顺序调整):这不算违规,按偏差处置。这一支路是**全文唯一允许的次序调整**,而且比正文多走两次重启(共三段),物理闭环如下——先备份、后删条目,次序不可颠倒(理由:删条目本身就是一次 NVRAM 变更,必须先有备份):
 
-1. **先把步骤 2 的备份做掉**(这是全文唯一允许的次序调整,理由是:删条目本身就是一次 NVRAM 变更,必须先有备份);
-2. 再在 Ubuntu 里执行 `sudo efibootmgr -b <ubuntu 条目编号> -B` 删除 `ubuntu` 条目,让固件回落到 `Windows Boot Manager`(设计 4.8 第三选择与 [L3 手册](04-ubuntu.md)同一手段);
-3. 随后按 `07-rescue.md` 与 L2 基线(`baseline/02-firmware-entries.txt`)核对现场并把这个偏差写进清单。条目删掉后,"残留清理"就等于步骤 4 已完成,清单上照勾并在备注里写明。
+1. **第一段:回 Windows 做备份**。在当前的 Ubuntu 会话里先完成步骤 0 的只读取证与 `sudo efibootmgr -v` 记录(步骤 1 第 2 条),然后重启回 Windows,按步骤 2 把 NVRAM 与 ESP 现状备份到 `D:\dbk-l5-backup\`。**这份备份没做完,就不要往下走**;
+2. **第二段:回 Ubuntu 删条目**。在 Windows 里按 `BOOT_MENU_KEY` 选 `ubuntu`,或执行 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 BootNext,不改顺序),回 Ubuntu 后执行 `sudo efibootmgr -b <ubuntu 条目编号> -B` 删除 `ubuntu` 条目,让固件回落到 `Windows Boot Manager`(设计 4.8 第三选择与 [L3 手册](04-ubuntu.md)同一手段);删完用 `sudo efibootmgr -v` 确认条目已消失;
+3. **第三段:重启回 Windows,接着做步骤 3**。此后**再也不需要进 Linux**。条目删掉后,"残留清理"就等于步骤 4 已完成,清单上照勾并在备注里写明;最后按 `07-rescue.md` 与 L2 基线(`baseline/02-firmware-entries.txt`)核对现场,并把这个偏差记进清单。
 
 怎么知道成功了:
 
@@ -172,7 +175,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 
 操作:磁盘管理 → 右键 `D:` → 扩展卷 → 用默认的"全部可用空间"(或按需填写容量)→ 完成。判据见"验证"第 9 行。
 
-若确实要给 `C:` 扩容(例如 `C:` 长期吃紧、且不愿等到下次重装):把它记为设备参数偏差,先确认基线可用与 BitLocker 状态,再按"离线移动分区"的第三方路线在**救援环境**里做;不要在 Windows 运行时对 `D:` 做"移动分区起点"的操作。本方案不提供运行中缩容/移动 Windows 分区的步骤(设计 3.5 明确否掉了"在已有系统上缩容"这一整类路径)。
+若确实要给 `C:` 扩容(例如 `C:` 长期吃紧、且不愿等到下次重装):把它记为设备参数偏差。**"离线移动分区"的第三方路线不在本方案交付范围,仅作偏差登记——本文不提供该路线的步骤**;真要试也得先确认基线可用与 BitLocker 状态,在**救援环境**里做,并且第三方工具**不得改 `{bootmgr}` 的 `path`、不得覆盖 `\EFI\Microsoft\`**(I3;越了这两条就不是"偏差"而是违规)。不要在 Windows 运行时对 `D:` 做"移动分区起点"的操作。本方案不提供运行中缩容/移动 Windows 分区的步骤(设计 3.5 明确否掉了"在已有系统上缩容"这一整类路径)。
 
 ### 变体:只想暂时停用 Linux(不删分区)
 
@@ -191,7 +194,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 
 | # | 检查项 | 命令 / 来源 | 期望 |
 |---|---|---|---|
-| 1 | 五步顺序未跳序 | `checklists/rollback.md` 第一节的勾选记录与备注 | 勾选顺序为 1 → 2 → 3 → 4 →(5);记录里没有"先删分区再修引导"的动作 |
+| 1 | 五步顺序未跳序 | `checklists/rollback.md` 第一节的勾选记录与备注 | 勾选顺序为 1 → 2 → 3 → 4 →(5);记录里没有"先删分区再修引导"的动作;走了步骤 1 的偏差分支时,其"先备份 → 回 Ubuntu 删条目 → 再回 Windows"的三段次序也写进备注(该分支在清单上排在步骤 2 之后,属步骤 1 的完成方式,不算跳序) |
 | 2 | `BootOrder` 首位是 `Windows Boot Manager` | Windows 侧 `bcdedit /enum firmware`;或 live 环境 `sudo efibootmgr -v` | `BootOrder` 第一项对应 `Windows Boot Manager` |
 | 3 | "动手前"备份已生成 | `D:\dbk-l5-backup\02-esp-backup\manifest.sha256`、`02-firmware-entries.txt`、`02-partitions.txt` | 三份在位、可读;备份树含 `EFI\Microsoft\` 与 `EFI\ubuntu\` 两棵子树 |
 | 4 | 动手前现场与 L2 基线一致 | `powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -BaselineDir baseline` | ①②③ 三项"通过";④ 若有差异属预期(L3 已恢复 BitLocker 保护),已记入清单 |
@@ -208,7 +211,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 
 | 现象 | 立即动作 |
 |---|---|
-| 步骤 1 改完顺序,重启仍进 Linux | 先确认"保存"真的生效(部分固件要按 `F10` 再确认一次退出)。仍不进 Windows 就别急着往下走:**回到固件设置界面再设一次**;固件确实不支持顺序调整时,按步骤 1 的偏差路径处理(先做步骤 2 备份,再 `efibootmgr -b <n> -B` 删条目让固件回落)。**不得**改用 `efibootmgr -o`(I2) |
+| 步骤 1 改完顺序,重启仍进 Linux | 先确认"保存"真的生效(部分固件要按 `F10` 再确认一次退出)。仍不进 Windows 就别急着往下走:**回到固件设置界面再设一次**;固件确实不支持顺序调整时,按步骤 1 的偏差分支处理(三段重启的次序:**先**回 Windows 做步骤 2 备份,**再**用 `BOOT_MENU_KEY` 回 Ubuntu `efibootmgr -b <n> -B` 删条目让固件回落,**然后**重启进 Windows 做步骤 3)。**不得**改用 `efibootmgr -o`(I2) |
 | 重启停在 `grub>` / `grub rescue>` | 说明引导没有先归位,或 `ubuntu` 条目指向的引导文件已损坏。**立即停手,不要再删任何分区**。按 `07-rescue.md` 的两条路现场处置:`ls` 找分区 → `set prefix` → `insmod normal` → `normal`;或直接回 Windows:`search --file --set=root /EFI/Microsoft/Boot/bootmgfw.efi` → `chainloader` → `boot`。之后用基线复原(见"回滚"第 3 条)并复查四不变量 |
 | 磁盘管理里认不出哪块是 Linux 分区 | **停下,不要猜**。用 `baseline/02-partitions.txt` 与 `D:\dbk-l5-backup\02-partitions.txt` 的偏移/大小逐项对账;或在 `diskpart` 里 `select disk 0` → `list partition` 看大小与位置。两块 ext4 分区是 100GiB 与 15GiB、无盘符;`D:` 是 ≈635GiB。**宁可停,不可试** |
 | 误删了 `D:` 或 ESP | 立刻停止一切写盘动作(尤其不要再建分区、不要跑安装器)。ESP 被删:按"回滚"第 3 条用 ESP 备份 + `bcdboot` 复原;`D:` 被删:数据恢复优先于系统修复,先评估是否需要专业恢复,不要在原盘写入新数据 |

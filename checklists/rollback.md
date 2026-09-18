@@ -16,10 +16,10 @@
 |---|---|---|
 | `[ ]` | 动手前只读取证:`sudo efibootmgr -v`、`sudo lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT`,两份输出拷到共享盘/外置盘(不要留在 `~/`) | 两份文件在仓库外可读;本步**未做任何写操作**(NVRAM 与分区表未变) |
 | `[ ]` | 步骤 1:进 Linux(`BOOT_MENU_KEY` 或 `set-bootnext.ps1`),`sudo efibootmgr -v` 抄下 `BootOrder:` 整行、`Windows Boot Manager` 编号、`ubuntu` 编号与 loader 路径 | 抄下来的三样都记进本行备注;`ubuntu` 条目路径为 `\EFI\ubuntu\shimx64.efi` 或 `grubx64.efi` |
-| `[ ]` | 步骤 1:重启进**固件设置**,把 `Windows Boot Manager` 移到 `BootOrder` 第一位(只用界面,不用工具) | 重启后默认进 Windows;`efibootmgr -v` 或 `bcdedit /enum firmware` 的 `BootOrder` 第一项是 `Windows Boot Manager`;连续重启 3 次都进 Windows |
-| `[ ]` | 步骤 1 的偏差分支(仅当固件不给顺序选项时):**先做完下面步骤 2 的备份**,再 `sudo efibootmgr -b <ubuntu 编号> -B` 删条目让固件回落 | 条目删除后 `BootOrder` 首位是 `Windows Boot Manager`;偏差已写在备注里 |
+| `[ ]` | 步骤 1:进**固件设置**(优先在 Ubuntu 里 `sudo systemctl reboot --firmware-setup`;该命令不被支持时关机后按厂商 Setup 键,键位见 [L1 手册](../docs/01-firmware.md) 的"厂商差异表"),把 `Windows Boot Manager` 移到 `BootOrder` 第一位(只用界面,不用工具) | 保存退出后**直接进 Windows**;`efibootmgr -v` 或 `bcdedit /enum firmware` 的 `BootOrder` 第一项是 `Windows Boot Manager`;连续重启 3 次都进 Windows |
 | `[ ]` | 步骤 2:重启进 Windows,管理员会话跑 `backup-esp.ps1 -OutDir D:\dbk-l5-backup`(**不要**用默认的 `-OutDir baseline`,会覆盖 L2 基线) | `D:\dbk-l5-backup\02-esp-backup\manifest.sha256` 在位;脚本输出的"清单 N 个文件"与备份树文件数一致;备份树含 `EFI\Microsoft\` 与 `EFI\ubuntu\` 两棵子树 |
-| `[ ]` | 步骤 2:跑 `verify-baseline.ps1 -BaselineDir baseline` 复核"动手前"现场未被改动 | ①②③ 三项(引导)全部"通过";④ BitLocker 若与 L2 报告不同属预期差异(备注写明);⑧ 差异已记录,不是引导层问题 |
+| `[ ]` | 步骤 2:跑 `verify-baseline.ps1 -BaselineDir baseline` 复核"动手前"现场未被改动 | ①②③ 三项(引导)全部"通过";④ BitLocker 若与 L2 报告不同属预期差异(备注写明);四项里只有 ④ 有差异,已记录,不是引导层问题 |
+| `[ ]` | 步骤 1 的偏差分支(仅当固件不给顺序选项时;**次序见正文,勿提前执行**,含三段重启):① 先回 Windows 做步骤 2 的备份 → ② 用 `BOOT_MENU_KEY`(或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1))回 Ubuntu,`sudo efibootmgr -b <ubuntu 编号> -B` 删条目让固件回落 → ③ 再重启进 Windows 做步骤 3 | 备份**早于**删条目(删条目本身即 NVRAM 变更);条目删除后 `BootOrder` 首位是 `Windows Boot Manager`;三段重启的次序已写进备注;偏差已记录 |
 | `[ ]` | 步骤 3:**对账后**在磁盘管理中删除两块无盘符的 ext4 分区(100GiB 与 15GiB),各右键"删除卷" | 删前用 `baseline\02-partitions.txt` 与 `D:\dbk-l5-backup\02-partitions.txt` 逐项对上偏移/大小;删后 `Get-Partition -DiskNumber 0` 的分区数比删前少 2 |
 | `[ ]` | 步骤 3 后复核:ESP / MSR / `C:` / `D:` / WinRE 未被触碰 | 图形与 `Get-Partition` 里这 5 项仍在,大小与基准一致;多出一处连续未分配空间约 115GiB |
 | `[ ]` | 步骤 4:清理 NVRAM 残留 `ubuntu` 条目(固件界面"删除启动项" → `bcdedit /enum firmware` + `bcdedit /delete {identifier}` → live U 盘 `sudo efibootmgr -b <编号> -B`) | `bcdedit /enum firmware` 里没有 `path` 指向 `\EFI\ubuntu\...` 的条目;`BootOrder` 首位仍是 `Windows Boot Manager`(**没有**用改顺序代替删除) |
@@ -84,6 +84,8 @@
 
 设计 4.8 的"第三选择":**不是重装**,而是用 ESP 备份还原引导文件 + `bcdboot` 重建 + 清理 NVRAM。命令与判据以 [L2 手册](../docs/03-preflight.md)"回滚"第 1 条为准,本节只做勾选。
 
+**执行环境**:本节在 Windows 管理员会话或 WinRE 命令提示符中执行(`mountvol /s`、`Get-FileHash`、`bcdboot` 均需管理员权限)。
+
 | 勾选 | 动作 | 判据 / 如何确认 |
 |---|---|---|
 | `[ ]` | 先确认崩溃层级:系统分区数据完好、只是引导不进/进错 | 能从 live U 盘看到 Windows `C:` 上的 `\Windows\` 与 `D:` 上的数据;没有分区表层面的损坏(分区数、大小与 `baseline\02-partitions.txt` 一致) |
@@ -92,7 +94,7 @@
 | `[ ]` | 把 `baseline\02-esp-backup\EFI\` 复制回 ESP:`robocopy baseline\02-esp-backup\EFI S:\EFI /E` | **只复制 `EFI\` 子树**;`manifest.sha256` 不复制回 ESP;复制后 `S:\EFI\Microsoft\` 与备份一致 |
 | `[ ]` | 重建 Windows 引导:`bcdboot <Windows 盘符>:\Windows /s S: /f UEFI` | 命令成功(无 "Failure when attempting to copy boot files");Windows 盘符按实际替换 |
 | `[ ]` | 卸载 ESP:`mountvol S: /d` | ESP 不再占用该盘符,ESP 内容未被后续写操作污染 |
-| `[ ]` | 复查四条不变量 | `BootOrder` 首位为 `Windows Boot Manager`;`\EFI\Microsoft\` 逐文件与基线一致;`{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致;`ubuntu` 条目状态与预期一致(留着 / 已删,写进备注) |
+| `[ ]` | 复查四条不变量 | `BootOrder` 首位为 `Windows Boot Manager`;引导层的判据是"`bootmgfw.efi` 与基线一致、`{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致、且 Windows 能正常启动";`\EFI\Microsoft\Boot\BCD` 由 `bcdboot` 重建,其哈希差异记为**预期**,不按"逐文件与基线一致"判;`ubuntu` 条目状态与预期一致(留着 / 已删,写进备注) |
 | `[ ]` | 用脚本复核并留档 | 管理员会话跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) -BaselineDir baseline:①②③ 三项"通过";④ BitLocker 的差异按预期记录处理;结论写进备注 |
-| `[ ]` | 复原后连续重启 3 次 | 都直接进 Windows,无 `grub>` / `grub rescue>`;需要 Linux 时用 `BOOT_MENU_KEY` 或 [reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh) 的反向入口 |
+| `[ ]` | 复原后连续重启 3 次 | 都直接进 Windows,无 `grub>` / `grub rescue>`;需要 Linux 时用 `BOOT_MENU_KEY` 的一次性启动菜单,或在 Windows 侧跑 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 BootNext,不改启动顺序) |
 | `[ ]` | 若 `\EFI\ubuntu\` 也已损坏,且不再需要 Linux | 按 [L5 退役手册](../docs/06-decommission.md) 的五步走:先修 `BootOrder`,再清理条目与残留目录;**不要**先删分区/先删目录 |
