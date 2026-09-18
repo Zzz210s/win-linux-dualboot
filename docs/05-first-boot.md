@@ -37,7 +37,7 @@ L4 完成后,这台设备应当达到:
 
 - **L3 已收尾且 11 项全绿**:`baseline/03-efi-layout.txt` 在位,`BootOrder` 首位仍是 `Windows Boot Manager`,`ubuntu` 条目在末尾(I1、I2 未被破坏)。L4 不修引导,带引导问题进来只会把两件事混在一起。
 - **BitLocker 保护已恢复**:L3 步骤 8 的 `manage-bde -protectors -enable C:` 已完成。L4 不改分区表与固件,但共享盘方案的前提是 `D:` **不加密**,该状态要与 [L2 手册](03-preflight.md)的记录一致。
-- **回 Windows 的入口可用**(设计文档交接规则第 6 条):`BOOT_MENU_KEY` 能调出一次性启动菜单(见 [L0 手册](01-firmware.md) 厂商差异表);或 [scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)、[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(由后续任务交付)| 二者任一可用即可,**不允许**用 `efibootmgr -o` 代替(I2)。
+- **回 Windows 的入口可用**(设计文档交接规则第 6 条):`BOOT_MENU_KEY` 能调出一次性启动菜单(见 [L0 手册](01-firmware.md) 厂商差异表);或 [scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)、[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)| 二者任一可用即可,**不允许**用 `efibootmgr -o` 代替(I2)。
 - **快照能力已就绪**(R1、R2):`/snapshots` 分区可写;Timeshift 由步骤 6 配置(目标为 `/snapshots`、保留 3 份(可调))。在第一次内核/驱动变更之前必须已有至少一个快照点,否则**不得**执行该变更。
 - **参数表已填**(每台设备一份,见[入口文档](00-overview.md)):`SHARED_PART_UUID`(Windows `D:` 分区 UUID)、`SNAPSHOT_PART_UUID`(L3 建的 15GiB ext4 快照分区)、`GPU`(是否混合显卡)、`BOOT_MENU_KEY`、`DISK`。两个 UUID 的取值来源是 `baseline/02-partitions.txt` 与 L3 分区表交叉核对,**不要凭记忆填写**。
 - **Windows 侧重定向清单已固化且不得再改名**(L1 的隐含约定,见 [L1 手册](02-windows.md) 第 4 节):`D:\Desktop`、`D:\Documents`、`D:\Downloads`、`D:\Pictures`、`D:\Videos`、`D:\Music` 与办公约定目录 `D:\Shared\`。Linux 侧逐项对应为 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}` 与 `/mnt/shared/Shared/`。
@@ -231,7 +231,7 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeI
 
 - **上游工具**:`KeyofBlueS/bt-keys-sync`(https://github.com/KeyofBlueS/bt-keys-sync),依赖 `chntpw`。本仓库只调用上游脚本,**不内置其代码**(第 11 节的引用结论);
 - **方向:以 Windows 侧密钥为准**,用上游的 `--windows-keys` 路径导入到 Linux;**不做反向写入 Windows 注册表**——上游自己的建议也是这个方向,反向写风险更高(4.5 回滚列:"注册表有备份,可还原");
-- **包装脚本**:[scripts/linux/bt-keys-sync-wrapper.sh](../scripts/linux/bt-keys-sync-wrapper.sh)(由后续任务交付)负责装 `chntpw`、确认 Windows 分区可读(只读即可读取注册表文件)、下载上游脚本到 `/opt/bt-keys-sync/`、按下面顺序提示操作;
+- **包装脚本**:[scripts/linux/bt-keys-sync-wrapper.sh](../scripts/linux/bt-keys-sync-wrapper.sh)负责装 `chntpw`、确认 Windows 分区可读(只读即可读取注册表文件)、下载上游脚本到 `/opt/bt-keys-sync/`、按下面顺序提示操作;
 - **操作顺序**(顺序错了就得重来):
   1. 先在 **Ubuntu** 里完成一次正常配对(生成 Linux 侧记录);
   2. 重启进 **Windows**,对同一设备**重新配对一次**(让 Windows 侧成为权威来源);
@@ -254,10 +254,10 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 
 - **安装前置**:zram 单元由 `systemd-zram-generator` 提供,该包必须在 zram 配置落地前装好。`storage.sh --apply` 会自己 `apt-get install -y systemd-zram-generator` 一次(已装则跳过;`DBK_SKIP_APT=1` 时只跳过安装,便于无 apt 环境做静态校验)。若脚本报"必须先执行 `sudo apt install -y systemd-zram-generator` 再重跑",照提示装完重跑 `storage.sh --apply` 即可,否则 R6 的 zram 半项判据不成立;
 - **`--uuid` 与 `--snapshot-uuid` 的先后**:两个 UUID 都先交给 `mount-shared.sh` 写 `fstab`(共享盘行与快照分区行各自独立判定,第一次只给 `--uuid` 也能跑,补上 `--snapshot-uuid` 重跑会补写快照行);`--snapshot-uuid` 决定 `/snapshots` 是否可用——**它是 R1/R2 的落点,缺了它 R1/R2 判据不可能达成**;
-- **退出码不能当判据**:`first-boot.sh` 的退出码**恒为 0**(单模块失败不阻塞登录),要看的是 `/var/log/dbk/first-boot-summary.txt`——表头 `模块 | 状态 | 关键输出`,末尾有 `失败项: N;跳过项: M` 与失败模块清单。`--apply` 之后先看这个文件,再看 `/var/log/dbk/<模块>.log`;
+- **退出码不能当判据**:`first-boot.sh` 的模块失败不改变退出码(恒为 0;**仅用法/权限类错误才非 0**),要看的是 `/var/log/dbk/first-boot-summary.txt`——表头 `模块 | 状态 | 关键输出`,末尾有 `失败项: N;跳过项: M` 与失败模块清单。`--apply` 之后先看这个文件,再看 `/var/log/dbk/<模块>.log`;
 - **`hardening.sh` 要在 `mount-shared.sh` 之后复跑一次**:编排顺序是 hardening 在 mount-shared 之前,所以首次 `--apply` 时 `/snapshots` 还没挂上,R1/R2 会记 `fail`(属预期,不是缺陷);`mount-shared` 记 `ok` 后执行 `sudo bash scripts/linux/hardening.sh --apply`,R1/R2 才会记为 `ok`;
 - **单模块重跑**(排障,全部幂等):`sudo bash scripts/linux/storage.sh --apply`、`sudo bash scripts/linux/hardening.sh --apply`、`sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID> --apply`;
-- **`graphics.sh` 已交付**(任务 9):`first-boot.sh` 会按当前模式(`--apply`/`--dry-run`)调用它并记 `ok`/`fail`(沿用脚本退出码);只有当**仓库里 `graphics.sh` 文件不存在**时才会记 `skipped` 并打印提示级消息(**不改退出码、不阻塞登录**),此时显卡驱动按步骤 3 手工收敛;脚本内另有 `DBK-RESULT skipped` 的情形——**本机无 NVIDIA 独显或读不到显卡信息**(`lspci` 无 VGA/3D 数据、无 `pciutils`)时跳过模块加载判定,属正常跳过,不是失败。单独重跑:`sudo bash scripts/linux/graphics.sh --apply`(也可先 `bash scripts/linux/graphics.sh` 看 dry-run 采集结果);脚本支持 `DBK_CMDLINE=<文件>` 替换 `/proc/cmdline`、`DBK_LOG=<文件>` 替换日志路径,便于离线演练/复核。**dry-run 与 `--apply` 的判据差异**:dry-run 下 graphics 的真机判据失败以 `DBK-RESULT dry-run-fail` 呈现(状态列仍为 ok,不算失败项);`--apply` 下同一条件才是 `DBK-RESULT fail` 且 RC=1。
+- **`graphics.sh`**(见 [graphics.sh](../scripts/linux/graphics.sh)):`first-boot.sh` 会按当前模式(`--apply`/`--dry-run`)调用它并记 `ok`/`fail`(沿用脚本退出码);只有当**仓库里 `graphics.sh` 文件不存在**时才会记 `skipped` 并打印提示级消息(**不改退出码、不阻塞登录**),此时显卡驱动按步骤 3 手工收敛;脚本内另有 `DBK-RESULT skipped` 的情形——**本机无 NVIDIA 独显或读不到显卡信息**(`lspci` 无 VGA/3D 数据、无 `pciutils`)时跳过模块加载判定,属正常跳过,不是失败。单独重跑:`sudo bash scripts/linux/graphics.sh --apply`(也可先 `bash scripts/linux/graphics.sh` 看 dry-run 采集结果);脚本支持 `DBK_CMDLINE=<文件>` 替换 `/proc/cmdline`、`DBK_LOG=<文件>` 替换日志路径,便于离线演练/复核。**dry-run 与 `--apply` 的判据差异**:dry-run 下 graphics 的真机判据失败以 `DBK-RESULT dry-run-fail` 呈现(状态列仍为 ok,不算失败项);`--apply` 下同一条件才是 `DBK-RESULT fail` 且 RC=1。
 
 | # | 措施 | 落地 | 判据 / 回滚点 |
 |---|---|---|---|
@@ -279,8 +279,8 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 
 做什么:确认本机有一条"一键回 Windows"的路径,并且它是**一次性**的(I2)。
 
-- **Ubuntu 侧**:[scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)(由后续任务交付)用 `efibootmgr -n <Windows 条目编号>` 设置一次性启动项,执行后重新读取并断言 `BootOrder` 未变,再 `systemctl reboot`;
-- **Windows 侧**:[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(由后续任务交付)用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做等价的一次性切换,执行后同样断言第一条仍是 Windows Boot Manager;
+- **Ubuntu 侧**:[scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)用 `efibootmgr -n <Windows 条目编号>` 设置一次性启动项,执行后重新读取并断言 `BootOrder` 未变,再 `systemctl reboot`;
+- **Windows 侧**:[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做等价的一次性切换,执行后同样断言第一条仍是 Windows Boot Manager;
 - **厂商菜单键**:开机按 `BOOT_MENU_KEY`(参数表)选 `Windows Boot Manager`,这是零副作用的兜底路径,也是 L3 进 Linux 用的同一条路径(见 [L0 手册](01-firmware.md) 厂商差异表)。
 
 三条纪律:

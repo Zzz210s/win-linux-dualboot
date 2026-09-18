@@ -370,7 +370,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 
 ### 7.1 周期性巡检
 
-每次 Windows 大版本更新或累积更新后,重跑基线核对:**BootOrder 首项**、**ESP 目录树是否被改动**、**BitLocker 状态**。
+每次 Windows 大版本更新或累积更新后,重跑基线核对:**BootOrder 首项**、**ESP 目录树是否被改动**、**`{bootmgr}` 的 `path`**、**BitLocker 状态**(与 `verify-baseline.ps1` 输出的四项一一对应)。
 
 已知事故类型:2024-08 的 SBAT / Secure Boot DBX 更新曾导致双系统机器无法引导 Linux(微软已确认)。缓解:`mokutil --set-sbat-policy delete` + 常备 Ubuntu 安装 U 盘。
 
@@ -396,7 +396,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | Windows 引导未被污染 | `\EFI\Microsoft\` 与 L2 基线逐文件一致 |
 | 引导路径未被篡改 | `{bootmgr}` 的 `path` 与基线一致 |
 | 不变量落地 | Ubuntu 条目位于 `BootOrder` 末尾;全程未使用 `efibootmgr -o` |
-| **可撤除性演练** | 备份 ESP 后临时删除 `\EFI\ubuntu\`(保留分区)→ 重启确认**自动进 Windows 且无 `grub rescue`** → 用镜像还原并复测。**参考设备必做,其他设备推荐** |
+| **可撤除性演练** | 备份 ESP 后临时删除 `\EFI\ubuntu\`(保留分区)→ 重启确认**自动进 Windows 且无 `grub rescue`** → 用第 2 步另存的副本还原 `\EFI\ubuntu\`(L2 基线**不含**该子树)并复测。**参考设备必做,其他设备推荐** |
 
 **B. 系统功能组**:会话类型为 `wayland`(且无 X11 会话可选);GPU 驱动状态正常或有 nouveau 兜底且无签名拒绝日志;Secure Boot 保持开启;共享数据分区以 `ntfs3` **读写**挂载成功且 `nofail`;**跨系统双向可见性**(Windows 写入 → Linux 读到;Linux 写入 → Windows 读到);**家目录重定向生效**(文档/下载/图片/桌面指向共享盘);`RTC in local TZ: no`;切换系统后蓝牙无需重新配对;`fwupd` 能识别设备。
 

@@ -158,12 +158,12 @@ baseline/              每台设备的部署产物,永不入库(仅 README.md �
 
 是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分六组:
 
-- **A. 引导安全组(A1-A7)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线一致、`{bootmgr}` 的路径未变、全程没写过永久启动顺序;并含一次**可逆的撤除演练**:临时删掉 `\EFI\ubuntu\`,确认机器仍能自动进 Windows 且不出现 `grub rescue>`,再用 ESP 镜像还原。
+- **A. 引导安全组(A1-A7)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线一致、`{bootmgr}` 的路径未变、全程没写过永久启动顺序;并含一次**可逆的撤除演练**:临时删掉 `\EFI\ubuntu\`,确认机器仍能自动进 Windows 且不出现 `grub rescue>`,再用第 2 步另存的副本还原 `\EFI\ubuntu\`(L2 基线**不含**该子树)。
 - **B. 系统功能组(B1-B10)**:Wayland 会话、显卡驱动正常且有 nouveau 兜底、Secure Boot 仍开启、`ntfs3` 读写挂载带 `nofail`、共享盘双向可见、家目录重定向生效、RTC 用 UTC、切换系统后蓝牙无需重配、`fwupd` 能识别设备。
 - **C. 双系统切换组(C1-C4)**:一次性 `BootNext` 进 Linux 且不改默认项、一键回 Windows、切换三次后顺序仍稳定。
 - **D. 可撤除性组(D1-D6)**:L5 五步退役完整推演、系统盘隔离逐项核对、两条原地重装路径各走一遍、非重装的引导修复路径已被证明可用。
 - **E. 记录组(E1-E5)**:产物齐全且未入库、偏差回写到设备参数表。
-- **F. 健壮性组(F1-F9)**:快照回滚真做一次、快照分区在 `df` 中可见、旧内核可启动、journald 持久化、更新策略与配置一致、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、所有非 root 挂载点带 `nofail`。
+- **F. 健壮性组(F1-F9)**:快照回滚真做一次、快照分区在 `df` 中可见、旧内核可启动、journald 持久化、更新策略与配置一致、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、L4 写入的三条(共享盘、`/snapshots`、swapfile)带 `nofail`,而 `/boot/efi` 刻意不加。
 
 未勾选项只有在落成"已知例外"并写明影响面时才可接受,否则该设备判为未完成。至少一台设备完整跑通,才能称为"参考实现"——目前还没有。
 

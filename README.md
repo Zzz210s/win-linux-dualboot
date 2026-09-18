@@ -158,12 +158,12 @@ Rollback points for each measure are listed in the design document; [scripts/lin
 
 Completion is judged by [docs/08-verification.md](docs/08-verification.md) being fully green, not by "it installed". That list has six groups:
 
-- **A. boot safety (A1-A7)** — Windows Boot Manager first in `BootOrder` across repeated reboots, `\EFI\Microsoft\` byte-identical to the L2 baseline, `{bootmgr}` path unchanged, no permanent ordering ever written, plus a **reversible decommission drill**: remove `\EFI\ubuntu\` temporarily, confirm the machine still boots Windows unattended with no `grub rescue>` prompt, then restore from the ESP image.
+- **A. boot safety (A1-A7)** — Windows Boot Manager first in `BootOrder` across repeated reboots, `\EFI\Microsoft\` byte-identical to the L2 baseline, `{bootmgr}` path unchanged, no permanent ordering ever written, plus a **reversible decommission drill**: remove `\EFI\ubuntu\` temporarily, confirm the machine still boots Windows unattended with no `grub rescue>` prompt, then restore `\EFI\ubuntu\` from the copy saved in step 2 (the L2 baseline does **not** contain that subtree).
 - **B. system function (B1-B10)** — Wayland session, GPU driver healthy with nouveau as fallback, Secure Boot still on, `ntfs3` read-write mount with `nofail`, bidirectional visibility on the shared volume, redirected home directories, RTC in UTC, Bluetooth pairing surviving a system switch, `fwupd` seeing the device.
 - **C. dual-boot switching (C1-C4)** — one-shot `BootNext` into Linux without changing the default, one-command return to Windows, order stable after three switches.
 - **D. removability (D1-D6)** — the L5 five-step decommission walked through, system/data isolation verified item by item, both in-place reinstall paths exercised, and the non-reinstall boot repair path proven.
 - **E. records (E1-E5)** — artifacts complete and not committed, deviations written back to the device parameter table.
-- **F. robustness (F1-F9)** — a real snapshot rollback drilled once, snapshot partition visible in `df`, old kernel bootable, journald persistent, update policy as configured, SSH rescue reachable, `systemd-oomd` and zram active, `smartd` reporting PASSED, `nofail` present on every non-root mount.
+- **F. robustness (F1-F9)** — a real snapshot rollback drilled once, snapshot partition visible in `df`, old kernel bootable, journald persistent, update policy as configured, SSH rescue reachable, `systemd-oomd` and zram active, `smartd` reporting PASSED, `nofail` present on the three entries L4 writes (shared volume, /snapshots, swapfile) and deliberately absent from /boot/efi.
 
 An unchecked item is only acceptable when it is recorded as a known exception with its impact written down; otherwise the device counts as unfinished. At least one device has to complete the whole set before the playbook can be called a reference implementation — no device has yet.
 
