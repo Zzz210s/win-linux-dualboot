@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
 REQ=("## 目标" "## 前置条件" "## 步骤" "## 验证" "## 失败处理" "## 回滚")
 PH='TBD|TODO|待补|FIXME|占位符'
-# emoji 字节模式(F0 9F = U+1F000 及以上;E2 98/99/9A/9B = U+2600~U+26FF 符号区;E2 9C/9D/9E = U+2700~U+27BF dingbats 区(✅✨❌➡ 之类);EF B8 8F = 变体选择符)。
+# emoji 字节模式(F0 9F = U+1F000 及以上;E2 98/99/9A/9B = U+2600~U+26FF 符号区;E2 9C/9D/9E = U+2700~U+27BF dingbats 区(U+2705 / U+2728 / U+274C / U+27A1 之类);EF B8 8F = 变体选择符)。
 # 本机 grep -P 不支持多字节码点范围(恒 exit 2,且 LC_ALL=C.UTF-8 会把 ASCII 判成 emoji),故用 LC_ALL=C 下的字节级 -E 匹配。
 EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xef\xb8\x8f')"
 # 手册应有清单:文档尚未写出时如实报 MISSING,而不是静默跳过
