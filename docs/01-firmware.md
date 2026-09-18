@@ -152,12 +152,13 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 | 存储控制器模式(原值 → 目标值) | 步骤 1、2 | 原值供回滚;目标值为 AHCI / NVMe 且 VMD 关闭 |
 | Secure Boot 状态 | 步骤 3 | 开启 |
 | Fast Boot 状态 | 步骤 3 | 关闭 |
+| 启动顺序(`BootOrder` 首位)原值 | 步骤 1 | 照实记录首位条目(如 `Windows Boot Manager`,或前次部署残留的 `ubuntu`);后续阶段比对基准 |
 | 启动菜单键 | 步骤 6 | 即参数表 `BOOT_MENU_KEY` |
 | CPU / GPU / 网卡型号 | 固件界面或系统信息 | 与 [baseline/README.md](../baseline/README.md) 列出的 L0 内容一致 |
 | 目标磁盘型号与容量 | 步骤 5 | 即参数表 `DISK_MODEL` / `DISK_SIZE` |
 | 安装介质校验值 | 步骤 4 | 每个 ISO 一行:文件名 + 校验方式 + 校验值来源。Ubuntu ISO 填 SHA256 值与官方发布值来源;Windows ISO 填"来自微软官方下载域 + 官方安装器校验(官方未发布该镜像哈希)" |
 
-验证:`baseline/00-firmware.md` 存在且上表字段无空缺;`baseline/` 下除 `README.md` 外的产物一律不入库。
+验证:`baseline/00-firmware.md` 存在且上表字段无空缺(其中"启动顺序(`BootOrder` 首位)原值"一行必须在产物里落盘——缺这行则 L2 的启动顺序比对没有基准,会被 L2 预检判为黄项);`baseline/` 下除 `README.md` 外的产物一律不入库。
 
 ### 厂商差异表(步骤 2 与步骤 6 使用)
 

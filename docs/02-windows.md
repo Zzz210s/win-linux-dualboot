@@ -24,7 +24,7 @@
 
 两条边界,越界即视为设计缺陷:
 
-- **ESP 镜像(`02-esp-backup.img`)与固件启动项快照(`02-firmware-entries.txt`)是 L2 的基线产物**,L1 不生成,也不要把它们记成 L1 产物;
+- **ESP 备份(`02-esp-backup/`,文件树 + `manifest.sha256`)与固件启动项快照(`02-firmware-entries.txt`)是 L2 的基线产物**,L1 不生成,也不要把它们记成 L1 产物;
 - **L1 全程不改 `BootOrder`、不执行 `efibootmgr -o`**(I1、I2)。Windows 安装程序自己新建 `Windows Boot Manager` 条目并把它排在首位,属安装的正常结果;本阶段要做的只是**照实记录**,不是调整顺序。
 
 I4 在首次装机时的落地方式:**分区表在 L1 一次定稿、基线在 L2 生成**,所以 L1 动手之前没有基线是允许的;此后任何分区表或固件变更都必须先有可用基线。由此引出[入口文档](00-overview.md)"阶段产物与交接规则"第 4 条:**L1 与 L2 必须在同一次会话内连续完成**(中途若 Windows 发生更新,基线即失效)。
@@ -202,7 +202,7 @@ Get-CimInstance -ClassName SoftwareLicensingProduct -Filter "PartialProductKey I
 1. **`baseline/01-partitions.txt`**:步骤 1 的 `list disk` / `list partition` 原始输出 + 分区表定稿值 + WinRE 落点与未分配空间的实测偏差 + 各分区卷标 + 步骤 4 的重定向核对结果与 C: 内容核对结果(注记段)。
 2. **`baseline/01-activation.md`**:`slmgr /dlv` 与 `slmgr /xpr` 输出 + 执行日期 + 上游项目版本号。
 3. 两份产物**不入库**(`baseline/*` 已被 `.gitignore` 排除,只保留 `baseline/README.md`)。
-4. **紧接着进入 L2**:装完 Windows 后不要长时间停留,L1 与 L2 必须在同一次会话内连续完成(交接规则第 4 条),L2 会把这里的记录当作复核对象,并生成基线(`02-esp-backup.img`、`02-firmware-entries.txt`)。
+4. **紧接着进入 L2**:装完 Windows 后不要长时间停留,L1 与 L2 必须在同一次会话内连续完成(交接规则第 4 条),L2 会把这里的记录当作复核对象,并生成基线(`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt`)。
 
 不变量复核(I1-I4):
 
