@@ -1,0 +1,54 @@
+rem =====================================================================
+rem L1 目标分区表:标称 1TB(实际可用约 953GiB)的 NVMe,整盘一次定稿
+rem diskpart 的 size 参数以 MB 为单位:1GiB = 1024MB
+rem
+rem   序号  分区             size      GUI 显示    文件系统  用途
+rem   1     ESP              2048      2GiB        FAT32     Windows 与 Ubuntu 共用
+rem   2     MSR              16        16MiB       (无)      Microsoft Reserved
+rem   3     Windows(系统)    204800    200GiB      NTFS      C: 系统与程序
+rem   4     Data(数据)       650240    ≈635GiB     NTFS      D: 数据盘 / 双系统共享盘
+rem   5     Ubuntu            -         约 115GiB   未分配    留给 L3:root 100 + Snapshot 15
+rem
+rem 用法:Windows 11 专业版安装界面 -> Shift + F10 打开命令行 -> 输入 diskpart
+rem       -> select disk 0 -> 把本文件 Select 之后的命令逐条执行
+rem
+rem 执行前必做(防"安装时选错目标盘",设计文档第 9 节):
+rem   diskpart
+rem   list disk
+rem   select disk 0
+rem   detail disk
+rem 型号与容量必须与参数表 DISK_MODEL / DISK_SIZE 一致(容量约 953G)。
+rem 型号或容量任何一项对不上就停下核对;clean 一旦执行即整盘清空,没有撤销。
+rem =====================================================================
+
+select disk 0
+clean
+convert gpt
+
+rem 1. ESP 2GiB。Windows 与 Ubuntu 共用一个 ESP(设计文档 3.4);
+rem    尺寸不允许被削减——这是 L3 的 shim/GRUB 与后续内核能否放下的前提。
+create partition efi size=2048
+format quick fs=fat32 label="ESP"
+
+rem 2. MSR 16MiB,Windows 保留,不格式化、不分配盘符。
+create partition msr size=16
+
+rem 3. Windows 系统 C: 200GiB。只放系统与程序;原地重装时唯一被格式化的分区
+rem    (设计文档 3.15 与 4.8 办法一)。
+create partition primary size=204800
+format quick fs=ntfs label="Windows"
+
+rem 4. Windows 数据 D: 650240MB(≈635GiB)。数据、游戏库、下载与容器镜像都在这里,
+rem    同时是两个系统共享的 NTFS 分区(设计文档 3.16 与 5.3):Windows 侧原生访问,
+rem    Ubuntu 侧由 L4 以 ntfs3 读写挂载。该分区不启用 BitLocker / 设备加密。
+create partition primary size=650240
+format quick fs=ntfs label="Data"
+
+rem 5. 剩余约 115GiB 必须保持未分配,不许在此处再建分区:
+rem    它是 L3 安装 Ubuntu 时的 root 100GiB + Snapshot 15GiB。
+rem    不要用不带 size 的 create partition(会吃满整盘,导致 L3 无空间可用)。
+rem
+rem WinRE 由 Windows 安装程序在安装系统时自行创建(可能在磁盘末尾);
+rem 若它落在上面这段预留空间内,按 docs/02-windows.md 的"WinRE 偏差处理"处置:
+rem 只要 ESP 尺寸未被削减、留给 Linux 的空间仍不少于 115GiB 即接受,并把偏差
+rem 记录进 baseline/01-partitions.txt。
