@@ -30,15 +30,16 @@ fi
 for f in "${files[@]}"; do
   if [ ! -f "$f" ]; then echo "MISSING $f"; fail=1; continue; fi
   base="$(basename "$f")"
-  case "$f" in
-    checklists/*|*/checklists/*) : ;;  # 勾选清单不是六段式手册,只做占位符/emoji/链接检查
-    *)
-      if [ "$base" != "00-overview.md" ] && [ "$base" != "10-faq.md" ] && [ "$base" != "README.md" ] && [ "$base" != "README.zh-CN.md" ]; then
-        for h in "${REQ[@]}"; do
-          grep -qF "$h" "$f" || { echo "MISSING_SECTION $f :: $h"; fail=1; }
-        done
-      fi ;;
-  esac
+  fdir="$(cd "$(dirname "$f")" 2>/dev/null && pwd)"
+  # 勾选清单(checklists/ 下的 .md)不是六段式手册,只做占位符/emoji/链接检查。
+  # 用绝对目录与 $ROOT/checklists 比较:既能兼容在 checklists/ 内用裸文件名调用,
+  # 又不会把仓库外任何名为 checklists 的目录一并豁免。
+  if [ "$fdir" = "$ROOT/checklists" ]; then :
+  elif [ "$base" != "00-overview.md" ] && [ "$base" != "10-faq.md" ] && [ "$base" != "README.md" ] && [ "$base" != "README.zh-CN.md" ]; then
+    for h in "${REQ[@]}"; do
+      grep -qF "$h" "$f" || { echo "MISSING_SECTION $f :: $h"; fail=1; }
+    done
+  fi
   if grep -nE "$PH" "$f" >/dev/null; then
     echo "PLACEHOLDER $f"; grep -nE "$PH" "$f" | head -3; fail=1
   fi

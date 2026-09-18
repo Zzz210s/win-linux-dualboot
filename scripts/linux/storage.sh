@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# L4:交换空间落地 —— swapfile 4GiB(不建 swap 分区、不做休眠)+ zram(约 8GiB)。
+# L4:交换空间落地 —— swapfile 4GiB(不建 swap 分区、不做休眠)+ zram(约 min(RAM/2, 8GiB))。
 #
 # 用法:bash scripts/linux/storage.sh [--apply] [--size 4G] [--swapfile /swapfile] [--log <path>]
 #   默认 dry-run:只打印将执行的动作与判据,不改动系统。
@@ -70,7 +70,7 @@ log "=== 交换空间计划(决策 3.8:不做休眠、不建 swap 分区)==="
 log "1) $SWAPFILE($SWAP_SIZE):fallocate -l -> chmod 600 -> mkswap -> swapon"
 log "2) $FSTAB:缺 swapfile 行时先备份为 $FSTAB_BAK 再追加 '$SWAPFILE none swap sw,nofail 0 0'"
 log "3) 确保 $ZRAM_PKG 已安装(缺则 apt-get install -y;DBK_SKIP_APT=1 跳过),再安装 $ZRAM_TPL -> $ZRAM_CONF(内容不同时先备份为 $ZRAM_CONF.dbk.bak)"
-log "4) systemctl daemon-reload && systemctl start systemd-zram-setup@zram0.service(zram 约 8GiB)"
+log "4) systemctl daemon-reload && systemctl start systemd-zram-setup@zram0.service(zram 约 min(RAM/2, 8GiB))"
 log "5) 验证:swapon --show 列出 $SWAPFILE、zramctl 列出 zram0;并报告 systemd-oomd 状态"
 log "6) 回退:swapoff $SWAPFILE && rm -f $SWAPFILE;删该 fstab 行与 $ZRAM_CONF(都不动分区表)"
 
@@ -121,7 +121,7 @@ cur="$(awk -v p="$SWAPFILE" '!/^[[:space:]]*#/ && $1==p' "$FSTAB" 2>/dev/null ||
 if [ -n "$cur" ]; then
   log "fstab 已有 $SWAPFILE 条目,跳过写入: $(printf '%s' "$cur" | head -n 1)"
   case "$cur" in *swap*) ;; *) log "警告: 该条目未见 swap 关键字,请手工核对 $FSTAB" ;; esac
-  case "$cur" in *nofail*) ;; *) log "警告: 该条目缺 nofail(设计第 8 节 F 组判据:非 root 条目均带 nofail),请手工核对 $FSTAB" ;; esac
+  case "$cur" in *nofail*) ;; *) log "警告: 该条目缺 nofail(设计第 8 节 F 组判据:L4 写入的三条(共享盘、/snapshots、swapfile)带 nofail),请手工核对 $FSTAB" ;; esac
 else
   if [ ! -e "$FSTAB_BAK" ]; then
     cp -a "$FSTAB" "$FSTAB_BAK" && log "已备份 $FSTAB -> $FSTAB_BAK(重跑不覆盖首次备份)" || { log "错误: 备份 $FSTAB 失败"; RC=1; }

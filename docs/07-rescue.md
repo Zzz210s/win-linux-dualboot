@@ -253,7 +253,7 @@ mountvol S: /d
 
 若 `ubuntu` 的 NVRAM 条目也已丢失(被清过),补建一条:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(盘与分区号按 `baseline/02-partitions.txt` 替换),建完立刻断言 `BootOrder` 首位仍是 `Windows Boot Manager`。
 
-**(b) 没有现成备份的** → 从 live 环境重建:挂上 root 与 ESP、`chroot` 后重装 GRUB 的 EFI 文件,再显式建 NVRAM 条目:
+**(b) 没有现成备份的** → 从 live 环境重建:挂上 root 与 ESP、`chroot` 后重装 GRUB 的 EFI 文件(**条目由 `grub-install` 自动新建**,见下)。
 
 ```bash
 # live 环境(必须以 UEFI 启动:先 ls /sys/firmware/efi 确认存在;CSM/Legacy 启动的 U 盘会让 grub-install 走非 EFI 目标)
@@ -268,6 +268,8 @@ exit
 sudo umount -R /mnt
 sudo efibootmgr -v
 ```
+
+若 `grub-install` 结束时提示未能写入 NVRAM(或 `efibootmgr -v` 里看不到 `ubuntu`),用 `sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'` 补建一条(盘/分区按 `baseline/02-partitions.txt` 替换),再断言 `BootOrder` 首位仍是 `Windows Boot Manager`。该命令仍以 0 退出但只警告不建条目的情况确实存在(非 UEFI 启动、efivars 不可写),所以这一句是兜底而非可选步骤。
 
 若上面跑完发现 `efibootmgr -v` 里出现**重复的 `ubuntu` 条目**(重装/换 ESP 后的常见残留),用 `sudo efibootmgr -b <编号> -B` 删掉多余项——保留 `BootOrder` 里实际生效的那一条。
 
