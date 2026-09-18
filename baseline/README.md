@@ -12,9 +12,9 @@
 |---|---|---|
 | `00-firmware.md` | L0 装机前 | 固件设定记录(SATA/NVMe 模式、Secure Boot、Fast Boot)、固件版本、CPU/GPU/网卡型号、安装介质校验值 |
 | `01-partitions.txt` | L1 Windows 安装 | `diskpart` 分区表输出(各分区偏移与大小) |
-| `01-esp-backup.img` | L1 Windows 安装 | 新建 ESP 的整块镜像,基线回滚用 |
-| `01-firmware-entries.txt` | L1 Windows 安装 | `bcdedit /enum firmware` 快照 + `BootOrder` |
 | `01-activation.md` | L1 Windows 安装 | `slmgr /dlv` 与激活状态复核输出 |
+| `02-esp-backup.img` | L2 预检 | 新建 ESP 的整块镜像,基线回滚用 |
+| `02-firmware-entries.txt` | L2 预检 | `bcdedit /enum firmware` 快照 + `BootOrder` |
 | `02-preflight-report.md` | L2 预检 | 闸门报告:红/黄/绿 + 是否允许进入 L3 |
 | `03-efi-layout.txt` | L3 Ubuntu 安装 | `\EFI\` 目录树 + `efibootmgr -v` + `BootOrder` + `lsblk` |
 | `04-first-boot.md` | L4 首启收敛 | 会话类型、GPU 模块状态、ntfs3 挂载、时间、蓝牙 key 同步结果 |

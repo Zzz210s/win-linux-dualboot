@@ -141,8 +141,8 @@
 | 阶段 | 名称 | 目的 | 产物 | 完成判据 |
 |---|---|---|---|---|
 | **L0** | 装机前准备 | 把固件与介质调成目标状态 | `baseline/00-firmware.md` | 固件设定值与介质校验值记录齐全 |
-| **L1** | Windows 全新安装 | 整盘分区一次定稿 + 系统 + 激活 | `baseline/01-*`(分区表、ESP 镜像、固件启动项、激活状态) | 分区表与目标布局一致;激活完成;Fast Startup 与休眠已关 |
-| **L2** | 预检与基线 | 只读体检 + 建立可回滚基线 | `baseline/02-preflight-report.md` | 报告结论为"允许进入 L3"(无红项) |
+| **L1** | Windows 全新安装 | 整盘分区一次定稿 + 系统 + 激活 | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) | 分区表与目标布局一致;激活完成;Fast Startup 与休眠已关 |
+| **L2** | 预检与基线 | 只读体检 + 建立可回滚基线 | `baseline/02-preflight-report.md`、`02-esp-backup.img`、`02-firmware-entries.txt` | 报告结论为"允许进入 L3"(无红项) |
 | **L3** | Ubuntu 安装 | 装 Linux 且不侵犯 Windows 引导 | `baseline/03-efi-layout.txt` | Ubuntu 可启动;`\EFI\Microsoft\` 与基线一致;BootOrder 首项仍为 Windows |
 | **L4** | 首启收敛 | 驱动、Wayland、挂载、时间、蓝牙 | `baseline/04-first-boot.md` | 验收 B 组全绿 |
 | **L5** | 退役与救援 | 安全撤除与故障恢复 | `checklists/rollback.md` | L5 流程可执行(参考设备需真跑一次) |
@@ -164,7 +164,8 @@
 ### 4.3 L2 预检与基线(硬闸门)
 
 - 只读体检:BootOrder 与固件启动项、ESP 目录树与剩余空间、BitLocker 状态、存储控制器模式、Fast Startup/休眠、磁盘布局;
-- 基线备份:ESP 整块 dd 镜像 + `bcdedit /enum firmware` 快照 + 分区表输出;
+- 基线备份(**在 L2 内生成**):ESP 整块 dd 镜像 → `baseline/02-esp-backup.img`;`bcdedit /enum firmware` 固件启动项快照 → `baseline/02-firmware-entries.txt`。产物名前缀取所在阶段号;
+- 基线复核:复核 L1 记录的分区表(`baseline/01-partitions.txt`)与激活状态(`baseline/01-activation.md`)未被后续操作改变;
 - **闸门规则**:存在红项 → 禁止进入 L3;存在黄项 → 记录后带风险继续。
 
 ### 4.4 L3 Ubuntu 安装

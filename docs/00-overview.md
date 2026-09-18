@@ -48,7 +48,7 @@
 | I1 | 读固件启动顺序 | 第一位是 Windows Boot Manager(不是 ubuntu) |
 | I2 | 安装 Ubuntu 期间与之后复查启动顺序 | 没有任何步骤写过 `efibootmgr -o`;进 Linux 走一次性 `BootNext` 或厂商菜单键 |
 | I3 | 对比 ESP 上 `\EFI\Microsoft\` 与基线镜像 | 目录树与文件哈希与基线一致;`{bootmgr}` 的 `path` 未被改写 |
-| I4 | **进入 L3 前的 L2 闸门检查** | `baseline/02-preflight-report.md` 结论为"允许进入 L3"(无红项),且 ESP 镜像、固件启动项快照、分区表、BitLocker 挂起记录四项齐备 |
+| I4 | **进入 L3 前的 L2 闸门检查** | `baseline/02-preflight-report.md` 结论为"允许进入 L3"(无红项),且四项齐备:`baseline/02-esp-backup.img`、`baseline/02-firmware-entries.txt`、`baseline/01-partitions.txt` 与 BitLocker 挂起记录 |
 
 ---
 
@@ -116,8 +116,8 @@
 |---|---|---|---|
 | 入口 | 目标与契约 | 本文件 | 无(读,不执行) |
 | **L0** | 装机前准备 | `01-firmware.md` | `baseline/00-firmware.md` |
-| **L1** | Windows 全新安装 | `02-windows.md` | `baseline/01-*`(分区表与激活状态在 L1 记录;ESP 镜像与固件启动项快照在 L2 生成) |
-| **L2** | 预检与基线(硬闸门) | `03-preflight.md` | `baseline/02-preflight-report.md` |
+| **L1** | Windows 全新安装 | `02-windows.md` | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) |
+| **L2** | 预检与基线(硬闸门) | `03-preflight.md` | `baseline/02-preflight-report.md`、`02-esp-backup.img`、`02-firmware-entries.txt` |
 | **L3** | Ubuntu 安装 | `04-ubuntu.md` | `baseline/03-efi-layout.txt` |
 | **L4** | 首启收敛 | `05-first-boot.md` | `baseline/04-first-boot.md` |
 | **L5** | 退役与救援 | `06-decommission.md` + `07-rescue.md` | `checklists/rollback.md` |
@@ -125,7 +125,7 @@
 | 风险 | 风险登记表 | `09-risks.md` | 无(查,不执行) |
 | 附录 | 高频疑问速查 | `10-faq.md` | 无(查,不执行) |
 
-注:L1 负责定稿分区表并记录激活状态;ESP 整块镜像与固件启动项快照是 **L2 生成的基线产物**(设计文档 4.3),两步共用 `baseline/01-*` 编号前缀,并统一由 `baseline/02-preflight-report.md` 判定四项是否齐备。
+注:产物名前缀 = 所在阶段号。L1 定稿分区表(`baseline/01-partitions.txt`)并记录激活状态(`baseline/01-activation.md`);ESP 整块镜像(`baseline/02-esp-backup.img`)与固件启动项快照(`baseline/02-firmware-entries.txt`)是 **L2 生成的基线产物**(设计文档 4.3),四项是否齐备统一由 `baseline/02-preflight-report.md` 判定。
 
 **从哪一节开始读**:
 
