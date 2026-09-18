@@ -1,0 +1,18 @@
+# templates/fstab.snippet -> /etc/fstab(L4 首启收敛)
+# 用法:把下面两行按 <...> 说明替换后追加到 /etc/fstab;或直接运行
+#       scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --apply(它会做备份 + 校验 + 写测试)。
+# 两行都带"分区缺失也不阻断启动"的挂载选项:万一分区缺失或写坏,启动过程不会被卡住(设计文档第 7 节 L4 fstab 行)。
+#
+# 前置条件(缺一不可,设计文档 5.3):
+#   1) Windows 已关闭 Fast Startup 与休眠(HiberbootEnabled=0,powercfg /a 里"休眠/快速启动"不可用),
+#      否则 NTFS 处于混合关机的脏状态,Linux 挂载会失败甚至损坏数据;
+#   2) D: 不得启用 BitLocker / 设备加密(manage-bde -status 应为 Protection Off),
+#      加密后 Linux 侧无法直接读写,共享盘方案直接失效;
+#   3) 挂载选项固定 uid/gid/umask 并使用 windows_names(ntfs3 没有 POSIX 权限位;
+#      windows_names 阻止 Linux 侧创建 Windows 非法文件名);
+#   4) 不把依赖 POSIX 语义的工作流放在共享盘(见 templates/user-dirs.dirs.snippet 末尾清单)。
+#
+# 共享数据盘(D: 数据分区,NTFS):两个系统读写同一批文件;uid/gid 取首个用户(1000)
+UUID=<SHARED_PART_UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,windows_names,nofail,noatime  0 0
+# Ubuntu 快照分区(L3 已建的 15GiB ext4,变更前快照的存放位置;健壮性 R1/R2)
+UUID=<SNAPSHOT_PART_UUID>  /snapshots  ext4  defaults,nofail,noatime  0 2

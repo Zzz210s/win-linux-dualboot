@@ -1,0 +1,19 @@
+# templates/user-dirs.dirs.snippet -> ~/.config/user-dirs.dirs(L4 首启收敛)
+# 只重定向"文档类"目录,目标与 Windows 侧已知文件夹重定向一一对应
+# (docs/02-windows.md 第 4 节:D:\Desktop / D:\Documents / D:\Downloads / D:\Pictures / D:\Videos / D:\Music),
+# 共享盘在 Linux 侧挂载到 /mnt/shared,因此同一批文件在两个系统里都可读写。
+# 由 scripts/linux/mount-shared.sh --apply 写入(先备份原文件为 user-dirs.dirs.dbk.bak);
+# 也可手工合并到现有文件后执行 xdg-user-dirs-update --force。
+XDG_DESKTOP_DIR="/mnt/shared/Desktop"
+XDG_DOWNLOAD_DIR="/mnt/shared/Downloads"
+XDG_DOCUMENTS_DIR="/mnt/shared/Documents"
+XDG_PICTURES_DIR="/mnt/shared/Pictures"
+XDG_MUSIC_DIR="/mnt/shared/Music"
+XDG_VIDEOS_DIR="/mnt/shared/Videos"
+# 以下三项目的不动(保持在本地 root,理由见文件末尾)。
+# XDG_TEMPLATES_DIR="$HOME/Templates"
+# XDG_PUBLICSHARE_DIR="$HOME/Public"
+# 不要放在共享盘上的东西(NTFS 无 POSIX 权限语义,设计文档 5.3 第 4 条与第 9 节):
+#   - ~/.config、~/.ssh、~/.gnupg 等配置与凭据目录(root 本地);
+#   - 代码仓库与任何依赖符号链接/硬链接/可执行位/大小写敏感重命名的工程(root 本地);
+#   - 需要 setuid/权限位语义或要在 Linux 侧批量重命名/移动的大目录。
