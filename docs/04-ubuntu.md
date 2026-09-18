@@ -27,7 +27,7 @@
 
 三条边界,越界即视为设计缺陷:
 
-- **不调整启动顺序**:全程不执行 `efibootmgr -o`,也不在固件界面改顺序;`ubuntu` 条目由安装器新建并**默认排在 `BootOrder` 末尾**,本方案直接使用这个默认行为(I1、I2);
+- **不调整启动顺序**:全程不执行 `efibootmgr -o`,也不在固件界面改顺序;`ubuntu` 条目由安装器新建并**默认排在 `BootOrder` 末尾**,本方案直接使用这个默认行为(I1、I2)。唯一例外是顺序被外力改动后的复原(见"失败处理"中"重启默认进了 Ubuntu"一行):那种情形只走固件设置界面、并须记录偏差,仍不得用 `efibootmgr -o`;
 - **不覆盖 `\EFI\Microsoft\`,不改 `{bootmgr}` 的 `path`**(I3);也不手工执行 `grub-install`,引导写入位置由安装器一次做对;
 - **不关 Secure Boot、不自签密钥**(设计 3.3:Ubuntu 官方 shim 已在微软签名链内,没有关闭它的理由;关闭它会把 L4 的预签名 NVIDIA 包路径一起破坏)。
 
@@ -94,7 +94,7 @@
 2. **期间不改动 `BootOrder`**:不执行 `efibootmgr -o`,不在固件界面拖动启动顺序;安装器新建的 `ubuntu` 条目**按默认排在 `BootOrder` 末尾**,这正是本方案要的形态(I1、I2);
 3. 安装器若在收尾阶段询问是否更新或替换引导入口,一律选**默认/不额外改动**那一项;任何"设为默认启动项"之类的选项都不要勾。
 
-怎么知道成功了:重启后的表现是"**默认仍然进 Windows,要用 Ubuntu 时用厂商菜单键一次性选它**"。如果重启直接进了 Ubuntu,说明启动顺序被改了,按"失败处理"第 2 行处置并把顺序还原。
+怎么知道成功了:重启后的表现是"**默认仍然进 Windows,要用 Ubuntu 时用厂商菜单键一次性选它**"。如果重启直接进了 Ubuntu,说明启动顺序被改了,按"失败处理"第 3 行处置并把顺序还原。
 
 ### 4. Secure Boot 保持开启
 
@@ -156,7 +156,7 @@
 
 - 期望:默认进 **Windows**。因为本阶段没动 `BootOrder`,首位仍是 `Windows Boot Manager`(I1);
 - 进 Windows 是**预期结果,不是失败**:要用 Ubuntu 时按 `BOOT_MENU_KEY` 一次性选 `ubuntu`,这条路径就是 I2 的落地方式;
-- 若默认进了 Ubuntu,按"失败处理"第 2 行处置(把顺序还原,不要习惯性地接受)。
+- 若默认进了 Ubuntu,按"失败处理"第 3 行处置(把顺序还原,不要习惯性地接受)。
 
 顺带完成本阶段最重要的两项核对:Windows 能正常进桌面;`\EFI\Microsoft\` 未被改动(验证段第 2 行)。
 
@@ -178,7 +178,7 @@ L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;�
 | # | 检查项 | 命令 / 来源 | 期望 |
 |---|---|---|---|
 | 1 | Ubuntu 可启动 | 重启后按 `BOOT_MENU_KEY` 选 `ubuntu` | 能进 GNOME 桌面/登录会话,不是黑屏、不是 `grub>` |
-| 2 | Windows 引导未被污染 | 在 Ubuntu 里核对 ESP:`cd /boot/efi && sudo sha256sum -c <02-esp-backup/manifest.sha256 的副本> 2>&1 \| grep -v ': OK$'` | `EFI/Microsoft/` 子树**全部 OK**、零差异(逐文件一致)。清单若报"无效的行格式",先复制一份并 `sed -i 's/\r$//'` 转成 LF 再核对,**不要改基线的原文件**;清单里 `EFI/ubuntu/` 属新增,不在基线行内 |
+| 2 | Windows 引导未被污染 | 在 Ubuntu 里核对 ESP,清单来源 `baseline/02-esp-backup/manifest.sha256`:先**把清单副本放到家目录**(如 `~/manifest.sha256`),**清单副本不得写入 ESP**(写进 `/boot/efi` 本身就是一次 ESP 写操作,会污染该判据);再 `cd /boot/efi && sudo sha256sum -c ~/manifest.sha256 2>&1 \| grep -v ': OK$'` | `EFI/Microsoft/` 子树**全部 OK**、零差异(逐文件一致)。清单若报"无效的行格式",对家目录里的副本执行 `sed -i 's/\r$//'` 转成 LF 再核对,**不要改基线原文件、也不要把副本放进 ESP**;清单里 `EFI/ubuntu/` 属新增,不在基线行内 |
 | 3 | `BootOrder` 首位仍是 Windows Boot Manager | `baseline/03-efi-layout.txt` 的 `efibootmgr -v` 一节;或 `sudo efibootmgr` | `BootOrder:` 列表第一项对应的条目是 `Windows Boot Manager` |
 | 4 | Ubuntu 条目在末尾 | 同一份输出 | `BootOrder:` 列表最后一项对应的条目是 `ubuntu` |
 | 5 | 全程未改启动顺序(I2) | 自证 + 与 L2 快照对比 | 本阶段未执行过 `efibootmgr -o`;`BootOrder` 与 `baseline/02-firmware-entries.txt` 相比只**在末尾新增**了 `ubuntu`,其余顺序未变 |
@@ -196,8 +196,8 @@ L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;�
 | 现象 | 立即动作 |
 |---|---|
 | 安装器看不到磁盘(分区界面空白,或只列出 U 盘) | 回 [L0 手册](01-firmware.md) 步骤 2 核查存储控制器模式:必须是 AHCI / NVMe,且 VMD / RAID On 关闭。可在 live 环境用 `lsblk -d -o NAME,MODEL,SIZE` 复核(`nvme0n1` 是否出现)。仍看不到则该设备不适用本方案(设计文档 1.2 偏离表),不要在安装器里反复重试 |
-| 重启后直接进 Windows(没看到 Ubuntu 入口) | 这**通常是正常形态**:`BootOrder` 首位未变,I1 成立。用 `BOOT_MENU_KEY` 调出一次性启动菜单,选 `ubuntu` 进入;同时核对固件条目列表:`ubuntu` 条目是否存在、其 EFI 路径是否指向 `\EFI\ubuntu\shimx64.efi`。条目缺失时从 live 环境用 `efibootmgr -c` **只新建**(绝不用 `-o` 调顺序),或直接重跑安装器的引导安装部分 |
-| 重启默认进了 Ubuntu(启动顺序被改) | 违反 I1,立即修:优先在**固件设置界面**里把 `Windows Boot Manager` 改回首位(这样能保证与 `baseline/02-firmware-entries.txt` 记下的顺序一致)。无此选项时,在 Ubuntu 里用 `sudo efibootmgr -o <Windows 条目编号>,<其余编号...>` 把首位还原——这是**修复被改动的顺序**,与 I2 禁止的"用 `-o` 规划顺序"不同,属允许动作。修完重启确认默认进 Windows,并把这次修动写进 L4 记录的偏差项 |
+| 重启后直接进 Windows(没看到 Ubuntu 入口) | 这**通常是正常形态**:`BootOrder` 首位未变,I1 成立。用 `BOOT_MENU_KEY` 调出一次性启动菜单,选 `ubuntu` 进入;同时核对固件条目列表:`ubuntu` 条目是否存在、其 EFI 路径是否指向 `\EFI\ubuntu\shimx64.efi`。条目缺失时从 live 环境用显式盘/分区新建:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(盘/分区按 `baseline/02-partitions.txt` 替换;不给盘/分区时默认 loader 未必指向 `\EFI\ubuntu\` 的 shim/grub)。命令只新建条目,**绝不用 `-o` 调顺序**;随后立刻 `sudo efibootmgr` 复读并断言"`BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾",不满足则按下一行处置并把偏差写进 L4 记录;也可直接重跑安装器的引导安装部分 |
+| 重启默认进了 Ubuntu(启动顺序被改) | 违反 I1,立即修:**只在固件设置界面**把 `Windows Boot Manager` 改回首位(与 `baseline/02-firmware-entries.txt` 记下的顺序一致)。固件没有顺序选项时,**不要用 `efibootmgr -o`**(I2 与交接规则第 5 条禁止):先记录当前 `BootOrder` 与偏差,再按 `docs/07-rescue.md` 与 L2 基线复原(必要时用 `efibootmgr -b <ubuntu 条目编号> -B` 删除该条目,让固件回落到 Windows),并把这次修动写进 L4 记录的偏差项 |
 | 停在 `grub>` / `grub rescue>` | 引导层问题,**不要重装**:按 `07-rescue.md` 的 GRUB 恢复流程处置(`ls` 找分区 → `set prefix` → `insmod normal` → `normal`;或 `chainloader` 回 Windows)。同时确认 `\EFI\Microsoft\` 未被改动、`BootOrder` 首位仍是 `Windows Boot Manager`;修完按验证段第 2、3 行复查 |
 | Secure Boot 拒载(`Verification failed` / `Security Violation` / `bad shim signature`) | 先核查 `mokutil --sb-state`(应为 `enabled`),再确认用的是官方 ISO(其 shim 在微软签名链内)。**不要自签密钥、不要关闭 Secure Boot**;显卡/驱动类模块签名被拒时,回退 nouveau 并把问题留给 L4 的预签名包路径(设计文档第 7 节 L3/L4 行)。若 live 环境也被拒,先查固件里 `Secure Boot Mode` 是否被改成 `Custom`(应保持 `Standard`) |
 | 安装界面或首启黑屏 | 步骤 5(a):引导菜单按 `e`,内核行加 `nomodeset` 临时启动。它关掉 KMS,**与默认的 Wayland 会话冲突**,只是应急手段;能进系统后立即装好显卡驱动并移除该参数(`/etc/default/grub` 去掉 + `sudo update-grub`),不要把它当长期配置 |
