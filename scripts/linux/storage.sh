@@ -82,7 +82,7 @@ fi
 
 # 0) zram 依赖包:zram 单元由该包提供;缺包则 systemd-zram-setup@zram0.service 起不来(R6 半项失效)
 #    先查后装(重跑不重复下载);DBK_SKIP_APT=1 时只跳过安装,便于无 apt 环境做静态校验
-apt_ensure "$ZRAM_PKG" "sudo apt install -y $ZRAM_PKG"; pkg_st=$?
+pkg_st=0; apt_ensure "$ZRAM_PKG" "sudo apt install -y $ZRAM_PKG" || pkg_st=$?
 if [ "$pkg_st" -eq 1 ]; then RC=1; fi
 if [ "$pkg_st" -eq 9 ]; then log "DBK_SKIP_APT=1:未安装 $ZRAM_PKG,按静态校验继续(下面 zram 判据会因缺包记 fail)"; fi
 

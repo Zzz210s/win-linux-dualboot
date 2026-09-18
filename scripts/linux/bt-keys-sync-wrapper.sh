@@ -85,10 +85,14 @@ fi
 
 if apt_installed chntpw; then log "依赖 chntpw: 已安装"; else log "依赖 chntpw: 未安装,计划用 apt-get install -y chntpw(DBK_SKIP_APT=1 时跳过)"; fi
 
+# 上游 README(KeyofBlueS/bt-keys-sync,"Windows registry hive file"一节)的选项为 `-p, --path <system_hive_path>`:
+# hive 已定位时显式传入,这样 --win-mnt 挂在 /media、/mnt 以外(或已挂载但不被上游搜索到的)路径时上游也能找到
+DRY_ARGS=" --windows-keys"
+if [ "$HIVE_OK" -eq 1 ]; then DRY_ARGS="$DRY_ARGS --path $WIN_MNT/$HIVE_REL"; fi
+if [ "${#PASSTHRU[@]}" -gt 0 ]; then DRY_ARGS="$DRY_ARGS ${PASSTHRU[*]}"; fi
+
 if [ "$APPLY" -ne 1 ]; then
-  PT_TEXT=""
-  if [ "${#PASSTHRU[@]}" -gt 0 ]; then PT_TEXT=" ${PASSTHRU[*]}"; fi
-  log "计划执行: 1) apt_ensure chntpw  2) 把上游脚本下载到 $DEST/  3) bash <上游脚本> --windows-keys$PT_TEXT"
+  log "计划执行: 1) apt_ensure chntpw  2) 把上游脚本下载到 $DEST/  3) bash <上游脚本>$DRY_ARGS"
   log "计划结束: 提示你不做反向写入(不改 Windows 注册表),并按上面四步复测。"
   log "dry-run 结束:未装包、未下载、未运行上游脚本;真正执行请用 sudo bash scripts/linux/bt-keys-sync-wrapper.sh --apply${WIN_MNT:+ --win-mnt $WIN_MNT}"
   exit 0
@@ -96,7 +100,7 @@ fi
 
 [ "$(id -u)" -eq 0 ] || die "--apply 需要 root:请用 sudo 重跑"
 [ "$HIVE_OK" -eq 1 ] || die "读不到 Windows 注册表 hive($WIN_MNT/$HIVE_REL):先只读挂载 Windows 系统分区并带 --win-mnt 重跑"
-apt_ensure chntpw "sudo apt install -y chntpw"; pkg_st=$?
+pkg_st=0; apt_ensure chntpw "sudo apt install -y chntpw" || pkg_st=$?
 [ "$pkg_st" -eq 0 ] || die "chntpw 不可用(见上面的失败原因),无法继续"
 
 # 上游脚本获取:fetch 只往 stdout 写,--script 指定的本地副本优先
@@ -127,7 +131,7 @@ download_upstream() {
 mkdir -p "$DEST" || die "无法创建 $DEST"
 if [ -n "$SCRIPT_PATH" ]; then
   [ -s "$SCRIPT_PATH" ] || die "--script 指定的文件不存在或为空: $SCRIPT_PATH"
-  log "使用指定的上游脚本副本: $SCRIPT_PATH"
+  log "使用指定的上游脚本副本: $SCRIPT_PATH(用户自备文件:不改权限位、不做下载校验,由你自行保证来源可信)"
 else
   SCRIPT_PATH="$(download_upstream "$REPO_URL" "$DEST" || true)"
   if [ -z "$SCRIPT_PATH" ]; then
@@ -135,17 +139,16 @@ else
     log "请按 $REPO_URL 的 README 手工下载脚本到 $DEST/(或用 --script <路径> 指定已有副本)后重跑;本仓库不内置上游代码。"
     exit 1
   fi
-  log "已下载上游脚本到: $SCRIPT_PATH"
+  chmod +x "$SCRIPT_PATH" 2>/dev/null || true
+  log "已下载上游脚本到: $SCRIPT_PATH(取自 master/main 的**分支尖端**快照:无签名、无版本校验,上游随时可能变)"
+  sha="$(sha256sum "$SCRIPT_PATH" 2>/dev/null | cut -d' ' -f1 || true)"
+  log "该文件 SHA256: ${sha:-无法计算(缺 sha256sum)};建议先人工过目该文件再运行(less $SCRIPT_PATH),并把 SHA256 记入 baseline/04-first-boot.md"
 fi
-chmod +x "$SCRIPT_PATH" 2>/dev/null || true
 
-PT_TEXT=""
-if [ "${#PASSTHRU[@]}" -gt 0 ]; then PT_TEXT=" ${PASSTHRU[*]}"; fi
-log "运行: bash $SCRIPT_PATH --windows-keys$PT_TEXT"
-if [ "${#PASSTHRU[@]}" -gt 0 ]; then
-  bash "$SCRIPT_PATH" --windows-keys "${PASSTHRU[@]}" || die "上游脚本以非 0 退出;把它的输出与 docs/05-first-boot.md 步骤 5 对照排障"
-else
-  bash "$SCRIPT_PATH" --windows-keys || die "上游脚本以非 0 退出;把它的输出与 docs/05-first-boot.md 步骤 5 对照排障"
-fi
+UP_ARGS=("--windows-keys")
+if [ "$HIVE_OK" -eq 1 ]; then UP_ARGS+=("--path" "$WIN_MNT/$HIVE_REL"); fi
+if [ "${#PASSTHRU[@]}" -gt 0 ]; then UP_ARGS+=("${PASSTHRU[@]}"); fi
+log "运行: bash $SCRIPT_PATH ${UP_ARGS[*]}"
+bash "$SCRIPT_PATH" "${UP_ARGS[@]}" || die "上游脚本以非 0 退出;把它的输出与 docs/05-first-boot.md 步骤 5 对照排障"
 log "完成: 已按 --windows-keys 从 Windows 侧导入密钥;未做反向写入(Windows 注册表未被修改)。"
 log "复测: 同一设备在 Ubuntu 与 Windows 里都应能直接连接(不需再次配对);结果按 docs/05-first-boot.md 步骤 5 记入 baseline/04-first-boot.md。"

@@ -87,7 +87,7 @@ else {
   }
   $ok = ($first -eq '{bootmgr}' -or $fd -match $WBM)
   $d = '当前首位 ' + $first + ' ' + $fd
-  if (-not $baseFirst) { $d += ';基线 ' + $baseFwPath + ' 取不到首位(无法比对,按人工核对)' }
+  if (-not $baseFirst) { $d += ';基线 ' + $baseFwPath + ' 取不到首位(无法比对,按人工核对)'; $ok = $false }
   elseif ($baseFirst -eq $first) { $d += ';与基线一致' }
   else { $d += ';基线首位为 ' + $baseFirst + '(不一致)'; $ok = $false }
   Add-Result '① BootOrder 首位' $ok ($d + ';判据:首位必须是 Windows Boot Manager(I1)')

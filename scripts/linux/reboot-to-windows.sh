@@ -93,9 +93,8 @@ if [ -z "$AFTER_ORDER" ]; then
 fi
 log "执行后 BootOrder: $AFTER_ORDER"
 AFTER_NEXT="$(efibootmgr 2>/dev/null | sed -n 's/^BootNext:[[:space:]]*//p' | head -n 1 || true)"
-if [ -n "$AFTER_NEXT" ]; then
-  log "已设置 BootNext: $AFTER_NEXT(一次性,只在下次启动生效,用过即消失)"
-fi
+[ "${AFTER_NEXT:-}" = "$WIN_NUM" ] || die "BootNext 未按预期设置(期望 '$WIN_NUM',回读到 '${AFTER_NEXT:-空}'):efibootmgr -n 可能返回 0 但未写入,重启会进错误的系统;请手工执行 sudo efibootmgr 核对后再重启"
+log "已设置 BootNext: $AFTER_NEXT(一次性,只在下次启动生效,用过即消失)"
 [ "$AFTER_ORDER" = "$BEFORE_ORDER" ] || die "I2 断言失败: BootOrder 在执行前后不一致(执行前 '$BEFORE_ORDER',执行后 '$AFTER_ORDER');立即在固件设置界面把 Windows Boot Manager 改回首位,并把偏差写进 L4 记录"
 
 FIRST="$(printf '%s' "$AFTER_ORDER" | cut -d, -f1)"

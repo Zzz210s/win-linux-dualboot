@@ -161,7 +161,7 @@ else
   if have "$DRV_CMD"; then
     log "$DRV_CMD 已可用,跳过 apt-get install $DRV_PKG"
   else
-    apt_ensure "$DRV_PKG" "sudo apt install -y $DRV_PKG"; st_pkg=$?
+    st_pkg=0; apt_ensure "$DRV_PKG" "sudo apt install -y $DRV_PKG" || st_pkg=$?
     [ "$st_pkg" -eq 1 ] && RC=1
   fi
   if have "$DRV_CMD"; then

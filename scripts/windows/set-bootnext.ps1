@@ -13,12 +13,15 @@
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1 -WhatIf   # 只看计划,不改系统
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1            # 真正设置
   参数 -Match 是匹配 Ubuntu 条目的描述正则(默认 'ubuntu|grub');描述行在中文系统上可能是中文标签,故解析做了双语匹配。
-  退出码:0 = 计划打印完成,或设置成功且 I1 断言通过;1 = 失败(含 I1 断言失败)。
+  若匹配到**多条**(重装或换 ESP 后残留旧 ubuntu 条目的常见情形),脚本打印 GUID + description 清单并以非零退出;
+  核对出当前有效的那条后用 -Guid <{GUID}> 显式指定重跑(绝不能随便取第一条:失效 GUID 会直接把重启落到 grub rescue>)。
+  退出码:0 = 计划打印完成,或设置成功且 I1 断言通过;1 = 失败(含条目歧义/未找到与 I1 断言失败)。
 #>
 [CmdletBinding()]
 param(
   [switch]$WhatIf,
-  [string]$Match = 'ubuntu|grub'
+  [string]$Match = 'ubuntu|grub',
+  [string]$Guid = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,7 +98,24 @@ if ($fw) {
   if ($order.Count -gt 0) { Write-Host ('当前 BootOrder 首位:' + $order[0] + '(' + (Get-EntryDesc $order[0] $entries) + ')') }
 }
 $target = $null
-foreach ($e in $entries) { if ($e.Guid -ne $FWBM -and $e.Desc -and $e.Desc -match $Match) { $target = $e; break } }
+# 先收集**全部**匹配:多条时绝不能静默取第一条(残留旧 ubuntu 条目的 GUID 可能已失效)
+$hits = @($entries | Where-Object { $_.Guid -ne $FWBM -and $_.Desc -and $_.Desc -match $Match })
+if ($Guid) {
+  $target = @($hits | Where-Object { $_.Guid -eq $Guid }) | Select-Object -First 1
+  if (-not $target) { $target = @($entries | Where-Object { $_.Guid -eq $Guid }) | Select-Object -First 1 }
+  if (-not $target) {
+    Write-Host ('错误:-Guid 指定的条目 ' + $Guid + ' 在固件条目里不存在。现有条目:')
+    foreach ($e in $entries) { Write-Host ('  ' + $e.Guid + '  ' + $e.Desc) }
+    Write-Host '本次未执行任何命令;请核对 GUID,或去掉 -Guid 让脚本按 -Match 自动匹配。'
+    exit 1
+  }
+} elseif ($hits.Count -gt 1) {
+  Write-Host ('错误:description 匹配 /' + $Match + '/ 的固件条目有 ' + $hits.Count + ' 条,无法自动确定目标。')
+  Write-Host '匹配到的条目(重装/换 ESP 后常会留下失效的旧 ubuntu 条目,选错会把下次启动落到 grub rescue>):'
+  foreach ($e in $hits) { Write-Host ('  ' + $e.Guid + '  ' + $e.Desc + '  路径:' + $e.Path) }
+  Write-Host '处置:核对哪一条是当前有效的 Ubuntu 条目(可对照上面 BootOrder 里的 GUID 与路径),用 -Guid <{GUID}> 显式指定后重跑;本次未执行任何命令。'
+  exit 1
+} elseif ($hits.Count -eq 1) { $target = $hits[0] }
 
 $cmd = 'bcdedit /set {fwbootmgr} bootsequence <目标条目 GUID>'
 if ($target) { $cmd = ('bcdedit /set {fwbootmgr} bootsequence ' + $target.Guid) }
