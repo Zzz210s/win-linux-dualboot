@@ -1,0 +1,9 @@
+# journald 持久化片段 —— 由 scripts/linux/hardening.sh 安装到
+#   /etc/systemd/journald.conf.d/99-dbk-persistent.conf
+# 设计依据:措施 R5(崩溃可观测,设计 4.7)。自建日志目录 /var/log/dbk/ 由各脚本自行创建。
+# 作用:把日志从易失的 /run/log/journal 落盘到 /var/log/journal,系统崩溃或启动失败后
+#      仍可用 journalctl -b -1 回看上一轮启动;代价是日志占用磁盘空间(按默认上限轮转)。
+# 生效方式:安装后 sudo systemctl restart systemd-journald,再确认 /var/log/journal 存在。
+# 回滚:删除该文件后重启 systemd-journald,即回到易失日志(见 docs/05-first-boot.md 回滚第 5 节)。
+[Journal]
+Storage=persistent

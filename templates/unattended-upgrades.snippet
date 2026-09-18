@@ -1,0 +1,17 @@
+# unattended-upgrades 策略片段 —— 由 scripts/linux/hardening.sh 安装到
+#   /etc/apt/apt.conf.d/52-dbk-policy
+# 语法提醒:apt.conf 里 # 与 // 都是合法注释(apt.conf(5):"Lines starting with # are also treated as comments"),
+#           下面策略项统一用 // 便于与上面两行说明区分。
+# 设计依据:决策 3.18(内核与驱动不自动更新)+ 措施 R8(保守更新策略)。
+// 只自动安装安全更新(unattended-upgrades 默认源即 -security;本片段不放开 -updates/-proposed)
+APT::Periodic::Unattended-Upgrade "1";
+// 不自动重启:重启时机由人决定,避免无人值守把桌面带进"重启后进不去"的状态
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+// 保留旧内核:崩溃时还能从 GRUB "Advanced options" 选上一个内核启动(R3)
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "false";
+// 内核与显卡驱动不得无人值守更新:必须先快照再手动执行(决策 3.18)
+Unattended-Upgrade::Package-Blacklist {
+  "linux-";
+  "nvidia-";
+};
