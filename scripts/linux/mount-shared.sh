@@ -46,7 +46,7 @@ while [ "$#" -gt 0 ]; do
     --user=*) TARGET_USER="${1#*=}"; shift ;;
     --template) FSTAB_TPL="${2:-}"; shift 2 ;;
     --template=*) FSTAB_TPL="${1#*=}"; shift ;;
-    --log) LOG="${2:-}"; shift 2 ;;
+    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;

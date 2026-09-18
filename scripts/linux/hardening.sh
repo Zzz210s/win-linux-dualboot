@@ -37,7 +37,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;
-    --log) LOG="${2:-}"; shift 2 ;;
+    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;

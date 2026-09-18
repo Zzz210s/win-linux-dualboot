@@ -50,7 +50,7 @@ while [ "$#" -gt 0 ]; do
     --size=*) SWAP_SIZE="${1#*=}"; shift ;;
     --swapfile) SWAPFILE="${2:-}"; shift 2 ;;
     --swapfile=*) SWAPFILE="${1#*=}"; shift ;;
-    --log) LOG="${2:-}"; shift 2 ;;
+    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;
