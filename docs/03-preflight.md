@@ -174,7 +174,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\preflight.ps1 `
 3. 把 `baseline\02-esp-backup\EFI\` 复制回 ESP:`robocopy baseline\02-esp-backup\EFI S:\EFI /E`。**只复制 `EFI\` 子树**:`manifest.sha256` 是清单文件,不属于 ESP 内容,不得复制回 ESP;
 4. 重建 Windows 引导:`bcdboot C:\Windows /s S: /f UEFI`(Windows 盘符按实际替换);
 5. 卸载 ESP:`mountvol S: /d`;
-6. 复查四条不变量:`BootOrder` 首位仍为 Windows Boot Manager;`\EFI\Microsoft\` 文件哈希与 `manifest.sha256` 一致;`{bootmgr}` 的 `path` 与本阶段 `02-firmware-entries.txt` 一致;Ubuntu 条目仍存在。
+6. 复查四条不变量:`BootOrder` 首位仍为 Windows Boot Manager;`\EFI\Microsoft\` 文件哈希与 `manifest.sha256` 一致;`{bootmgr}` 的 `path` 与本阶段 `02-firmware-entries.txt` 一致;Ubuntu 条目仍存在。(若复原过程中执行过 `bcdboot`,`\EFI\Microsoft\Boot\BCD` 与 `bootmgfw.efi` 的差异属预期,此时以"能正常启动 + `{bootmgr}` 的 `path` 一致 + `BootOrder` 首位未变"为准)
 
 这一步的价值来自本阶段的产物形态:**文件树 + 清单**能复原被删改的引导文件并证明复原结果;`02-firmware-entries.txt` 是固件启动项与 `{bootmgr}` 的比对基准。
 

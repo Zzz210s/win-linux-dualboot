@@ -38,7 +38,7 @@
 - **基线可用**(I4):`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` 在位可读。退役要删分区、可能还要扩分区,属"分区表变更",**没有可用基线就没有回滚点**。
 - **BitLocker 状态已知且恢复密钥在手**:48 位恢复密钥已备份(设计第 9 节)。**只有走步骤 5 的例外路径**(离线重排给 `C:` 扩容)才有必要先挂起保护:`manage-bde -protectors -disable C: -rebootcount 0`,扩容完成后按"回滚"第 4 条恢复。**标准路径不需要挂起**:它只删两块 ext4 分区并扩 `D:`,不改动 `C:` 的偏移。但分区表变更**整体**属于 BitLocker 的触发场景,所以"恢复密钥在手"是硬前提——不确认状态就不要动手。
 - **救援 U 盘在位**(设计 4.7 的 R4):常备的 Ubuntu 安装 U 盘是"删到一半发现不对"时唯一可靠的入口,也是步骤 4 第三条路径要用到的工具。
-- **回 Linux 的入口已知**(L4 步骤 7 已配):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。退役期间只在步骤 1 需要进一次 Linux,之后**再也不需要**。
+- **回 Linux 的入口已知**(L4 步骤 7 已配):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。退役期间**标准路径**只在步骤 1 需要进一次 Linux,之后**再也不需要**;偏差分支见步骤 1 的说明(需两次 Linux 会话:记录现状 + 删条目)。
 - **参数表已填**:`DISK`、`DISK_MODEL` / `DISK_SIZE`、`ESP_SIZE = 2GiB`、`WINDOWS_SYSTEM_SIZE = 200GiB`、`WINDOWS_DATA_SIZE ≈ 635GiB`、`ROOT_SIZE = 100GiB`、`SNAPSHOT_SIZE = 15GiB`、`BOOT_MENU_KEY`。删分区时靠它与 `baseline/02-partitions.txt` 的偏移/大小逐项对账。
 - **最后一次进 Linux 时收尾干净**:共享盘写入已落盘(`sync` 后 `sudo umount /mnt/shared`),不要在 Windows 处于休眠状态时让 Linux 挂载过共享盘(设计 5.3 前置条件第 1、2 条)。
 - **口径:L5 只做"主动退役"**,不做新装、不做救援。若现状是"引导层损坏而系统分区完好",那是设计 4.8 的"第三选择",走 `07-rescue.md`,不要顺手重装,也不要顺手删分区。
@@ -64,7 +64,7 @@ sudo lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT | tee ~/l5-before-lsblk.txt
 2. **记录现状**:`sudo efibootmgr -v`,抄下 `BootOrder:` 整行、`Windows Boot Manager` 的条目编号、`ubuntu` 条目的编号与 loader 路径(`\EFI\ubuntu\shimx64.efi` 或 `grubx64.efi`;通常 shim 与 grub 各一条);
 3. **进固件设置界面**(是 `Setup`,不是启动菜单)。两条入口,优先用第一条:
    - **在 Ubuntu 里直接重启进固件设置**:`sudo systemctl reboot --firmware-setup`(不用记键位,也不会错过按键时机);
-   - **该命令不被支持时**(少数固件/内核组合会直接普通重启,或报内核不支持该操作):关机后按厂商的固件设置键开机——键位见 [L1 手册](01-firmware.md) 的"厂商差异表",该表的"启动菜单键"列在每个厂商格内同时给出固件设置键(如 Dell `F2`、HP `F10`、Lenovo `F2`、ASUS `F2` / `Del`、Acer `F2`、MSI `Del`、通用 `Del` 或 `F2`)。
+   - **该命令不被支持时**(少数固件会直接普通重启;报 `Cannot indicate to EFI to boot into setup mode`(固件不支持该标志)或被会话 inhibitor 挡住(`Operation inhibited by ...`)):关机后按厂商的固件设置键开机——键位见 [L1 手册](01-firmware.md) 的"厂商差异表",该表的"启动菜单键"列在每个厂商格内同时给出固件设置键(如 Dell `F2`、HP `F10`、Lenovo `F2`、ASUS `F2` / `Del`、Acer `F2`、MSI `Del`、通用 `Del` 或 `F2`)。
 4. 在 `Boot Order` / `Boot Sequence` 里把 `Windows Boot Manager` 移到第一位。不同固件的操作方式不同(方向键 + `+`/`-`、`F5`/`F6`、或用下拉框选中后 `Enter`),以"保存后 `BootOrder` 首位是 Windows"为准;
 5. **保存退出**:保存退出后机器会**直接进 Windows**,步骤 2 就在这个 Windows 会话里做,**不要再回 Ubuntu 一趟**。
 
@@ -220,7 +220,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 | 删掉条目后,开机又在列表里看到 `ubuntu` | 部分固件会从磁盘上残留的引导文件重建条目。确认 ESP 上是否还有 `\EFI\ubuntu\`:若在,按"回滚"第 3 条先把现场核清,再用 `robocopy`/资源管理器删除该子树(**只删 `\EFI\ubuntu\`,不要碰 `\EFI\Microsoft\`**);若已不存在,把它记成固件行为偏差;只要首位是 Windows,就不影响启动 |
 | 「扩展卷」对 `C:` 是灰的 | 正常:见步骤 5,`C:` 与未分配空间不相邻。**不要**为了给 `C:` 扩容而删除或移动 `D:`;把结论记进清单第 9 行,或扩 `D:` |
 | 扩展 `D:` 时报磁盘空间不足 / 卷被占用 | 确认无页面文件、无休眠文件、无第三方工具占用;`D:` 上有未落盘写入时先在 Linux/Windows 两侧都停掉相关进程(Fast Startup 必须保持关闭,设计 5.3) |
-| 分区表变更后 Windows 索要 BitLocker 恢复密钥 | 输入已备份的 48 位恢复密钥,进系统后按"回滚"第 4 条恢复保护状态。为降低再次触发:下一次分区表/固件变更之前先 `manage-bde -protectors -disable C: -rebootcount 0` |
+| 分区表变更后 Windows 索要 BitLocker 恢复密钥 | 输入已备份的 48 位恢复密钥,进系统后按"回滚"第 4 条恢复保护状态。为降低再次触发:下一次**涉及 `C:` 或其相邻布局**的分区表/固件变更之前先 `manage-bde -protectors -disable C: -rebootcount 0` |
 | 退役中途 Windows 仍能看到 `ubuntu` 启动项且它排在最前 | 违反 I1,立即进固件设置界面把 `Windows Boot Manager` 设回首位(或删除失效的 `ubuntu` 条目)。**不要**因为"看着烦"去重装 Windows,更不要用第三方的"引导修复"一键工具改 `{bootmgr}` 的 `path`(I3) |
 | 退役后想确认 Windows 侧一切正常 | 跑一次 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1):ESP 文件哈希与 `{bootmgr}` 的 path 应仍与基线一致(删掉 `\EFI\ubuntu\` 不影响 `\EFI\Microsoft\` 的比对),BitLocker 一项的差异按预期记录处理 |
 
