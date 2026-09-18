@@ -48,7 +48,7 @@
 | I1 | 读固件启动顺序 | 第一位是 Windows Boot Manager(不是 ubuntu) |
 | I2 | 安装 Ubuntu 期间与之后复查启动顺序 | 没有任何步骤写过 `efibootmgr -o`;进 Linux 走一次性 `BootNext` 或厂商菜单键 |
 | I3 | 对比 ESP 上 `\EFI\Microsoft\` 与基线镜像 | 目录树与文件哈希与基线一致;`{bootmgr}` 的 `path` 未被改写 |
-| I4 | 进入 L2 前检查 `baseline/` 产物 | BitLocker 挂起记录、ESP 镜像、固件启动项快照、分区表四项齐全 |
+| I4 | **进入 L3 前的 L2 闸门检查** | `baseline/02-preflight-report.md` 结论为"允许进入 L3"(无红项),且 ESP 镜像、固件启动项快照、分区表、BitLocker 挂起记录四项齐备 |
 
 ---
 
@@ -100,12 +100,12 @@
 | `SECURE_BOOT` | Secure Boot 目标状态 | 全程保持开启,不关闭、不换密钥 | 开启 |
 | `DISK_MODEL` | 目标磁盘型号(安装前核对,**防装错盘**) | 与整盘格式化前的分区表输出核对 | Samsung MZVLQ1T0HBLB |
 | `DISK_SIZE` | 目标磁盘容量 | 用于验证"容量偏离"是否需要走偏离分支 | 标称 1TB / 约 953GiB |
-| `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | **装机后由 `blkid` 获取**,填入 `templates/fstab.snippet`;安装前留空 | 例如 `blkid` 输出的 UUID 值 |
+| `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | L1 只记录 `D:` 的卷标与分区位置(不含 UUID);UUID 在 L3/L4 由 `blkid` 取得后回填本表,并写入 `templates/fstab.snippet` | 例如 `blkid` 输出的 UUID 值 |
 
 说明:
 
 - `ESP_SIZE` / `WINDOWS_SYSTEM_SIZE` / `ROOT_SIZE` / `SNAPSHOT_SIZE` 是"目标值",写入 L1 的 `diskpart` 脚本;实际分区表以 L1 产物为准并记录偏差。
-- `SHARED_PART_UUID` 是唯一一个安装后才能确定的字段;它同时出现在 L1(记录)与 L4(挂载)两个阶段,必须使用同一个值。
+- `SHARED_PART_UUID` 是唯一一个安装后才能确定的字段;它在 L4 挂载共享分区时使用,必须在 L3/L4 回填本表后与 `fstab` 里的值一致。
 - 参数表任何一格都不允许写序列号、机器名、用户名;多设备适配靠本表,不靠文档分支。
 
 ---
@@ -116,7 +116,7 @@
 |---|---|---|---|
 | 入口 | 目标与契约 | 本文件 | 无(读,不执行) |
 | **L0** | 装机前准备 | `01-firmware.md` | `baseline/00-firmware.md` |
-| **L1** | Windows 全新安装 | `02-windows.md` | `baseline/01-*`(分区表、ESP 镜像、固件启动项、激活状态) |
+| **L1** | Windows 全新安装 | `02-windows.md` | `baseline/01-*`(分区表与激活状态在 L1 记录;ESP 镜像与固件启动项快照在 L2 生成) |
 | **L2** | 预检与基线(硬闸门) | `03-preflight.md` | `baseline/02-preflight-report.md` |
 | **L3** | Ubuntu 安装 | `04-ubuntu.md` | `baseline/03-efi-layout.txt` |
 | **L4** | 首启收敛 | `05-first-boot.md` | `baseline/04-first-boot.md` |
@@ -124,6 +124,8 @@
 | 验收 | 唯一判据 | `08-verification.md` | 验收清单(A-F 组)全绿 |
 | 风险 | 风险登记表 | `09-risks.md` | 无(查,不执行) |
 | 附录 | 高频疑问速查 | `10-faq.md` | 无(查,不执行) |
+
+注:L1 负责定稿分区表并记录激活状态;ESP 整块镜像与固件启动项快照是 **L2 生成的基线产物**(设计文档 4.3),两步共用 `baseline/01-*` 编号前缀,并统一由 `baseline/02-preflight-report.md` 判定四项是否齐备。
 
 **从哪一节开始读**:
 
