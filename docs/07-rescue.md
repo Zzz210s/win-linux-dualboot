@@ -31,7 +31,7 @@
 ## 前置条件
 
 - **已经知道"崩溃在哪一层"的大致方向**:至少要先回答问题清单(步骤 0.2)里的"能否进固件""能否进 Windows""提示符长什么样"三条,再往下走。
-- **基线可用**(I4):`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt`、`baseline/03-efi-layout.txt` 在位可读。它们是"引导层是否被改写"的唯一客观判据,也是基线回滚的来源。
+- **基线可用**(I4):`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt`、`baseline/03-efi-layout.txt` 在位可读。它们是"引导层是否被改写"的唯一客观判据,也是基线回滚的来源(`baseline/02-esp-backup/` 与 `baseline/02-firmware-entries.txt` 只覆盖基线行内的东西与固件条目;装 Ubuntu 之后新增的 `\EFI\ubuntu\` 不在其中,不能用它还原,见步骤 3.1)。
 - **救援介质在位**(设计 4.7 的 R4):常备的 Ubuntu 安装 U 盘,装机结束后不回收;需要时按 [L0 手册](01-firmware.md) 的厂商差异表调出启动菜单。
 - **Windows 侧的入口已知**:`BOOT_MENU_KEY`、[set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)、[reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh) 三条都在手上——救援期间经常要在两系统之间来回,不要依赖"记得按键时机"。
 - **BitLocker 恢复密钥在手**(设计第 9 节):48 位恢复密钥已备份在设备之外。分区表变更、ESP 写入、重装系统都可能触发恢复提示;**密钥不在手就不要动手**。
@@ -159,6 +159,7 @@ boot
 要点与判据:
 
 - `search --file ...` 成功即把 `root` 指向 ESP(找到文件不报错)。报 not found → 先 `ls (hd0,gpt1)/EFI/Microsoft/Boot/` 确认路径大小写与拼写(UEFI 的 FAT 卷大小写不敏感,但 `EFI` 是目录、`Microsoft` 是子目录,层级不能少);
+- `insmod chain` 报 `file not found` → `chain` 模块要从 `$prefix` 下加载,`$prefix` 未修好时它必然失败:先按 1.1 / 1.2 把 `set prefix` 指到 root 的 `/boot/grub`(即 `set prefix=(hd0,gpt5)/boot/grub`)再试;仍不行就改走固件启动菜单(`BOOT_MENU_KEY` 选 `Windows Boot Manager`),不要在这里硬敲;
 - `chainloader` 提示载入成功即可;Secure Boot 下这里**应该**能通过——用的是微软签名链里的 `bootmgfw.efi`,在固件看来与正常启动 Windows 无异(设计 3.3);
 - 报 `invalid signature` / `Verification failed` → 见"失败处理"中 Secure Boot 一行;
 - `boot` 后直接进 Windows,不需要任何手工选择;
@@ -169,7 +170,7 @@ boot
 1. **先确认现场**:在 Windows 管理员会话跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1)(后面步骤 2 第 4、5 条),确认 `\EFI\Microsoft\` 与 `{bootmgr}` 没被改动;
 2. **判断要不要修 Linux 侧**:
    - 只是 NVRAM 条目指向的文件名不对(比如条目写 `grubx64.efi` 而 ESP 上只有 `shimx64.efi`)→ 在 Ubuntu 里用 `sudo efibootmgr -b <编号> -B` **删除该条目**,再从 live 环境用显式盘/分区重建:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(命令只新建条目,**绝不用 `-o` 调顺序**;口径与 [L3 手册](04-ubuntu.md) 的失败处理一致);
-   - 文件真丢了(更新重写了 ESP)→ 走步骤 3 的基线回滚,再按需从 live 环境重装 GRUB 的 EFI 文件;
+   - 文件真丢了(`\EFI\ubuntu\` 被更新重写或清掉)→ 先走步骤 3 复原 `\EFI\Microsoft\`,再按步骤 3.1(b) 的具体步骤从 live 环境重建 Ubuntu 引导文件:`chroot` 后 `grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`,再用 `sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'` 建条目,最后断言 `BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾;
 3. **不要顺手改启动顺序**:修完 `BootOrder` 首位必须仍是 `Windows Boot Manager`,`ubuntu` 在末尾(设计 8-A)。顺序被改动的场景走步骤 6;
 4. **记一笔**:把这次故障的现象、层级结论、做过的命令写进 [checklists/rollback.md](../checklists/rollback.md) 第 2 节的备注。
 
@@ -215,26 +216,63 @@ boot
    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -BaselineDir baseline
    ```
 
-   - 判据:① `BootOrder` 首位为 `Windows Boot Manager`;③ `{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致;② 若报差异,按第 3 条的"预期差异"解释并写进备注;④ BitLocker 状态有变化即转人工;
+   - 判据(与 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 输出的四项一一对应):① `BootOrder` 首位为 `Windows Boot Manager`(与 `baseline\02-firmware-entries.txt` 一致);② `\EFI\Microsoft\` 与 `baseline\02-esp-backup\manifest.sha256` 逐文件比对的差异,按第 3 条的"预期差异"解释并写进备注(`bcdboot` 会重写 `bootmgfw.efi` 与 `BCD`);③ `{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致;④ BitLocker 状态有变化即转人工;
    - 把巡检输出连同这次救援的说明记入 `baseline/`(或清单备注);
    - 连续重启 3 次都直接进 Windows,才算这一步收尾(设计 8-A)。
 
 ### 3. 第三选择:基线回滚(ESP 还原 + `bcdboot` + NVRAM 清理)
 
-适用:**引导层损坏而系统分区完好**——ESP 上的引导文件被删改(Windows 更新重写 ESP、误删 `\EFI\ubuntu\`、`\EFI\Microsoft\` 与基线不一致),但 `C:`、`D:`、Linux 分区都在、数据都在。设计 4.8 的"第三选择"就是这一条:**不是重装**。
+适用:**引导层损坏而系统分区完好**——ESP 上的引导文件被删改(Windows 更新重写 ESP、误删 `\EFI\ubuntu\`(按 3.1 处置)、`\EFI\Microsoft\` 与基线不一致),但 `C:`、`D:`、Linux 分区都在、数据都在。设计 4.8 的"第三选择"就是这一条:**不是重装**。
 
 这一节只做勾选级指引,完整命令与判据以 [L2 手册](03-preflight.md)"回滚"第 1 条为准(**避免同一段命令两处维护**),与 [checklists/rollback.md](../checklists/rollback.md) 第 4 节逐项对应:
 
 1. **校验备份完整性**:逐行核对 `baseline\02-esp-backup\manifest.sha256` 与备份树里的文件哈希(`Get-FileHash -Algorithm SHA256`)。备份与清单由 [backup-esp.ps1](../scripts/windows/backup-esp.ps1) 生成(清单格式见该脚本说明);备份本身坏了,这一条路就不成立;
 2. **挂载 ESP**:`mountvol S: /s`;
-3. **还原文件树**:`robocopy baseline\02-esp-backup\EFI S:\EFI /E` —— **只复制 `EFI\` 子树**;`manifest.sha256` 是清单文件,不属于 ESP 内容,不得复制回 ESP;
+3. **还原文件树**:`robocopy baseline\02-esp-backup\EFI S:\EFI /E` —— **只复制 `EFI\` 子树**;`manifest.sha256` 是清单文件,不属于 ESP 内容,不得复制回 ESP。备份树里**没有** `EFI\ubuntu\`(它不在 L2 基线里,见 3.1),这一行只复原 `\EFI\Microsoft\` 等内容;
 4. **重建 Windows 引导**:`bcdboot C:\Windows /s S: /f UEFI`(与步骤 2 同一命令,判据同步骤 2 第 3 条);
 5. **卸载 ESP**:`mountvol S: /d`;
 6. **清理 NVRAM 残留条目**:删掉指向已不存在文件的条目(`bcdedit /enum firmware` + `bcdedit /delete {identifier}`,或 live 环境 `sudo efibootmgr -b <编号> -B`)。**用删除代替改顺序**——任何情况下都不用 `efibootmgr -o` / `displayorder`(I2);
 7. **复查四条不变量**并重跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1);② 若因 `bcdboot` 报差异,按步骤 2 第 3 条的"预期差异"解释;
 8. **连续重启 3 次**都默认进 Windows,需要 Linux 时用一次性入口。
 
-**与步骤 2 的分工**:步骤 2 是"`\EFI\Microsoft\` 齐全、只重建 BCD";步骤 3 是"`\EFI\Microsoft\` 或 `\EFI\ubuntu\` 被删改、先用基线把文件树放回去再重建"。两者最后都收敛到同一套判据。
+**与步骤 2 的分工**:步骤 2 是"`\EFI\Microsoft\` 齐全、只重建 BCD";步骤 3 是"`\EFI\Microsoft\` 被删改、先用基线把文件树放回去再重建"。两者最后都收敛到同一套判据;涉及 `\EFI\ubuntu\` 的部分见 3.1(基线里没有它)。
+
+#### 3.1 `\EFI\ubuntu\` 不在 L2 基线里:两条真实来源
+
+**`\EFI\ubuntu\` 不在 L2 基线清单里**(`baseline\02-esp-backup\` 由 L2 预检产出,而 L2 生成于装 Ubuntu **之前**,产出阶段见 [baseline/README.md](../baseline/README.md);[L3 手册](04-ubuntu.md) 的验证第 2 行已写死同一口径:"清单里 `EFI/ubuntu/` 属新增,不在基线行内")。**所以不能用 `baseline\02-esp-backup\EFI\ubuntu\` 还原 Ubuntu 引导文件——那个目录根本不存在**;基线只能复原 `\EFI\Microsoft\` 相关内容,固件条目现状看 `baseline\02-firmware-entries.txt`。
+
+`\EFI\ubuntu\` 被清掉或损坏时,只有两条真实来源(任何依赖 L2 基线的写法都无效):
+
+**(a) 做过 L5 主动退役备份的** → 用 `D:\dbk-l5-backup\02-esp-backup\EFI\ubuntu\`(那是 [L5 退役手册](06-decommission.md) 步骤 2 写出的备份;该备份树含 `EFI\Microsoft\` 与 `EFI\ubuntu\` 两棵子树,是唯一"含 ubuntu 的现成备份"):
+
+```powershell
+mountvol S: /s
+robocopy D:\dbk-l5-backup\02-esp-backup\EFI\ubuntu S:\EFI\ubuntu /E
+mountvol S: /d
+```
+
+**(b) 没有现成备份的** → 从 live 环境重建:挂上 root 与 ESP、`chroot` 后重装 GRUB 的 EFI 文件,再显式建 NVRAM 条目:
+
+```bash
+# live 环境;盘与分区号按 baseline/02-partitions.txt 替换
+sudo mount /dev/nvme0n1p5 /mnt                  # Ubuntu root
+sudo mount /dev/nvme0n1p1 /mnt/boot/efi         # ESP
+for d in dev dev/pts proc sys run; do sudo mount --rbind /$d /mnt/$d; done
+sudo chroot /mnt /bin/bash
+grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu
+update-grub
+exit
+sudo umount -R /mnt
+sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'
+sudo efibootmgr -v
+```
+
+判据与纪律:
+
+- `/boot/efi/EFI/ubuntu/` 下出现 `shimx64.efi`、`grubx64.efi` 与 `grub.cfg`(与 `Microsoft/` 并存);
+- 建完条目**立刻断言**:`BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾;顺序不对就走步骤 6 处置,**不用 `efibootmgr -o`**(I2);
+- 全程保持 Secure Boot 开启:走的是 shim 签名链(设计 3.3),不要用 `--no-nvram` 或自签密钥之类的变通绕开;
+- **不要手工把别的机器或别的系统的 `\EFI\ubuntu\` 文件抄进来**:`shimx64.efi` 与 `grubx64.efi` 是一对,版本错配会被 Secure Boot 拒载(处置见"失败处理"的 `invalid signature` 一行)。
 
 ### 4. 办法一:只重装 Windows(仅格式化 `C:`)
 
@@ -256,7 +294,7 @@ boot
 |---|---|---|
 | 误格 `D:` 或 Linux 分区 | **灾难性、不可逆** | 靠第 3 步的逐分区核对;已经格错就停手,`D:` 只能靠外部备份恢复,Linux 侧按步骤 5 重装并把 `/snapshots` 一起重建 |
 | 安装程序新建恢复分区 / 挪动 WinRE | 分区表偏离计划(占掉预留空间) | 属设计第 9 节已登记的版本敏感性风险:**尺寸偏差可接受**(唯一不可削减的是 ESP),把偏差写进 `baseline/` 与设备参数表即可,不要为了"回到计划"去挪分区 |
-| ESP 被安装器改写 | `\EFI\ubuntu\` 可能被清掉 → 重启停 `grub rescue>` | 装完先挂载 ESP 看 `S:\EFI\ubuntu\` 是否还在;不在则从 `baseline\02-esp-backup\EFI\ubuntu\` 放回去(步骤 3 的机制),再 `sudo efibootmgr -c ...` 重建条目(不用 `-o`) |
+| ESP 被安装器改写 | `\EFI\ubuntu\` 可能被清掉 → 重启停 `grub rescue>` | 装完先挂载 ESP 看 `S:\EFI\ubuntu\` 是否还在;不在则按步骤 3.1 的两条来源重建(**`\EFI\ubuntu\` 不在 L2 基线清单里——L2 基线生成于装 Ubuntu 之前,不能用 `baseline\02-esp-backup\EFI\ubuntu\` 还原**),再 `sudo efibootmgr -c ...` 重建条目(不用 `-o`) |
 | BitLocker 索要恢复密钥 | 进不去系统 | 密钥在手直接输入;`C:` 重装后保护状态会回到"未加密或待启用",按设计第 9 节登记状态变化,不要在救援期间顺手开新保护 |
 
 ### 5. 办法二:只重装 Ubuntu(仅格式化 root)
@@ -277,7 +315,7 @@ boot
 
 | 风险 | 后果 | 处置 |
 |---|---|---|
-| **误勾"格式化 ESP"** | **同时毁掉 Windows 引导**(`\EFI\Microsoft\` 被清空),两系统一起进不去 | **在点"安装/下一步"之前退回去取消勾选,这一步是无损的**;若已经装完才发现,走步骤 3 的基线回滚(`\EFI\Microsoft\` 从 `baseline\02-esp-backup\EFI\` 放回 + `bcdboot`),并把这次记为严重偏差 |
+| **误勾"格式化 ESP"** | **同时毁掉 Windows 引导**(`\EFI\Microsoft\` 被清空),两系统一起进不去 | **在点"安装/下一步"之前退回去取消勾选,这一步是无损的**;若已经装完才发现,走步骤 3 的基线回滚(`\EFI\Microsoft\` 从 `baseline\02-esp-backup\EFI\` 放回 + `bcdboot`),`\EFI\ubuntu\` 按步骤 3.1 的两条来源重建(它不在 L2 基线里),并把这次记为严重偏差 |
 | 误格 `C:` 或 `D:` | 灾难性 | 靠第 3 步的逐分区核对;发生即停手,按步骤 4 重装 Windows,`D:` 只能靠外部备份 |
 | `/snapshots` 被一起格式化 | 丢失历史回滚点(R1) | 第 3 步明确"挂上但不格式化";已经格式化则重建分区并按 [L4 手册](05-first-boot.md) 重新启用快照 |
 | 装完启动顺序被改 | 违反 I1 | **只在固件设置界面**把 `Windows Boot Manager` 改回首位;固件没有顺序选项时走步骤 6 |
@@ -314,36 +352,37 @@ boot
 
 ### 7. 周期性巡检(每次 Windows 大版本/累积更新之后)
 
-**Windows 更新是这台设备上唯一会周期性改写 ESP 与固件启动项的外力**(2024-08 的 SBAT / Secure Boot DBX 事件就是这一类的极端形态,见设计 7.1)。所以每次大版本升级或累积更新之后,重跑一次基线核对:
+**Windows 更新是这台设备上周期性地改写 `\EFI\Microsoft\` 与固件启动项的唯一外力**(Ubuntu 侧的 shim / grub 包更新也会周期性重写 `\EFI\ubuntu\`,但那是 Linux 引导自身、不碰 Windows 侧;2024-08 的 SBAT / Secure Boot DBX 事件就是"更新动引导"这一类的极端形态,见设计 7.1)。所以每次大版本升级或累积更新之后,重跑一次基线核对:
 
 ```powershell
 # 管理员 Windows PowerShell,仓库根目录
 powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -BaselineDir baseline
 ```
 
-核对三项(脚本输出里的 ①②③,判据同步骤 2):
+核对四项(与脚本输出的 ①②③④ 一一对应,判据同步骤 2):
 
 | # | 核对项 | 判据 |
 |---|---|---|
 | 1 | `BootOrder` 首位 | 仍是 `Windows Boot Manager`(与 `baseline\02-firmware-entries.txt` 一致) |
 | 2 | ESP 目录树是否被改动 | `\EFI\Microsoft\` 与 `baseline\02-esp-backup\manifest.sha256` 逐文件一致(更新之后此处的差异要当回事,先判断是"Windows 更新正常写入"还是"引导被接管") |
-| 3 | `BitLocker` 状态 | 与 `baseline\02-preflight-report.md` 的记录一致;变化即提示人工介入 |
+| 3 | `{bootmgr}` 的 `path` | 与 `baseline\02-firmware-entries.txt` 一致;变化即提示人工介入 |
+| 4 | `BitLocker` 状态 | 与 `baseline\02-preflight-report.md` 的记录一致;变化即提示人工介入 |
 
-脚本退出码 0 = "巡检通过",1 = "需人工介入";输出留档到 `baseline/`(或清单备注)。**巡检通过不等于可以不动**:三项里任何一项报差异,先按步骤 0 判断层级,再按步骤 2 或步骤 3 处置。
+脚本退出码 0 = "巡检通过",1 = "需人工介入";输出留档到 `baseline/`(或清单备注)。**巡检通过不等于可以不动**:四项里任何一项报差异,先按步骤 0 判断层级,再按步骤 2 或步骤 3 处置。
 
 **SBAT / Secure Boot DBX 事故(2024-08,微软已确认)**:微软通过 Windows 更新推送的 DBX 更新会把若干 Linux 引导器的 SBAT 版本判为"过旧",在部分双系统设备上更新后无法引导 Linux。现象与处置:
 
 - **现象**:更新并重启后,固件直接跳过 `ubuntu` 条目,或停在 `grub>` / `grub rescue>`,或出现 `Verification failed: (0x1A) Security Violation` / `bad shim signature` 一类拒载提示;Windows 侧一切正常(设计第 9 节、[入口文档](00-overview.md)"已知事故类型");
-- **处置**:清理固件下发的 SBAT 策略——在 Windows 侧清除注册表中 `SbatLevel` 相关值(与 [入口文档](00-overview.md) 第 1 条一致);在 Linux 侧立即可用的是 `sudo mokutil --set-sbat-policy delete`(需要 `mokutil` 可用;执行后重启生效)。清完策略再按步骤 1 或步骤 3 复原引导;
+- **处置**:清理固件下发的 SBAT 策略——在 Windows 侧清除注册表中 `SbatLevel` 相关值(与 [入口文档](00-overview.md) 第 1 条一致);在 Linux 侧立即可用的是 `sudo mokutil --set-sbat-policy delete`(需要 `mokutil` 可用;执行后重启生效)。清完策略再按步骤 1 或步骤 3 复原引导。**具体注册表键值名与命令以微软 / Ubuntu 官方公告为准**;
 - **缓解**:①**常备 Ubuntu 安装 U 盘**并在装机结束后不回收、保持"已验证可用"(R4)——引导被拒时从 U 盘进 live 环境修,而不是原地重装;②**不要关闭 Secure Boot 解决问题**:关闭它会把 L4 的预签名 NVIDIA 包路径一起破坏,且不是本方案的做法(设计 3.3);
-- **检**:事故本身不违反 I1-I4,处置完按步骤 7 的巡检三项复核一遍。
+- **检**:事故本身不违反 I1-I4,处置完按步骤 7 的巡检四项复核一遍。
 
 ### 8. 排障纪律(出事后最容易犯的四个错)
 
 **第一条:不要反复长按电源强制重启。** 强断会把"一次引导故障"升级成"文件系统损坏",最后两个系统一起进不去(设计第 9 节风险行、评论区 274 赞的那个案例)。替代手段:
 
 - 优先切 TTY:`Ctrl + Alt + F3`(桌面崩了但内核还活着时最有用);
-- 内核层面无响应时用 **REISUB(SysRq)** 安全重启:依次按 `Alt + SysRq + R`、`E`、`I`、`S`、`U`、`B`(键盘上 SysRq 常与 `PrtSc` 同键;Linux 需内核参数 `kernel.sysrq` 允许,Ubuntu 默认可用)。顺序本身是"交出键盘 → 终止进程 → 落盘 → 只读重挂 → 重启",每一步都在为下一步争取干净状态;
+- 内核层面无响应时用 **REISUB(SysRq)** 安全重启:依次按 `Alt + SysRq + R`、`E`、`I`、`S`、`U`、`B`(键盘上 SysRq 常与 `PrtSc` 同键)。顺序本身是"交出键盘 → 终止进程 → 落盘 → 只读重挂 → 重启",每一步都在为下一步争取干净状态。**注意 Ubuntu 默认 `kernel.sysrq=176`,只开放 `S` / `U` / `B` 三位,`R` / `E` / `I` 往往空操作**(不报错也没反应):这种情况下直接按 `S -> U -> B`,同样达成"落盘 + 只读重挂 + 重启",前两步跳过即可;确实需要完整 REISUB 时,先把 `kernel.sysrq` 设为 `1`(写进 `/etc/sysctl.d/` 或内核命令行,重启后生效)再按六键;
 - **如果已经反复强断过**:下次启动前先跑一次文件系统检查(ext4 在挂载次数到阈值时会自动跑,也可在 live 环境手动 `sudo fsck -f /dev/nvme0n1p5`,设备名按 `baseline/02-partitions.txt` 替换),把损坏先修掉再谈别的。
 
 **第二条:桌面崩了不等于系统坏了。** 先拿到"还能用"的入口,再谈修复:
@@ -370,14 +409,14 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 |---|---|---|
 | 1 | 崩溃层级有文字结论 | 结论是"引导层 / 系统分区 / 硬件"三选一,并附判据(步骤 0.2 里回答了哪几条、实测值是什么);**引导层场景下未执行任何格式化** |
 | 2 | 默认启动项与重启实测 | `bcdedit /enum firmware`(或 `sudo efibootmgr -v`)的 `BootOrder:` 第一项对应 `Windows Boot Manager`;连续重启 **3 次**都默认进 Windows(设计 8-A) |
-| 3 | Windows 可正常启动 | 进桌面无异常;Fast Startup 与休眠处于关闭状态(`powercfg /a`);若走过步骤 4,激活状态与已知文件夹重定向已重做 |
+| 3 | Windows 可正常启动 | 进桌面无异常;Fast Startup 与休眠处于关闭状态:`powercfg /a` 里"休眠"与"快速启动"均显示不可用,且 `reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled` 为 `0x0`(与 [L1 手册](02-windows.md) 验证第 5 行、[L4 手册](05-first-boot.md) 1.1 第 1 条同一颗粒度);若走过步骤 4,激活状态与已知文件夹重定向已重做 |
 | 4 | Windows 引导未被污染 | `\EFI\Microsoft\` 与 `baseline\02-esp-backup\manifest.sha256` 逐文件一致;若过程中执行过 `bcdboot`,`bootmgfw.efi` 与 `BCD` 的差异属**预期**,以"能正常启动 + 第 5 行的 `path` 一致"为准([verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 的 ② 项) |
 | 5 | 引导路径未被篡改 | `{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致(verify-baseline.ps1 的 ③ 项) |
 | 6 | Linux 侧可用且不抢默认 | `\EFI\ubuntu\` 仍在 ESP 上;`ubuntu` 条目位于 `BootOrder` 末尾(或按已登记的偏差处理);用 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1) 能进 Ubuntu,且重启后默认仍是 Windows |
 | 7 | 不变量口径 | 全程未执行 `efibootmgr -o`,也未执行 `bcdedit /set {fwbootmgr} displayorder`(I1/I2);`\EFI\Microsoft\` 未被第三方接管(I3) |
 | 8 | 走重装路径时"只格一块" | 只有目标系统分区被格式化:另一系统分区、ESP、MSR、`D:`、`/snapshots` 的偏移与大小与 `baseline\02-partitions.txt` 一致(可用 `Get-Partition -DiskNumber 0` 与图形磁盘管理双向核对) |
 | 9 | 数据在位 | `D:` 上的文档类数据可读;`/mnt/shared/` 挂载正常(`ntfs3`);走过步骤 5 时 `/snapshots` 挂载可见(`df`) |
-| 10 | 巡检留档 | 有 Windows 更新的场景下,`verify-baseline.ps1` 的输出已留档,三项核对结论与偏差写明;结论文字为"巡检通过"或"需人工介入(原因:____)" |
+| 10 | 巡检留档 | 有 Windows 更新的场景下,`verify-baseline.ps1` 的输出已留档,四项核对结论与偏差写明;结论文字为"巡检通过"或"需人工介入(原因:____)" |
 | 11 | 记录到位 | [checklists/rollback.md](../checklists/rollback.md) 对应节的勾选与备注已填;偏差已回写[入口文档](00-overview.md)设备参数表 |
 
 ## 失败处理
@@ -386,11 +425,11 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 |---|---|
 | `ls` 列不出任何分区(`(hd0)` 之后再无 `(hdX,gptY)`) | `insmod part_gpt` 后重试;仍不行说明 GRUB 的核心镜像/模块也丢了——不要在这里硬敲,改走步骤 1.3 直接回 Windows,或从 live U 盘进环境处理 |
 | `insmod normal` 报 `file not found` | `prefix` 指错分区/路径。回步骤 1.1 用 `ls (hdX,gptY)/` 逐个分区重找含 `/boot/grub` 的那个;**不要**改成 `normal` 硬试,也不要 `set prefix` 到 ESP(`/EFI/ubuntu` 里没有 `grub.cfg`) |
-| `chainloader` 报 `unknown command` | 先 `insmod chain` 再重试;模块缺失时改走 firmware 的启动菜单选 `Windows Boot Manager`,进 Windows 后按步骤 2 修 |
+| `chainloader` 报 `unknown command` | 先 `insmod chain` 再重试;`insmod chain` 报 `file not found` 时,`chain` 模块来自 `$prefix`,按 1.1 / 1.2 把 `set prefix` 指到 root 的 `/boot/grub` 再试;仍不行就从固件启动菜单选 `Windows Boot Manager`,进 Windows 后按步骤 2 修 |
 | `chainloader` / 启动 Windows 报 `invalid signature`、`Verification failed`、`bad shim signature` | 属 Secure Boot 拒载:**不要关闭 Secure Boot、不要自签密钥**(设计 3.3)。先核查固件里 `Secure Boot Mode` 是否被改成 `Custom`(应为 `Standard`);用的是官方 ISO 吗?shim 是否在微软签名链内?SBAT 类事故按步骤 7 的处置清策略 |
 | `bcdboot` 报 `Failure when attempting to copy boot files` | 三种常见原因依次查:① `C:` 盘符写错(WinRE 里先 `dir` 确认含 `\Windows` 的卷);② ESP 没挂上或不是 FAT32(`S:\EFI` 不可见);③ ESP 空间不足(`dir S:\` 看剩余;2GiB 的目标尺寸下极少见)。修好后重跑,不要改别的判据 |
 | `mountvol S: /s` 报错或 `S:\` 里没有 `EFI\` | 换一个空闲盘符(`T:` 等);仍失败则说明 ESP 分区本身不可用(分区表问题)→ 停手,回步骤 0 重新判断层级,可能已是"系统分区/分区表"层 |
-| 装完 Windows 重启进了 `grub rescue>` | `\EFI\ubuntu\` 被安装器清掉或 `ubuntu` 条目还在 `BootOrder` 前面。先按步骤 1.3 回 Windows → 步骤 3 把 `\EFI\ubuntu\` 放回去 → 条目按步骤 6 处置(**不用 `-o`**) |
+| 装完 Windows 重启进了 `grub rescue>` | `\EFI\ubuntu\` 被安装器清掉或 `ubuntu` 条目还在 `BootOrder` 前面。先按步骤 1.3 回 Windows → 按步骤 3 复原 `\EFI\Microsoft\` → `\EFI\ubuntu\` 按步骤 3.1 的两条来源重建(**它不在 L2 基线清单里:L2 基线生成于装 Ubuntu 之前,`baseline\02-esp-backup\EFI\ubuntu\` 不存在**)→ 条目按步骤 6 处置(**不用 `-o`**) |
 | 装完 Ubuntu 重启直接进 Windows,没看到 Ubuntu 入口 | **通常是正常形态**:`BootOrder` 首位未变(I1)。用 `BOOT_MENU_KEY` 选 `ubuntu` 即可;条目缺失时从 live 环境 `sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'` 新建(盘/分区按 `baseline/02-partitions.txt` 替换;**不用 `-o`**),随后立刻复读 `efibootmgr` 断言首位仍是 Windows |
 | 安装器用了"删除所有分区" | **在点"安装/下一步"之前退回去**——这一步还是无损的。若已经装完:两个系统分区与 ESP 都需重建,先按步骤 3 复原 ESP 引导文件,再按步骤 4(Windows)与步骤 5(Ubuntu)分别重装,并把这次记为严重偏差 |
 | `\EFI\Microsoft\` 与基线不一致(巡检或救援中报差异) | **立即停手**:说明 ESP 被改写,I3 已被违反。按步骤 3 做基线回滚(ESP 文件树还原 + `bcdboot` + NVRAM 清理),复原并复查后再继续 |
@@ -408,7 +447,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 |---|---|---|
 | 单步回滚 | 命令敲错(设备名/盘符/`prefix`)、`bcdboot` 盘符写错、装完发现多删了一块分区 | 回到该步骤的"判据"重新做。**注意不可逆项**:分区一旦格式化,数据只能靠外部备份或数据恢复;所以动手前先备份(步骤 4 第 1 条、步骤 6 第 2 条) |
 | 阶段回滚 | 决定不修了,把 Linux 撤掉;或重装到一半反悔 | 退役走 [L5 退役手册](06-decommission.md) 的五步(顺序不可更换);重装中途反悔见下文"重装中途反悔"一节 |
-| 基线回滚 | ESP 或固件启动项被破坏、引导层损坏而系统分区完好 | 就是本文步骤 3:ESP 文件树还原 + `bcdboot` 重建 + NVRAM 清理;来源是 `baseline/02-esp-backup/` 与 `baseline/02-firmware-entries.txt` |
+| 基线回滚 | ESP 或固件启动项被破坏、引导层损坏而系统分区完好 | 就是本文步骤 3:ESP 文件树还原 + `bcdboot` 重建 + NVRAM 清理;来源是 `baseline/02-esp-backup/` 与 `baseline/02-firmware-entries.txt`(基线只覆盖 `\EFI\Microsoft\` 与固件条目;`\EFI\ubuntu\` 按步骤 3.1 用 L5 备份或 live 重建) |
 
 ### 1. 救援后的基线状态(哪份还能用)
 
@@ -418,7 +457,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 | 只做步骤 6(删 `ubuntu` 条目) | **部分有效**:固件启动项已变(条目少了一条),分区表未变 | 把条目现状写进备注;不要为了"让基线成立"去改 `baseline/02-firmware-entries.txt`——那份记录的是故障前的现场,改了就没有比对意义 |
 | 走了步骤 4(重装 Windows,只格 `C:`) | **分区表仍有效**(偏移/大小未变);ESP 内容已变(BCD 重建) | 重跑 `preflight.ps1` 重做 L2 并重新生成 `baseline/02-*`(I4:分区表或固件变更前要有可用基线;此处虽只动了 `C:` 与 ESP,重做一份最省事),再按 [L4 手册](05-first-boot.md) 收敛 |
 | 走了步骤 5(重装 Ubuntu,只格 root) | 同上(ESP 的 `\EFI\ubuntu\` 已重写) | 重做 L2 基线 + 按 [L4 手册](05-first-boot.md) 重放配置;`/snapshots` 未格式化时旧快照仍可用 |
-| 走了步骤 4 或 5 且**误格了 ESP** | 分区表已变(ESP 被重建) | 先按步骤 3 从 `baseline\02-esp-backup\` 把 `\EFI\Microsoft\` 与 `\EFI\ubuntu\` 放回并 `bcdboot`,再重做 L2 基线;这一步做不了就只能在 live 环境重建引导 |
+| 走了步骤 4 或 5 且**误格了 ESP** | 分区表已变(ESP 被重建) | 先按步骤 3 从 `baseline\02-esp-backup\EFI\` 复原 `\EFI\Microsoft\` 并 `bcdboot`;`\EFI\ubuntu\` **不在 L2 基线清单里**(L2 基线生成于装 Ubuntu 之前),按步骤 3.1 的两条来源重建(有 L5 备份就用 `D:\dbk-l5-backup\02-esp-backup\EFI\ubuntu\`,否则从 live 环境 `chroot` 重建);再重做 L2 基线 |
 
 ### 2. 重装中途反悔
 
@@ -432,6 +471,6 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 ### 3. 不可逆项清单(动手前先读这一遍)
 
 - **格式化分区不可逆**:`D:` 的文档数据、Linux root 上的代码与密钥、`/snapshots` 里的快照,三者任一被格式化就只能靠外部备份;
-- **误格 ESP 会连带毁掉 Windows 引导**,恢复手段是 `baseline\02-esp-backup\`(前提是它可用且未过期);
+- **误格 ESP 会连带毁掉 Windows 引导**,恢复手段是 `baseline\02-esp-backup\`(前提是它可用且未过期);`\EFI\ubuntu\` 不在这份基线里(L2 基线生成于装 Ubuntu 之前),只能按步骤 3.1 用 L5 备份或从 live 环境重建;
 - **`bcdboot` 重建的 BCD 与 `bootmgfw.efi` 无法"退回原样"**,只能重建——这也是判据改成"能正常启动 + `{bootmgr}` 的 `path` 一致"的原因;
 - **删除 NVRAM 条目后,该系统的"默认启动能力"需要重新建立**(本方案里不需要:进 Linux 一律走一次性入口)。所以删条目永远排在"先备份"之后。
