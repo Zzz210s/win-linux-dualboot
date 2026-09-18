@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   产物(全部落在 -OutDir 下,I4 基线):
-    02-esp-backup/                  ESP 全量文件树(含 EFI\ 子树)
+    02-esp-backup/                  ESP 全量文件树(含 EFI\ 子树;重复运行时与源严格同步,源上已删除的陈旧文件会被清掉)
     02-esp-backup/manifest.sha256   文件级 SHA256 清单(相对路径 + 哈希)
     02-firmware-entries.txt         bcdedit /enum firmware 与 /enum {bootmgr} 快照
     02-partitions.txt               diskpart 与 Get-Disk/Get-Partition 快照
@@ -70,14 +70,15 @@ try {
     throw ('挂载点 ' + $mountPoint + ' 上没有 EFI 目录,可能不是 ESP;已跳过复制。')
   }
 
-  # 3. 复制 ESP 全量文件树(robocopy 只读源;/E 含空目录;/COPY:DAT 不含审计信息)
-  $rcArgs = @(($mountPoint + '\'), $espDir, '/E', '/COPY:DAT', '/R:1', '/W:1', '/XJ', '/NP', '/NFL', '/NDL', '/NJH', '/NJS')
+  # 3. 复制 ESP 全量文件树(/E 含空目录;/COPY:DAT 不含审计信息;/PURGE 清掉目标目录里源上已不存在的旧文件,
+  #    否则 ESP 侧删改过的文件会永久留在备份树里,复原时又被复制回 ESP)
+  $rcArgs = @(($mountPoint + '\'), $espDir, '/E', '/COPY:DAT', '/PURGE', '/R:1', '/W:1', '/XJ', '/NP', '/NFL', '/NDL', '/NJH', '/NJS')
   $null = & robocopy @rcArgs
   $rc = $LASTEXITCODE
   if ($rc -ge 8) { throw ('robocopy 复制 ESP 失败(退出码 ' + $rc + ')') }
 
-  # 4. 文件级清单(先枚举再写清单文件,清单本身不进清单)
-  $files = @(Get-ChildItem -LiteralPath $espDir -Recurse -File -Force)
+  # 4. 文件级清单(先枚举再写清单文件;manifest.sha256 是清单自身,永远不进清单,否则会自引用并破坏 docs/03-preflight.md 验证第 11 行)
+  $files = @(Get-ChildItem -LiteralPath $espDir -Recurse -File -Force | Where-Object { $_.Name -ne 'manifest.sha256' })
   $manifest = @()
   foreach ($f in $files) {
     $rel = $f.FullName.Substring($espDir.Length + 1).Replace('\', '/')

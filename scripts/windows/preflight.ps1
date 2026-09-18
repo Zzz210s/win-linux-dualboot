@@ -28,13 +28,12 @@ function Read-RegValue {
 }
 
 # 1. 管理员权限
-$isAdmin = $false
-try { $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { $isAdmin = $false }
-if ($isAdmin) { Add-Row '管理员权限' '是(当前进程为管理员)' $GREEN } else { Add-Row '管理员权限' '否(若干检查项读不到,判定将偏保守)' $YELLOW }
+$isAdmin = $false; try { $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { $isAdmin = $false }
+if ($isAdmin) { Add-Row '管理员权限' '是(当前进程为管理员,本报告结论有效)' $GREEN }
+else { Add-Row '管理员权限' '否:管理员权限不足,报告不可用(存储控制器/BitLocker/固件启动项/分区表都读不到),一律按禁止进入 L3 处理' $RED }
 
 # 2. 存储控制器模式(Linux 侧看不到磁盘的最大原因)
-$ctrlNames = @()
-try { $ctrlNames = @(Get-PnpDevice -Class SCSIAdapter -ErrorAction Stop | ForEach-Object { $_.FriendlyName }) } catch { $ctrlNames = @() }
+$ctrlNames = @(); try { $ctrlNames = @(Get-PnpDevice -Class SCSIAdapter -ErrorAction Stop | ForEach-Object { $_.FriendlyName }) } catch { $ctrlNames = @() }
 if ($ctrlNames.Count -eq 0) { try { $ctrlNames = @(Get-CimInstance -ClassName Win32_SCSIController -ErrorAction Stop | ForEach-Object { $_.Name }) } catch { $ctrlNames = @() } }
 if (@($ctrlNames | Where-Object { $_ -match 'VMD|RAID' }).Count -gt 0) { Add-Row '存储控制器模式' (@($ctrlNames | Where-Object { $_ -match 'VMD|RAID' }) -join '; ') $RED }
 elseif ($ctrlNames.Count -eq 0) { Add-Row '存储控制器模式' '读不到(PnP 与 CIM 均无结果)' $YELLOW }
@@ -75,16 +74,18 @@ else { Add-Row 'Fast Startup(HiberbootEnabled)' ('HiberbootEnabled = ' + $hb + '
 $hib = Join-Path ($env:SystemDrive + '\') 'hiberfil.sys'
 if (Test-Path -LiteralPath $hib) { Add-Row '休眠文件 hiberfil.sys' '存在(休眠未关闭,共享盘挂载前必须处理)' $YELLOW } else { Add-Row '休眠文件 hiberfil.sys' '不存在' $GREEN }
 
-# 7-8. 磁盘 0 的未分配空间与 ESP
+# 7-8. 磁盘 0 的未分配空间(判据 = 最大连续间隙:WinRE 在盘尾,盘尾空隙接近 0,不能拿它当判据)与 ESP
 $disk = $null; $parts = @()
 try { $disk = Get-Disk -Number 0 -ErrorAction Stop; $parts = @(Get-Partition -DiskNumber 0 -ErrorAction Stop) } catch { $disk = $null; $parts = @() }
 if ($disk -and $parts.Count -gt 0) {
-  $end = 0
-  foreach ($p in $parts) { $e = [int64]$p.Offset + [int64]$p.Size; if ($e -gt $end) { $end = $e } }
-  $freeGiB = [math]::Round((([int64]$disk.Size - $end) / 1GB), 1)
-  if ($freeGiB -lt 115) { Add-Row '磁盘 0 末尾未分配空间' ($freeGiB.ToString() + ' GiB(Linux 侧需 115GiB = root 100 + 快照 15)') $RED }
-  else { Add-Row '磁盘 0 末尾未分配空间' ($freeGiB.ToString() + ' GiB') $GREEN }
-} else { Add-Row '磁盘 0 末尾未分配空间' '读不到(Get-Disk/Get-Partition 失败或需管理员权限)' $YELLOW }
+  $gaps = @(); $prev = [int64]0
+  foreach ($p in @($parts | Sort-Object Offset)) { if (([int64]$p.Offset - $prev) -gt 0) { $gaps += ([int64]$p.Offset - $prev) }; $prev = [int64]$p.Offset + [int64]$p.Size }
+  if (([int64]$disk.Size - $prev) -gt 0) { $gaps += ([int64]$disk.Size - $prev) }
+  $maxGapGiB = [math]::Round(((($gaps | Measure-Object -Maximum).Maximum / 1GB)), 1); $tailGapGiB = [math]::Round((([int64]$disk.Size - $prev) / 1GB), 1)
+  $gapVal = '最大连续未分配 ' + $maxGapGiB + ' GiB;盘尾未分配 ' + $tailGapGiB + ' GiB'
+  if ($maxGapGiB -lt 115) { Add-Row '磁盘 0 未分配空间' ($gapVal + '(Linux 侧需 115GiB 连续 = root 100 + 快照 15;盘尾归 WinRE)') $RED }
+  else { Add-Row '磁盘 0 未分配空间' $gapVal $GREEN }
+} else { Add-Row '磁盘 0 未分配空间' '读不到(Get-Disk/Get-Partition 失败或需管理员权限)' $YELLOW }
 $esp = @($parts | Where-Object { $_.GptType -eq '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' })
 if ($esp.Count -eq 0) { $esp = @($parts | Where-Object { $_.Type -eq 'System' }) }
 if ($esp.Count -ge 1) {
@@ -105,18 +106,18 @@ $orderLine = ($fwText -split "`r?`n" | Where-Object { $_ -match 'displayorder|�
 if ($orderLine) { $notes += ('固件启动项中的顺序行(原样记录):' + $orderLine.Trim()) }
 
 # 10. L0 比对基准:启动顺序(BootOrder 首位)原值
-$l0 = Join-Path $BaselineDir '00-firmware.md'
-$l0Val = ''
+$l0 = Join-Path $BaselineDir '00-firmware.md'; $l0Val = ''
 if (Test-Path -LiteralPath $l0) {
-  $m = [regex]::Match((Get-Content -LiteralPath $l0 -Raw -Encoding UTF8), '(?m)^\s*\|[^|\r\n]*启动顺序[^|\r\n]*\|[^|\r\n]*\|\s*([^|\r\n]*?)\s*\|\s*$')
-  if ($m.Success) { $l0Val = $m.Groups[1].Value.Trim() }
+  # 只认字段名逐字为"启动顺序(`BootOrder` 首位)原值"的产物行:允许 2-4 列、取最后一个单元格;模板样板值按字段缺失处理。行内空白用 [ \t](不用 \s:后者能吃掉 \r\n 而跨行合并相邻两行);行尾用 \r?$ 兼容 CRLF
+  $m = [regex]::Matches((Get-Content -LiteralPath $l0 -Raw -Encoding UTF8), '(?m)^[ \t]*\|[^|\r\n]*启动顺序[ \t]*\([ \t]*`?BootOrder`?[ \t]*首位[ \t]*\)[ \t]*原值[^|\r\n]*\|(?:[ \t]*[^|\r\n]*\|)*[ \t]*([^|\r\n]*?)[ \t]*\|[ \t]*\r?$')
+  $vals = @($m | ForEach-Object { $_.Groups[1].Value.Trim() } | Where-Object { $_ -and $_ -notmatch '照实记录|后续阶段比对基准|判据|不变量|步骤' -and $_ -notin @('-', '无', '未记录') })
+  if ($vals.Count -gt 0) { $l0Val = $vals[$vals.Count - 1] }
 }
 if ($l0Val -and $l0Val -notin @('-', '无', '未记录')) { Add-Row 'L0 基准:启动顺序原值' ('已记录:' + $l0Val) $GREEN }
 else { Add-Row 'L0 基准:启动顺序原值' 'L0 产物字段缺失,无法比对启动顺序(baseline/00-firmware.md 缺失或缺少"启动顺序(BootOrder 首位)原值"一行)' $YELLOW }
 
 # 11-12. L1 产物复核与 L1 隔离结论转记(只核验,不重做 L1)
-$p01 = Join-Path $BaselineDir '01-partitions.txt'
-$a01 = Join-Path $BaselineDir '01-activation.md'
+$p01 = Join-Path $BaselineDir '01-partitions.txt'; $a01 = Join-Path $BaselineDir '01-activation.md'
 $missingL1 = @()
 if (-not (Test-Path -LiteralPath $p01)) { $missingL1 += '01-partitions.txt' }
 if (-not (Test-Path -LiteralPath $a01)) { $missingL1 += '01-activation.md' }
@@ -138,8 +139,7 @@ if ($miss.Count -gt 0) { Add-Row 'I4 基线产物齐备' ('缺失:' + ($miss -jo
 else { Add-Row 'I4 基线产物齐备' 'ESP 备份清单、固件启动项快照、L2 分区快照、L1 分区表均在位' $GREEN }
 
 # 14. 系统版本(记录即可;Win11 的注册表 ProductName 仍写 "Windows 10 Pro",故优先用 CIM Caption)
-$cap = ''
-try { $cap = [string](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).Caption } catch { $cap = '' }
+$cap = ''; try { $cap = [string](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).Caption } catch { $cap = '' }
 $cvPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 $ver = @('ProductName', 'DisplayVersion', 'CurrentBuild', 'UBR') | ForEach-Object { Read-RegValue $cvPath $_ }
 if (-not $cap) { $cap = $ver[0] }
@@ -163,6 +163,7 @@ $md = @'
 - 生成时间:<GEN>;基线目录:<BASE>
 - 运行模式:只读(本脚本不修改系统任何设置;唯一的写动作是生成本报告)
 - 判定口径:红 = 禁止进入 L3;黄 = 记录后继续;绿 = 通过
+- 结论有效性前提:本报告必须在**管理员会话**中生成;非管理员会话下若干项读不到,脚本一律判"禁止进入 L3"
 
 ## 检查项与判定
 
@@ -172,7 +173,7 @@ $md = @'
 
 ## 补充说明
 <NOTES>
-- 分区表是否"未被后续操作改变"由人工比对:本报告的未分配空间与 ESP 尺寸对照 baseline/01-partitions.txt 的定稿值,不一致时按黄项处理并在此处说明。
+- 分区表是否"未被后续操作改变"由人工比对:本报告的"最大连续未分配空间"(盘尾空隙只作参考,WinRE 占盘尾)与 ESP 尺寸对照 baseline/01-partitions.txt 的定稿值,不一致时按黄项处理并在此处说明。
 - ESP 目标尺寸为 2GiB;实测低于 2048MB 时本表仍可能判绿,但属偏差,须记入设备偏差并回写文档。红项修复后、基线产物补齐后,都必须重跑本脚本。
 
 ## L1 隔离核对结论(从 baseline/01-partitions.txt 转记)
