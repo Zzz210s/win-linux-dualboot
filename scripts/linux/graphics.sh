@@ -7,10 +7,10 @@
 #     1) 采集:lspci -nn | grep -E 'VGA|3D';mokutil --sb-state;cat /proc/cmdline(查残留 nomodeset)
 #     2) 只用 Ubuntu 仓库的**预签名**模块包:缺则 apt install ubuntu-drivers-common -> ubuntu-drivers list(候选与版本)-> ubuntu-drivers install(装完需重启 + 重跑本脚本复核);
 #        **不做 DKMS 编译、不用 nvidia-open 源码构建** —— Secure Boot 保持开启,自编译模块签名会被拒(决策 3.3)
-#     3) 校验 lsmod 里的 nvidia;dmesg 报 'key was rejected'/lockdown 即打印回退 nouveau 的命令并返回非零;刚装完的同一轮模块通常未载入当前内核,该情形只记 hint(需重启后重跑),不判失败
+#     3) 校验 lsmod 里的 nvidia;dmesg 报 'key was rejected'/lockdown 即打印回退 nouveau 的命令并返回非零;刚装完的同一轮模块通常未载入当前内核,该情形只记 hint(需重启后重跑),不判失败(dry-run 不改系统,本脚本所有 DBK-RESULT fail 行降为 dry-run-fail,避免 first-boot.sh 摘要"状态 ok + key 列 fail"并存)
 #     4) 混合显卡打印 PRIME offload 用法;5) 校验 XDG_SESSION_TYPE=wayland 与 wayland-info/modetest 存在性(判据第 7-9 行);取不到会话类型时按用户查 loginctl(docs/05-first-boot.md 同款命令),置"未判定"而非"通过"
 #     6) 打印黑屏/闪烁、引导菜单黑屏与 MUX 分支(BIOS 切独显直连)指引及其代价;7) 提示内核/驱动不参与自动更新(决策 3.18)
-#   环境开关:DBK_SKIP_APT=1 只跳过 apt 安装,用于无 apt/无网络的静态校验。
+#   环境开关:DBK_SKIP_APT=1 只跳过 apt 安装,用于无 apt/无网络的静态校验;DBK_CMDLINE=<文件> 可替换 /proc/cmdline(离线校验 nomodeset 判据用)。
 #   日志追加到 /var/log/dbk/graphics.log(目录不可写时只输出到终端);结果打成 DBK-RESULT 行供 first-boot.sh 摘要提取。
 #   退出码:0 = 校验通过(dry-run 恒为 0);1 = 有失败项;hint/未判定项(刚装驱动需重启、取不到会话类型、SKIP_APT)走未判定分支,不宣称通过。
 #   依据:决策 3.3(Secure Boot 保持开启、不自签)、3.17(MUX 分支与代价)、3.18(内核/驱动不自动更新)、4.5(L4 显卡行)。
@@ -26,22 +26,25 @@ source "$HERE/dbk-apt.sh"
 DRV_CMD="${DBK_DRIVER_CMD:-ubuntu-drivers}"
 DRV_PKG="${DBK_DRIVER_PKG:-ubuntu-drivers-common}"
 GRUB_TPL="${DBK_GRUB_TPL:-$ROOT/templates/grub-defaults.snippet}"
-SKIP_APT="${DBK_SKIP_APT:-0}"
+SKIP_APT="${DBK_SKIP_APT:-0}"; CMDLINE="${DBK_CMDLINE:-/proc/cmdline}"
 APPLY=0; RC=0; N_NV=0; N_IG=0; HYBRID=0; INCONCLUSIVE=0; JUST_INSTALLED=0
 
 usage() { sed -n '2,15p' "$0"; }
 have() { command -v "$1" >/dev/null 2>&1; }
+# 已装 NVIDIA 驱动包清单(包名=版本,排序后一行):用于安装前后比对,判断本轮是否真的改变了包状态
+nv_pkgs() { dpkg-query -W -f='${Package}=${Version} ' 'nvidia-driver-*' 2>/dev/null | sort | tr '\n' ' '; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply|--dry-run) [ "$1" = --apply ] && APPLY=1 || APPLY=0; shift ;;
-    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
+    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;
   esac
 done
 case "$SKIP_APT" in 1|0) ;; *) die "DBK_SKIP_APT 只接受 0/1: $SKIP_APT" ;; esac
+RES_FAIL=fail; [ "$APPLY" -eq 1 ] || RES_FAIL=dry-run-fail
 
 # 1) 采集:显卡型号与厂商 ID、核显/独显计数、Secure Boot、内核命令行(是否残留 nomodeset)
 collect() {
@@ -75,17 +78,16 @@ $(printf '%s\n' "$gpu" | sed 's/^/  /')"
   else
     log "提示: 无 mokutil,Secure Boot 状态待人工确认(mokutil --sb-state)"
   fi
-  if [ -r /proc/cmdline ]; then line="$(cat /proc/cmdline)"
+  if [ -r "$CMDLINE" ]; then line="$(cat "$CMDLINE")"
     if printf '%s' "$line" | grep -qw nomodeset; then
-      log "DBK-RESULT fail 内核命令行残留 nomodeset(判据第 8 行):nomodeset 只是应急的临时手段,装好驱动后必须移除 —— 它关掉 KMS,Wayland 起不来(设计 11.1);移除:删掉 /etc/default/grub 里的它 -> sudo update-grub -> 重启"; RC=1
+      log "DBK-RESULT $RES_FAIL 内核命令行残留 nomodeset(判据第 7 行的 /proc/cmdline 半项):nomodeset 只是应急的临时手段,装好驱动后必须移除 —— 它关掉 KMS,Wayland 起不来(设计 11.1);移除:删掉 /etc/default/grub 里的它 -> sudo update-grub -> 重启"; RC=1
     else
       log "内核命令行未含 nomodeset(符合判据)"
     fi
   else
-    log "提示: 读不到 /proc/cmdline(非 Linux),跳过 nomodeset 检查"
+    log "提示: 读不到 $CMDLINE(非 Linux),跳过 nomodeset 检查"
   fi
-  log "驱动路径: 只用 $DRV_CMD 的仓库预签名模块;**禁止 DKMS 编译与 nvidia-open 源码构建**(Secure Boot 下自编译模块签名必被拒)
-更新纪律(决策 3.18): 内核与显卡驱动不参与自动更新;升级/换内核前先做 R1 快照,并保留旧内核作为退路"
+  log "驱动路径: 只用 $DRV_CMD 的仓库预签名模块;**禁止 DKMS 编译与 nvidia-open 源码构建**(Secure Boot 下自编译模块签名必被拒);更新纪律(决策 3.18): 内核与显卡驱动不参与自动更新,升级/换内核前先做 R1 快照并保留旧内核作为退路"
 }
 
 # 3)+5) 校验:模块加载与签名(签名被拒即回退 nouveau)、会话类型与 Wayland/DRM 工具
@@ -99,7 +101,7 @@ verify() {
     elif [ "$N_NV" -gt 0 ] && [ "$JUST_INSTALLED" -eq 1 ]; then
       log "DBK-RESULT hint 驱动刚安装,需重启后重跑复核(判据:重启后 lsmod 有 nvidia 且 XDG_SESSION_TYPE=wayland)"; INCONCLUSIVE=1
     elif [ "$N_NV" -gt 0 ]; then
-      log "DBK-RESULT fail nvidia 模块未加载(lsmod 无 nvidia*):驱动未生效;若当前是 nouveau 兜底则桌面仍可用"; RC=1
+      log "DBK-RESULT $RES_FAIL nvidia 模块未加载(lsmod 无 nvidia*):驱动未生效;若当前是 nouveau 兜底则桌面仍可用"; RC=1
     else
       log "DBK-RESULT skipped nvidia 模块:本机未见 NVIDIA 独显(或无 lspci 数据)"
     fi
@@ -108,7 +110,7 @@ verify() {
   fi
   if have dmesg; then
     sig="$(dmesg 2>/dev/null | grep -iE 'key was rejected|lockdown' | tail -n 2 | tr '\n' ';' || true)"
-    if [ -n "$sig" ]; then log "DBK-RESULT fail 模块签名被 Secure Boot 拒绝或出现 lockdown: $sig"; RC=1; fi
+    if [ -n "$sig" ]; then log "DBK-RESULT $RES_FAIL 模块签名被 Secure Boot 拒绝或出现 lockdown: $sig"; RC=1; fi
   fi
   log "步骤 5: 校验会话类型与 Wayland 工具"
   st="${XDG_SESSION_TYPE:-}"
@@ -121,7 +123,7 @@ verify() {
   elif [ -z "$st" ]; then
     log "DBK-RESULT 未判定 取不到会话类型(XDG_SESSION_TYPE 为空且 loginctl 未查到本用户会话):不构成通过;登录桌面后重跑本脚本复核(echo \$XDG_SESSION_TYPE)"; INCONCLUSIVE=1
   else
-    log "DBK-RESULT fail XDG_SESSION_TYPE=$st:期望 wayland;先查 nomodeset 与驱动加载,再考虑重建会话"; RC=1
+    log "DBK-RESULT $RES_FAIL XDG_SESSION_TYPE=$st:期望 wayland;先查 nomodeset 与驱动加载,再考虑重建会话"; RC=1
   fi
   for c in wayland-info modetest glxinfo; do have "$c" && tools="$tools $c"; done
   if [ -n "$tools" ]; then log "Wayland/DRM 工具可用:$tools(wayland-info 可查合成器,glxinfo 可配合 PRIME 校验渲染器)"
@@ -131,8 +133,7 @@ verify() {
 # 4)+6) 指引:PRIME 用法、黑屏/闪烁回退、引导菜单黑屏(3.19)、MUX 分支与代价(3.17)、不降级发行版
 guide() {
   if [ "$HYBRID" -eq 1 ]; then
-    log "PRIME offload(混合显卡): __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <命令>
-  校验渲染器: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia glxinfo -B | grep 'OpenGL renderer'(期望 NVIDIA)"
+    log "PRIME offload(混合显卡): __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia <命令>;校验渲染器: __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia glxinfo -B | grep 'OpenGL renderer'(期望 NVIDIA)"
   else
     log "PRIME offload: 非混合显卡(或未识别到核显)时跳过本项(设计 4.5)"
   fi
@@ -145,8 +146,7 @@ guide() {
   log "  nouveau 是天然回滚点(设计 4.5 回滚列);不注册自签 MOK、不关 Secure Boot(决策 3.3);不要长按电源,用 REISUB(SysRq)"
   log "若每次开机在引导菜单阶段黑屏(键盘仍可用): 按决策 3.19 启用 GRUB_TERMINAL=console($GRUB_TPL 的条件项)-> sudo update-grub;菜单黑屏不等于系统坏了,不要重装"
   log "若混合模式下装完驱动仍点不亮/反复黑屏: 走设计 3.17 的 MUX 分支 —— BIOS 切'独显直连'先拿到可用系统,再评估是否切回混合"
-  log "  独显直连的代价: 所有进程占用独显显存、续航明显变差、日后本地推理的显存被显示输出吃掉(不作默认)
-  驱动不认时的顺序: 换更新内核(HWE)-> 换驱动版本 -> 才考虑发行版问题;不因驱动问题降级发行版(设计第 9 节)"
+  log "  独显直连的代价: 所有进程占用独显显存、续航明显变差、日后本地推理的显存被显示输出吃掉(不作默认);驱动不认时的顺序: 换更新内核(HWE)-> 换驱动版本 -> 才考虑发行版问题,不因驱动问题降级发行版(设计第 9 节)"
 }
 
 log "=== 显卡与 Wayland 校验(mode=$([ "$APPLY" -eq 1 ] && echo apply || echo dry-run);日志 $LOG)==="
@@ -166,11 +166,11 @@ else
   fi
   if have "$DRV_CMD"; then
     out_list="$("$DRV_CMD" list 2>&1)"; log "$DRV_CMD list 候选(安装前可见性): $(printf '%s' "$out_list" | tail -n 10 | tr '\n' ';')"
-    log "当前已装驱动版本: nvidia-smi=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n 1 | tr -d '\r' || echo 无) dpkg=$(dpkg-query -W -f='\${Package}=\${Version} ' 'nvidia-driver-*' 2>/dev/null || echo 无)"
+    pkgs0="$(nv_pkgs)"; log "当前已装驱动版本: nvidia-smi=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n 1 | tr -d '\r' || echo 无) dpkg=${pkgs0:-无}"
     out="$(DEBIAN_FRONTEND=noninteractive "$DRV_CMD" install 2>&1)"; st=$?
     if [ "$st" -eq 0 ]; then
       log "$DRV_CMD install: 成功(走 Ubuntu 仓库预签名包,无 DKMS 编译)"
-      JUST_INSTALLED=1
+      if [ "$(nv_pkgs)" != "$pkgs0" ]; then JUST_INSTALLED=1; log "已装驱动包清单发生变化 -> 标记刚安装(本轮模块未载入时走 hint,需重启后重跑复核)"; fi
     else
       log "错误: $DRV_CMD install 失败: $(printf '%s' "$out" | tail -n 3 | tr '\n' ' ')"; RC=1
     fi

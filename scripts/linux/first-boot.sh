@@ -7,7 +7,7 @@
 #   默认 dry-run:各模块以 --dry-run 调用,只打印计划,不改动系统;--apply(需要 root)才真正改系统。
 #   模块顺序:storage(交换空间 swapfile + zram)-> hardening(健壮性 R1-R9)
 #   -> mount-shared(共享盘挂载 + 家目录重定向,缺 --uuid 时记 skipped)
-#   -> graphics(NVIDIA 驱动与 PRIME,任务 9 交付;脚本不存在时打印提示级消息并记 skipped)。
+#   -> graphics(NVIDIA 驱动与 PRIME;脚本文件缺失时打印提示级消息并记 skipped)。
 #   整机目标:能进桌面 + 记录失败项 —— 单模块失败不改变本脚本退出码(始终 0),
 #   失败/跳过项在摘要与末尾提示里显式列出。
 # 日志:/var/log/dbk/first-boot.log(编排)、/var/log/dbk/<模块>.log(模块自身)、first-boot-summary.txt;
@@ -34,13 +34,13 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;
-    --uuid) UUID="${2:-}"; shift 2 ;;
+    --uuid) need_val "$#" "--uuid" "<SHARED_PART_UUID>"; UUID="$2"; shift 2 ;;
     --uuid=*) UUID="${1#*=}"; shift ;;
-    --snapshot-uuid) SNAPSHOT_UUID="${2:-}"; shift 2 ;;
+    --snapshot-uuid) need_val "$#" "--snapshot-uuid" "<SNAPSHOT_PART_UUID>"; SNAPSHOT_UUID="$2"; shift 2 ;;
     --snapshot-uuid=*) SNAPSHOT_UUID="${1#*=}"; shift ;;
-    --user) TARGET_USER="${2:-}"; shift 2 ;;
+    --user) need_val "$#" "--user" "<Ubuntu 用户名>"; TARGET_USER="$2"; shift 2 ;;
     --user=*) TARGET_USER="${1#*=}"; shift ;;
-    --log-dir) LOG_DIR="${2:-}"; shift 2 ;;
+    --log-dir) need_val "$#" "--log-dir" "<日志目录>"; LOG_DIR="$2"; shift 2 ;;
     --log-dir=*) LOG_DIR="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;
@@ -99,7 +99,7 @@ fi
 if [ -f "$HERE/graphics.sh" ]; then
   run_module graphics.sh graphics "${MODE[@]}"
 else
-  record_mod graphics skipped "graphics.sh 未交付(任务 9):NVIDIA 驱动与 PRIME 未配置;装驱动前先做 R1 快照"
+  record_mod graphics skipped "脚本文件不存在:$HERE/graphics.sh(仓库文件缺失);NVIDIA 驱动与 PRIME 未配置,装驱动前先做 R1 快照"
 fi
 
 # 统计失败/跳过项:与摘要写出解耦 —— 摘要写不出去时也要给出正确的失败项数量

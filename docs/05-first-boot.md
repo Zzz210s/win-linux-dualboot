@@ -164,7 +164,7 @@ xdg-user-dir DOCUMENTS     # 应回到 /home/<用户名>/Documents
 
 ### 3. 显卡驱动与显示策略
 
-做什么:按设计 4.5 与决策 3.3 / 3.17 / 3.18 / 3.19 收敛显示栈。**本步骤的全部动作由 `scripts/linux/graphics.sh` 承载**(由后续任务交付,尚未写出),本文只写口径与判据。
+做什么:按设计 4.5 与决策 3.3 / 3.17 / 3.18 / 3.19 收敛显示栈。**本步骤的全部动作由 `scripts/linux/graphics.sh` 承载**(已交付);下面只写口径与判据,排障时可单独重跑 `sudo bash scripts/linux/graphics.sh --apply`(默认 dry-run:不加 `--apply` 只打印采集结果、将执行的动作与回退指引,不改动系统)。
 
 驱动路径(不可偏离):
 
@@ -257,7 +257,7 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 - **退出码不能当判据**:`first-boot.sh` 的退出码**恒为 0**(单模块失败不阻塞登录),要看的是 `/var/log/dbk/first-boot-summary.txt`——表头 `模块 | 状态 | 关键输出`,末尾有 `失败项: N;跳过项: M` 与失败模块清单。`--apply` 之后先看这个文件,再看 `/var/log/dbk/<模块>.log`;
 - **`hardening.sh` 要在 `mount-shared.sh` 之后复跑一次**:编排顺序是 hardening 在 mount-shared 之前,所以首次 `--apply` 时 `/snapshots` 还没挂上,R1/R2 会记 `fail`(属预期,不是缺陷);`mount-shared` 记 `ok` 后执行 `sudo bash scripts/linux/hardening.sh --apply`,R1/R2 才会记为 `ok`;
 - **单模块重跑**(排障,全部幂等):`sudo bash scripts/linux/storage.sh --apply`、`sudo bash scripts/linux/hardening.sh --apply`、`sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID> --apply`;
-- **`graphics.sh` 尚未交付时**(任务 9):`first-boot.sh` 检测到该文件不存在会打印提示级消息并把 `graphics` 记为 `skipped`(`graphics.sh 未交付(任务 9):NVIDIA 驱动与 PRIME 未配置`),**不改变退出码、不阻塞登录**;此时显卡驱动按步骤 3 手工收敛,交付后单独跑 `sudo bash scripts/linux/graphics.sh --apply`。
+- **`graphics.sh` 已交付**(任务 9):`first-boot.sh` 会按当前模式(`--apply`/`--dry-run`)调用它并记 `ok`/`fail`(沿用脚本退出码);只有当**仓库里 `graphics.sh` 文件不存在**时才会记 `skipped` 并打印提示级消息(**不改退出码、不阻塞登录**),此时显卡驱动按步骤 3 手工收敛;脚本内另有 `DBK-RESULT skipped` 的情形——**本机无 NVIDIA 独显或读不到显卡信息**(`lspci` 无 VGA/3D 数据、无 `pciutils`)时跳过模块加载判定,属正常跳过,不是失败。单独重跑:`sudo bash scripts/linux/graphics.sh --apply`(也可先 `bash scripts/linux/graphics.sh` 看 dry-run 采集结果);脚本支持 `DBK_CMDLINE=<文件>` 替换 `/proc/cmdline`、`DBK_LOG=<文件>` 替换日志路径,便于离线演练/复核。
 
 | # | 措施 | 落地 | 判据 / 回滚点 |
 |---|---|---|---|
@@ -408,7 +408,11 @@ xdg-user-dir DOCUMENTS
 
 ### 3. 显卡驱动与显示策略回滚
 
-- 驱动:卸载专有驱动即回 **nouveau**(设计 4.5 回滚列:`sudo apt purge '^nvidia-.*' '^linux-modules-nvidia-.*'` → 重启;黑屏时先切 TTY 或用旧内核启动);
+- 驱动:卸载专有驱动即回 **nouveau**(设计 4.5 回滚列;**黑屏时先切 TTY(Ctrl+Alt+F3)或用旧内核启动**)。**不要**执行 `sudo apt purge '^nvidia-.*' '^linux-modules-nvidia-.*'` 这种通配写法:apt 的正则会把 `nvidia-cuda-toolkit`、`nvidia-container-toolkit(-base)`、`nvidia-docker2`、`nvidia-settings` 等非驱动包一并摘掉,`-y` 又会抹掉确认。与 `graphics.sh` 一致的三步:
+  1. 先列出将被删的项并人工过一眼:`dpkg -l | grep -E '^(ii|iU) +(nvidia|libnvidia|linux-modules-nvidia|linux-signatures-nvidia)'`;
+  2. 按上面清单用**精确包名**逐个移除(不通配、不加 `-y`):`sudo apt-get remove --purge <逐个包名>`;
+  3. `sudo apt-get autoremove` -> `sudo update-initramfs -u` -> `sudo reboot`;
+  装了 CUDA/容器运行时的要单独评估(它们不会随 nouveau 一起回来);再确认 `/etc/modprobe.d/*nouveau*.conf` 里无 `blacklist` 残留、`/etc/default/grub` 里无残留的 `nomodeset` / `nvidia-drm.modeset=1`,改完 `sudo update-grub`。
 - 显示模式:从"独显直连"切回"混合模式"只需改回固件设置——**切回前先确认预签名驱动已装好**,否则会回到"点不亮"的起点(设计 3.17);
 - `GRUB_TERMINAL=console`:移除该行后 `sudo update-grub`;
 - `nomodeset`:只应存在于应急场景;若还在内核行上,去掉后 `sudo update-grub`。

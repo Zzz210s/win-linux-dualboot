@@ -46,11 +46,11 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;
-    --size) SWAP_SIZE="${2:-}"; shift 2 ;;
+    --size) need_val "$#" "--size" "<字节数,如 4G>"; SWAP_SIZE="$2"; shift 2 ;;
     --size=*) SWAP_SIZE="${1#*=}"; shift ;;
-    --swapfile) SWAPFILE="${2:-}"; shift 2 ;;
+    --swapfile) need_val "$#" "--swapfile" "<绝对路径,如 /swapfile>"; SWAPFILE="$2"; shift 2 ;;
     --swapfile=*) SWAPFILE="${1#*=}"; shift ;;
-    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
+    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;

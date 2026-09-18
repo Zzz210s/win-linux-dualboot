@@ -32,11 +32,11 @@ usage() { sed -n '2,14p' "$0"; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --user) TARGET_USER="${2:-}"; shift 2 ;;
+    --user) need_val "$#" "--user" "<Ubuntu 用户名>"; TARGET_USER="$2"; shift 2 ;;
     --user=*) TARGET_USER="${1#*=}"; shift ;;
-    --template) XDG_TPL="${2:-}"; shift 2 ;;
+    --template) need_val "$#" "--template" "<user-dirs.dirs 模板路径>"; XDG_TPL="$2"; shift 2 ;;
     --template=*) XDG_TPL="${1#*=}"; shift ;;
-    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
+    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;

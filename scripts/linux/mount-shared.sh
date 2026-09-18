@@ -38,15 +38,15 @@ usage() { sed -n '2,11p' "$0"; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --uuid) UUID="${2:-}"; shift 2 ;;
+    --uuid) need_val "$#" "--uuid" "<SHARED_PART_UUID,用 blkid 获取>"; UUID="$2"; shift 2 ;;
     --uuid=*) UUID="${1#*=}"; shift ;;
-    --snapshot-uuid) SNAPSHOT_UUID="${2:-}"; shift 2 ;;
+    --snapshot-uuid) need_val "$#" "--snapshot-uuid" "<SNAPSHOT_PART_UUID>"; SNAPSHOT_UUID="$2"; shift 2 ;;
     --snapshot-uuid=*) SNAPSHOT_UUID="${1#*=}"; shift ;;
-    --user) TARGET_USER="${2:-}"; shift 2 ;;
+    --user) need_val "$#" "--user" "<Ubuntu 用户名>"; TARGET_USER="$2"; shift 2 ;;
     --user=*) TARGET_USER="${1#*=}"; shift ;;
-    --template) FSTAB_TPL="${2:-}"; shift 2 ;;
+    --template) need_val "$#" "--template" "<fstab 片段模板路径>"; FSTAB_TPL="$2"; shift 2 ;;
     --template=*) FSTAB_TPL="${1#*=}"; shift ;;
-    --log) [ "$#" -ge 2 ] || die "--log 缺少参数:<path>"; LOG="$2"; shift 2 ;;
+    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     --apply) APPLY=1; shift ;;
     --dry-run) APPLY=0; shift ;;
