@@ -97,8 +97,8 @@ list partition
 若未分配空间不足 115GiB:
 
 - **不得削减 ESP**(设计文档第 9 节明确"仅 ESP 尺寸不可削减");
-- 因为此时还没有数据,最干净的做法是回到步骤 1 重跑分区表(整盘 `clean`),按"D: 让出等量空间"重算尺寸后再装;
-- 若已经装完且不愿重来,则按"据实调整"处理:优先保证 root 100GiB,Snapshot 按剩余空间实测值缩小,缺口由 D: 侧后续让出;调整结果同样记入 `baseline/01-partitions.txt`,由 L2 逐项核对。
+- 因为此时还没有数据,唯一正确的做法是回到步骤 1 整盘 `clean` 重排重装:先在 [templates/partitions.txt](../templates/partitions.txt) 里把 D: 的 `size` 改小(小到缺口补足、预留空间重新不少于 115GiB),再 `select disk 0` → `clean` → 重跑该脚本 → 重新安装 Windows;
+- **任何情况下都不做 D:/C: 的事后缩容,也不修改 root / Snapshot 的目标值**(root 100GiB、Snapshot 15GiB 是 L3 的输入,两侧都不许改)——需要改尺寸就整盘重来,重排时同样不得削减 ESP。重排后的实际尺寸与未分配空间实测值记入 `baseline/01-partitions.txt`,由 L2 逐项核对。
 
 本步骤**不生成** ESP 镜像与固件启动项快照(L2 产物),也不改动 `BootOrder`。
 
@@ -157,7 +157,15 @@ reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v Hiber
 
 - **共享盘的卷标与位置**:本阶段只记录 D: 的卷标(`Data`)与它在分区表中的位置(第 4 个分区);`SHARED_PART_UUID` 不在这里填——UUID 在 L3/L4 由 `blkid` 取得后回填参数表(见[入口文档](00-overview.md)参数表说明)。
 
-验证(见"验证"第 4 行):六项已知文件夹的注册表取值全部指向 D:,并用"新建文件落点"实测一次。
+验证:逐项核对六项已知文件夹的重定向结果,命令与期望输出如下(与"验证"第 4 行同一口径)。
+
+```cmd
+reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+```
+
+期望输出:下列六项的值全部以 `D:\` 开头——`Desktop`(桌面)、`Personal`(文档)、`{374DE290-123F-4565-9164-39C4925E467B}`(下载)、`My Pictures`(图片)、`My Video`(视频)、`My Music`(音乐);同一份输出里其余值(如 `AppData`、`Local AppData`、`Cache`、`Fonts`)仍应留在 `C:\Users\<用户名>\...`,它们不在本次重定向范围内。等价写法:`Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"`。
+
+再用"新建文件落点"实测一次:在桌面新建一个文件(或改一次桌面壁纸),确认它出现在 `D:\Desktop` 而不是 `C:\Users\<用户名>\Desktop`。
 
 ### 5. KMS 激活(只做外链与流程,不分发脚本本体)
 
@@ -167,7 +175,7 @@ reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v Hiber
 
 - 上游项目:`massgravel/Microsoft-Activation-Scripts`,官方入口 https://github.com/massgravel/Microsoft-Activation-Scripts(设计文档第 11 节)。本项目只使用其中的 **Online KMS** 路径。
 - **Online KMS 机制**:激活周期为 **180 天**;上游脚本会创建一个**每 7 天**联系 KMS 主机以自动续期的计划任务,并在注册表留下 KMS 主机地址。因此激活是可续期、可复核的状态,不是一次性动作。
-- **明确排除**:KMS38(微软自 Windows build 26100.7019 起已废弃该机制、上游亦已移除,对 Windows 11 专业版 24H2 及以后的版本无效);自建 KMS 服务(需求中已删除,本方案不再列出);HWID / TSforge 不作主路径。
+- **明确排除**:KMS38(微软自 Windows build 26100.7019 起已废弃该机制、上游亦已移除,对 Windows 11 专业版 24H2 及以后的版本无效);自建 KMS 服务:本方案不采用;HWID / TSforge 不作主路径。
 - **获取与执行**:按上游项目 README 的官方说明操作(在其官方仓库 / 发布页获取,并在 Windows 侧按其指引运行),**本文不粘贴任何脚本内容,也不转述其脚本正文**。执行前确认来源就是上述官方仓库 / 发布页。
 
 核对激活状态:
@@ -216,7 +224,7 @@ bcdedit /enum firmware
 | 1 | 分区表与目标布局一致 | `diskpart` → `list partition`(或 `Get-Partition`) | 分区 1 = 2048MB、分区 2 = 16MB、分区 3 = 204800MB、分区 4 = 650240MB,顺序与卷标(`ESP` / `Windows` / `Data`)与 [templates/partitions.txt](../templates/partitions.txt) 一致 |
 | 2 | ESP 尺寸未被削减 | 同上 | ESP = 2048MB(即 `ESP_SIZE` = 2GiB);小于该值时不得继续 |
 | 3 | 留给 Linux 的未分配空间 | `list disk`(`可用` 列)/ `Get-Disk` | 不少于 115GiB;不足则按步骤 2 的偏差处理,并已记入 `baseline/01-partitions.txt` |
-| 4 | C: 不含用户数据(逐项核对重定向) | 步骤 4 的 `User Shell Folders` 查询 + "新建文件落点"实测 + `manage-bde -status` | 六项已知文件夹(桌面/文档/下载/图片/视频/音乐)全部指向 D:;在桌面新建的文件出现在 `D:\Desktop`;游戏库与容器镜像目录在 D:;D: 已建 `D:\Shared\`;`C:` 上只有系统与程序 |
+| 4 | C: 不含用户数据(逐项核对重定向) | `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"`(或 `Get-ItemProperty -Path "HKCU:\...\User Shell Folders"`)+ "新建文件落点"实测 + `manage-bde -status` | 该输出里 `Desktop` / `Personal` / `{374DE290-123F-4565-9164-39C4925E467B}` / `My Pictures` / `My Video` / `My Music` 六项的值全部以 `D:\` 开头(桌面/文档/下载/图片/视频/音乐);在桌面新建的文件出现在 `D:\Desktop`;游戏库与容器镜像目录在 D:;D: 已建 `D:\Shared\`;`C:` 上只有系统与程序 |
 | 5 | Fast Startup 与休眠已关闭 | `powercfg /a`;`reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled` | 休眠与快速启动均显示不可用;`HiberbootEnabled` 为 `0x0` |
 | 6 | 磁盘未加密 | `manage-bde -status` | C: 与 D: 均为"保护已关闭";**D: 不启用 BitLocker** 是共享盘方案的前提(设计文档 5.3) |
 | 7 | 激活状态已核对并落盘 | `slmgr /dlv`、`slmgr /xpr`、`Get-CimInstance SoftwareLicensingProduct` | `LicenseStatus` = 1、剩余天数为 KMS 周期值;输出已写入 `baseline/01-activation.md` |
