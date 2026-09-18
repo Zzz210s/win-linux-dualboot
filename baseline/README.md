@@ -18,7 +18,7 @@
 | `02-preflight-report.md` | L2 预检 | 闸门报告:红/黄/绿 + 是否允许进入 L3 |
 | `03-efi-layout.txt` | L3 Ubuntu 安装 | `\EFI\` 目录树 + `efibootmgr -v` + `BootOrder` + `lsblk` |
 | `04-first-boot.md` | L4 首启收敛 | 会话类型、GPU 模块状态、ntfs3 挂载、时间、蓝牙 key 同步结果 |
-| `05-robustness.md` | L4 首启收敛 | 健壮性核对:快照可用性与回滚演练、journald 持久化、SSH 可达、更新策略、SMART 状态 |
+| `04-robustness.md` | L4 首启收敛 | 健壮性核对:快照可用性与回滚演练、journald 持久化、SSH 可达、更新策略、SMART 状态 |
 
 ## 多设备用法
 

@@ -71,7 +71,7 @@
 | **I1** | `BootOrder` 第一位**永远是 Windows Boot Manager** | 删除 Linux 分区后,固件仍指向失效的 `\EFI\ubuntu\grubx64.efi`,重启停在 `grub rescue>` |
 | **I2** | 进 Linux 只用**一次性 `BootNext`**(或厂商启动菜单键),绝不用 `efibootmgr -o` 调整顺序 | 留下一个"没人记得撤销"的永久启动顺序 |
 | **I3** | 绝不覆盖 `\EFI\Microsoft\`,绝不修改 `{bootmgr}` 的 `path` | Windows 引导路径被第三方接管,系统更新后翻车 |
-| **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照) | 除重装外无路可退 |
+| **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照)——**首次装机时**,分区表在 L1 一次定稿、基线在 L2 生成;**此后的任何分区表或固件变更,都必须先有可用的基线备份** | 除重装外无路可退 |
 
 **为什么是这四条**:网络上"卡 grub 命令行"的根因不是 GRUB 坏了,而是固件 NVRAM 里的启动条目仍指向已被删除的引导文件,且它排在启动顺序前面。只要 I1 与 I2 成立,即使 Linux 侧被彻底清除,固件也会在失效条目后继续回落到 Windows。这比"记得先修引导再删分区"可靠——后者依赖人的记忆。
 
@@ -144,7 +144,7 @@
 | **L1** | Windows 全新安装 | 整盘分区一次定稿 + 系统 + 激活 | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) | 分区表与目标布局一致;激活完成;Fast Startup 与休眠已关 |
 | **L2** | 预检与基线 | 只读体检 + 建立可回滚基线 | `baseline/02-preflight-report.md`、`02-esp-backup.img`、`02-firmware-entries.txt` | 报告结论为"允许进入 L3"(无红项) |
 | **L3** | Ubuntu 安装 | 装 Linux 且不侵犯 Windows 引导 | `baseline/03-efi-layout.txt` | Ubuntu 可启动;`\EFI\Microsoft\` 与基线一致;BootOrder 首项仍为 Windows |
-| **L4** | 首启收敛 | 驱动、Wayland、挂载、时间、蓝牙 | `baseline/04-first-boot.md` | 验收 B 组全绿 |
+| **L4** | 首启收敛 | 驱动、Wayland、挂载、时间、蓝牙 | `baseline/04-first-boot.md`、`04-robustness.md`(首启收敛与健壮性核对) | 验收 B 组全绿 |
 | **L5** | 退役与救援 | 安全撤除与故障恢复 | `checklists/rollback.md` | L5 流程可执行(参考设备需真跑一次) |
 
 ### 4.1 L0 装机前准备

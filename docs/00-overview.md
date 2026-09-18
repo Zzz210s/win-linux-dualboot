@@ -35,7 +35,7 @@
 | **I1** | `BootOrder` 第一位**永远是 Windows Boot Manager** | 删除 Linux 分区后,固件仍指向失效的 `\EFI\ubuntu\grubx64.efi`,重启停在 `grub rescue>` |
 | **I2** | 进 Linux 只用**一次性 `BootNext`**(或厂商启动菜单键),绝不用 `efibootmgr -o` 调整顺序 | 留下一个"没人记得撤销"的永久启动顺序 |
 | **I3** | 绝不覆盖 `\EFI\Microsoft\`,绝不修改 `{bootmgr}` 的 `path` | Windows 引导路径被第三方接管,系统更新后翻车 |
-| **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照) | 除重装外无路可退 |
+| **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照)——**首次装机时**,分区表在 L1 一次定稿、基线在 L2 生成;**此后的任何分区表或固件变更,都必须先有可用的基线备份** | 除重装外无路可退 |
 
 上表表述与 [设计文档](design/00-design.md) 第 2 节一致。
 
@@ -119,7 +119,7 @@
 | **L1** | Windows 全新安装 | `02-windows.md` | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) |
 | **L2** | 预检与基线(硬闸门) | `03-preflight.md` | `baseline/02-preflight-report.md`、`02-esp-backup.img`、`02-firmware-entries.txt` |
 | **L3** | Ubuntu 安装 | `04-ubuntu.md` | `baseline/03-efi-layout.txt` |
-| **L4** | 首启收敛 | `05-first-boot.md` | `baseline/04-first-boot.md` |
+| **L4** | 首启收敛 | `05-first-boot.md` | `baseline/04-first-boot.md`、`04-robustness.md`(首启收敛与健壮性核对) |
 | **L5** | 退役与救援 | `06-decommission.md` + `07-rescue.md` | `checklists/rollback.md` |
 | 验收 | 唯一判据 | `08-verification.md` | 验收清单(A-F 组)全绿 |
 | 风险 | 风险登记表 | `09-risks.md` | 无(查,不执行) |
