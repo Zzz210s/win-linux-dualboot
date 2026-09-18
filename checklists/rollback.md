@@ -84,7 +84,7 @@
 
 设计 4.8 的"第三选择":**不是重装**,而是用 ESP 备份还原引导文件 + `bcdboot` 重建 + 清理 NVRAM。命令与判据以 [L2 手册](../docs/03-preflight.md)"回滚"第 1 条为准,本节只做勾选。
 
-**执行环境**:复原动作在 Windows 管理员会话或 WinRE 命令提示符中执行——需要管理员权限的是 `mountvol /s` 与对 ESP/系统区的写操作(`robocopy`、`bcdboot`);`Get-FileHash` 本身不需要管理员权限。WinRE 里若 `powershell` 起不来,用 `certutil -hashfile` 代替 `Get-FileHash`,或回到 Windows 管理员会话执行。注意两件事不在同一环境:首行的诊断可以在 live 环境做(从 live U 盘看到 Windows `C:`),而复原动作在 Windows/WinRE 做。
+**执行环境**:复原动作在 Windows 管理员会话或 WinRE 命令提示符中执行——需要管理员权限的是 `mountvol /s` 与对 ESP/系统区的写操作(`robocopy`、`bcdboot`);`Get-FileHash` 本身不需要管理员权限。WinRE 里若 `powershell` 起不来,用 `certutil -hashfile <文件> SHA256` 代替 `Get-FileHash`(`certutil` 不带算法参数时会默认 SHA1,必须显式写 `SHA256`;它的输出为大写十六进制,与 `manifest.sha256` 比对时**忽略大小写**),或回到 Windows 管理员会话执行。注意两件事不在同一环境:首行的诊断可以在 live 环境做(从 live U 盘看到 Windows `C:`),而复原动作在 Windows/WinRE 做。
 
 | 勾选 | 动作 | 判据 / 如何确认 |
 |---|---|---|
@@ -95,6 +95,6 @@
 | `[ ]` | 重建 Windows 引导:`bcdboot <Windows 盘符>:\Windows /s S: /f UEFI` | 命令成功(无 "Failure when attempting to copy boot files");Windows 盘符按实际替换 |
 | `[ ]` | 卸载 ESP:`mountvol S: /d` | ESP 不再占用该盘符,ESP 内容未被后续写操作污染 |
 | `[ ]` | 复查四条不变量 | `BootOrder` 首位为 `Windows Boot Manager`;判据以"Windows 能正常启动 + `{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致 + `BootOrder` 首位未变"为准;`bcdboot` 会从 `C:\Windows\Boot\EFI` 复制 `bootmgfw.efi`、并重建 `\EFI\Microsoft\Boot\BCD`,所以"ESP 逐文件哈希与基线比对"整体**降级为参考信息**(这两个文件的哈希差异记为**预期**,不作为失败判据);`ubuntu` 条目状态与预期一致(留着 / 已删,写进备注) |
-| `[ ]` | 跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 复核并留档 | **以 ①(BootOrder 首位)与 ③(`{bootmgr}` 的 `path`)通过 + Windows 能正常启动为准;② 因 `bcdboot` 重建 BCD 报差异属预期**,把差异清单记入 `baseline/` 留档;④ BitLocker 的差异按预期记录处理;结论写进备注 |
+| `[ ]` | 跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 复核并留档 | **以 ①(BootOrder 首位)与 ③(`{bootmgr}` 的 `path`)通过 + Windows 能正常启动为准;② 因 `bcdboot` 重建 BCD 报差异属预期**(另:`bcdboot` 还可能新增 `\EFI\Microsoft\Boot\BCD.LOG`、`BCD.LOG1`、`BCD.LOG2` 这类事务日志文件,同样属**预期新增**,不计为偏差),把差异清单记入 `baseline/` 留档;④ BitLocker 的差异按预期记录处理;结论写进备注 |
 | `[ ]` | 复原后连续重启 3 次 | 都直接进 Windows,无 `grub>` / `grub rescue>`;需要 Linux 时用 `BOOT_MENU_KEY` 的一次性启动菜单,或在 Windows 侧跑 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 BootNext,不改启动顺序) |
 | `[ ]` | 若 `\EFI\ubuntu\` 也已损坏,且不再需要 Linux | 按 [L5 退役手册](../docs/06-decommission.md) 的五步走:先修 `BootOrder`,再清理条目与残留目录;**不要**先删分区/先删目录 |

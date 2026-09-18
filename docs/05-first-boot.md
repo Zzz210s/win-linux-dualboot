@@ -14,7 +14,7 @@ L4 完成后,这台设备应当达到:
 
 | # | 目标状态 | 判据 |
 |---|---|---|
-| 1 | 共享数据盘(Windows 的 `D:`)以 `ntfs3` **读写**挂载到 `/mnt/shared`,`fstab` 两行都带 `nofail` | 本文"验证"第 1、2 行 |
+| 1 | 共享数据盘(Windows 的 `D:`)以 `ntfs3` **读写**挂载到 `/mnt/shared`;L4 写入的三条 `fstab` 条目(共享盘、`/snapshots`、swapfile)都带 `nofail` | 本文"验证"第 1、2 行 |
 | 2 | 共享盘写测试通过,且 Windows / Ubuntu **双向可见性**一致(设计 5.3 验收) | 本文"验证"第 3、4 行 |
 | 3 | 文档类家目录指向共享盘;**配置、凭据与代码仓库留在本地 root** | 本文"验证"第 5、6 行 |
 | 4 | 会话为 **Wayland**,NVIDIA 驱动走仓库预签名包,PRIME offload 可用,nouveau 兜底可达 | 本文"验证"第 7、8、9 行 |
@@ -38,7 +38,7 @@ L4 完成后,这台设备应当达到:
 - **L3 已收尾且 11 项全绿**:`baseline/03-efi-layout.txt` 在位,`BootOrder` 首位仍是 `Windows Boot Manager`,`ubuntu` 条目在末尾(I1、I2 未被破坏)。L4 不修引导,带引导问题进来只会把两件事混在一起。
 - **BitLocker 保护已恢复**:L3 步骤 8 的 `manage-bde -protectors -enable C:` 已完成。L4 不改分区表与固件,但共享盘方案的前提是 `D:` **不加密**,该状态要与 [L2 手册](03-preflight.md)的记录一致。
 - **回 Windows 的入口可用**(设计文档交接规则第 6 条):`BOOT_MENU_KEY` 能调出一次性启动菜单(见 [L0 手册](01-firmware.md) 厂商差异表);或 `scripts/linux/reboot-to-windows.sh`、`scripts/windows/set-bootnext.ps1`(由后续任务交付)| 二者任一可用即可,**不允许**用 `efibootmgr -o` 代替(I2)。
-- **快照能力已就绪**(R1、R2):`/snapshots` 分区可写;Timeshift 由步骤 6 配置(目标为 `/snapshots`、保留 3 份)。在第一次内核/驱动变更之前必须已有至少一个快照点,否则**不得**执行该变更。
+- **快照能力已就绪**(R1、R2):`/snapshots` 分区可写;Timeshift 由步骤 6 配置(目标为 `/snapshots`、保留 3 份(可调))。在第一次内核/驱动变更之前必须已有至少一个快照点,否则**不得**执行该变更。
 - **参数表已填**(每台设备一份,见[入口文档](00-overview.md)):`SHARED_PART_UUID`(Windows `D:` 分区 UUID)、`SNAPSHOT_PART_UUID`(L3 建的 15GiB ext4 快照分区)、`GPU`(是否混合显卡)、`BOOT_MENU_KEY`、`DISK`。两个 UUID 的取值来源是 `baseline/02-partitions.txt` 与 L3 分区表交叉核对,**不要凭记忆填写**。
 - **Windows 侧重定向清单已固化且不得再改名**(L1 的隐含约定,见 [L1 手册](02-windows.md) 第 4 节):`D:\Desktop`、`D:\Documents`、`D:\Downloads`、`D:\Pictures`、`D:\Videos`、`D:\Music` 与办公约定目录 `D:\Shared\`。Linux 侧逐项对应为 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}` 与 `/mnt/shared/Shared/`。
 - **救援介质在位**(R4):L3 用过的 Ubuntu 安装 U 盘保持"已验证可用",不回收。显卡环节是本阶段最容易进不去桌面的地方。
@@ -241,9 +241,9 @@ reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeI
 
 ### 6. 健壮性配置(设计 3.14 与 4.7 的 R1-R9)
 
-做什么:按九项措施把"不会因为一次升级、一个驱动或一块盘的问题而失去可用系统"落到机器上。全部动作由 `scripts/linux/storage.sh`(交换空间与 zram)、`scripts/linux/hardening.sh`(R1-R9 六项)承载,由 `scripts/linux/first-boot.sh` 依次编排(三个脚本均已交付,位于 `scripts/linux/`);手动执行的等价命令见下表的"判据"列。
+做什么:按九项措施把"不会因为一次升级、一个驱动或一块盘的问题而失去可用系统"落到机器上。全部动作由 `scripts/linux/storage.sh`(交换空间与 zram)、`scripts/linux/hardening.sh`(R1-R9 六项)承载,由 `scripts/linux/first-boot.sh` 依次编排(四个脚本 storage / hardening / mount-shared / graphics 均已交付,位于 `scripts/linux/`);手动执行的等价命令见下表的"判据"列。
 
-三个脚本都**默认 dry-run**:不加 `--apply` 只打印计划、不改系统。先看计划,再执行:
+四个脚本都**默认 dry-run**:不加 `--apply` 只打印计划、不改系统。先看计划,再执行:
 
 ```bash
 # 1) 先看计划(不需要 root;日志改落 <TMPDIR>/dbk-<uid>/)
@@ -257,23 +257,23 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 - **退出码不能当判据**:`first-boot.sh` 的退出码**恒为 0**(单模块失败不阻塞登录),要看的是 `/var/log/dbk/first-boot-summary.txt`——表头 `模块 | 状态 | 关键输出`,末尾有 `失败项: N;跳过项: M` 与失败模块清单。`--apply` 之后先看这个文件,再看 `/var/log/dbk/<模块>.log`;
 - **`hardening.sh` 要在 `mount-shared.sh` 之后复跑一次**:编排顺序是 hardening 在 mount-shared 之前,所以首次 `--apply` 时 `/snapshots` 还没挂上,R1/R2 会记 `fail`(属预期,不是缺陷);`mount-shared` 记 `ok` 后执行 `sudo bash scripts/linux/hardening.sh --apply`,R1/R2 才会记为 `ok`;
 - **单模块重跑**(排障,全部幂等):`sudo bash scripts/linux/storage.sh --apply`、`sudo bash scripts/linux/hardening.sh --apply`、`sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --snapshot-uuid <SNAPSHOT_PART_UUID> --apply`;
-- **`graphics.sh` 已交付**(任务 9):`first-boot.sh` 会按当前模式(`--apply`/`--dry-run`)调用它并记 `ok`/`fail`(沿用脚本退出码);只有当**仓库里 `graphics.sh` 文件不存在**时才会记 `skipped` 并打印提示级消息(**不改退出码、不阻塞登录**),此时显卡驱动按步骤 3 手工收敛;脚本内另有 `DBK-RESULT skipped` 的情形——**本机无 NVIDIA 独显或读不到显卡信息**(`lspci` 无 VGA/3D 数据、无 `pciutils`)时跳过模块加载判定,属正常跳过,不是失败。单独重跑:`sudo bash scripts/linux/graphics.sh --apply`(也可先 `bash scripts/linux/graphics.sh` 看 dry-run 采集结果);脚本支持 `DBK_CMDLINE=<文件>` 替换 `/proc/cmdline`、`DBK_LOG=<文件>` 替换日志路径,便于离线演练/复核。
+- **`graphics.sh` 已交付**(任务 9):`first-boot.sh` 会按当前模式(`--apply`/`--dry-run`)调用它并记 `ok`/`fail`(沿用脚本退出码);只有当**仓库里 `graphics.sh` 文件不存在**时才会记 `skipped` 并打印提示级消息(**不改退出码、不阻塞登录**),此时显卡驱动按步骤 3 手工收敛;脚本内另有 `DBK-RESULT skipped` 的情形——**本机无 NVIDIA 独显或读不到显卡信息**(`lspci` 无 VGA/3D 数据、无 `pciutils`)时跳过模块加载判定,属正常跳过,不是失败。单独重跑:`sudo bash scripts/linux/graphics.sh --apply`(也可先 `bash scripts/linux/graphics.sh` 看 dry-run 采集结果);脚本支持 `DBK_CMDLINE=<文件>` 替换 `/proc/cmdline`、`DBK_LOG=<文件>` 替换日志路径,便于离线演练/复核。**dry-run 与 `--apply` 的判据差异**:dry-run 下 graphics 的真机判据失败以 `DBK-RESULT dry-run-fail` 呈现(状态列仍为 ok,不算失败项);`--apply` 下同一条件才是 `DBK-RESULT fail` 且 RC=1。
 
 | # | 措施 | 落地 | 判据 / 回滚点 |
 |---|---|---|---|
 | R1 | **变更前快照** | Timeshift 目标为 `/snapshots`,**仅在变更前手动创建**(不强加定时任务),在装驱动/换内核之前先建一份 | `/snapshots` 下有快照;回滚 = 从快照整体还原 |
-| R2 | **独立快照分区** | 15GiB ext4 挂 `/snapshots`(L3 已建,本步骤确认可写),保留 3 份 | `findmnt /snapshots`;删除快照即回收空间 |
+| R2 | **独立快照分区** | 15GiB ext4 挂 `/snapshots`(L3 已建,本步骤确认可写),保留 3 份(可调) | `findmnt /snapshots`;删除快照即回收空间 |
 | R3 | **多内核保留 + 一次性启动** | 不启用 `Remove-Unused-Kernel-Packages`;`GRUB_DEFAULT=saved`(模板 [templates/grub-defaults.snippet](../templates/grub-defaults.snippet),由本步骤的 hardening 合并) | GRUB "Advanced options" 有旧内核;`grep GRUB_DEFAULT /etc/default/grub` |
 | R4 | **永久救援介质** | L3 的安装 U 盘不回收,标记"已验证可用" | 介质在位;从 U 盘能进 live 环境 |
 | R5 | **崩溃可观测** | journald 持久化(`/var/log/journal`)+ 自建日志目录 `/var/log/dbk/` | `ls -d /var/log/journal`;`journalctl -b -1` 可读 |
-| R6 | **OOM 与内存压力防护** | zram(约 8GiB)+ swapfile 4GiB,确认 `systemd-oomd` 启用 | `zramctl`、`swapon --show`、`systemctl is-enabled systemd-oomd` |
+| R6 | **OOM 与内存压力防护** | zram(约 `min(RAM/2, 8GiB)`)+ swapfile 4GiB,确认 `systemd-oomd` 启用 | `zramctl`、`swapon --show`、`systemctl is-enabled systemd-oomd` |
 | R7 | **常开 SSH 救援通道** | 安装并启用 `openssh-server`(桌面挂死时从另一台机器登录排障) | `ss -tlnp \| grep :22` |
 | R8 | **保守更新策略** | `unattended-upgrades` 只装安全更新、**不自动重启**、`Remove-Unused-Kernel-Packages=false`,并把 `linux-`、`nvidia-` 列入 `Package-Blacklist` | 配置文件位在 `/etc/apt/apt.conf.d/`;大版本升级前先做 R1 快照 |
 | R9 | **磁盘健康监控** | 安装 `smartmontools` 并启用 `smartd`;保留 ext4 周期性 `fsck` 默认策略 | `systemctl is-active smartd`、`smartctl -H <盘>` |
 
 **明确不做**:休眠(需 swap ≥ RAM,且 NVIDIA + Wayland 下易翻车);btrfs 快照(与已选 ext4 冲突);自定义 Secure Boot 密钥(改动签名链等于新增风险)(设计 4.7 末段)。
 
-交换空间的取值与理由(决策 3.8):zram 约 8GiB + swapfile 4GiB,**不建 swap 分区**——尺寸可随时调整,不必再动分区表。
+交换空间的取值与理由(决策 3.8):zram 约 `min(RAM/2, 8GiB)` + swapfile 4GiB,**不建 swap 分区**——尺寸可随时调整,不必再动分区表。
 
 ### 7. 回 Windows 的入口
 
@@ -338,7 +338,7 @@ sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID> --snapsh
 | # | 检查项 | 命令 / 来源 | 期望 |
 |---|---|---|---|
 | 1 | 共享盘已挂载且可写 | `findmnt /mnt/shared` | 目标为 `/mnt/shared`,文件系统 `ntfs3`,选项含 `rw`、`windows_names`、`nofail` |
-| 2 | `fstab` 两行且都带 `nofail` | `grep -c nofail /etc/fstab`、`findmnt --verify` | 计数 `>= 2`(共享盘行 + 快照分区行);`findmnt --verify` 不报 error |
+| 2 | L4 写入的三条 `fstab` 条目都带 `nofail` | `grep -c nofail /etc/fstab`、`findmnt --verify` | L4 写入的三条(共享盘、`/snapshots`、swapfile)都带 `nofail`,计数 `>= 3`;`findmnt --verify` 不报 error。`/boot/efi` 属必需挂载,**不加** `nofail` |
 | 3 | 写测试通过且无残留 | `touch /mnt/shared/.dbk-write-test && rm -f /mnt/shared/.dbk-write-test`;`ls -a /mnt/shared` | 创建与删除都成功;共享盘根目录下无 `.dbk-write-test` 残留 |
 | 4 | 双向可见性一致 | Windows 写 `D:\Shared\dbk-visibility.txt` -> Ubuntu 读 `/mnt/shared/Shared/dbk-visibility.txt`;反向再测一次 | 两次内容一致(设计 5.3 验收项);测完删除标记文件 |
 | 5 | 文档类家目录已重定向 | `xdg-user-dir DOCUMENTS`(及其余五项) | 六项分别指向 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}` |
@@ -409,7 +409,7 @@ xdg-user-dir DOCUMENTS
 ### 3. 显卡驱动与显示策略回滚
 
 - 驱动:卸载专有驱动即回 **nouveau**(设计 4.5 回滚列;**黑屏时先切 TTY(Ctrl+Alt+F3)或用旧内核启动**)。**不要**执行 `sudo apt purge '^nvidia-.*' '^linux-modules-nvidia-.*'` 这种通配写法:apt 的正则会把 `nvidia-cuda-toolkit`、`nvidia-container-toolkit(-base)`、`nvidia-docker2`、`nvidia-settings` 等非驱动包一并摘掉,`-y` 又会抹掉确认。与 `graphics.sh` 一致的三步:
-  1. 先列出将被删的项并人工过一眼:`dpkg -l | grep -E '^(ii|iU) +(nvidia|libnvidia|linux-modules-nvidia|linux-signatures-nvidia)'`;
+  1. 先列出将被删的项并人工过一眼:`dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | grep -E '^(ii|iU) +(nvidia|libnvidia|linux-modules-nvidia|linux-signatures-nvidia)'`(用 `dpkg-query -W` 而非 `dpkg -l`:后者在非 tty 下按 80 列截断包名);
   2. 按上面清单用**精确包名**逐个移除(不通配、不加 `-y`):`sudo apt-get remove --purge <逐个包名>`;
   3. `sudo apt-get autoremove` -> `sudo update-initramfs -u` -> `sudo reboot`;
   装了 CUDA/容器运行时的要单独评估(它们不会随 nouveau 一起回来);再确认 `/etc/modprobe.d/*nouveau*.conf` 里无 `blacklist` 残留、`/etc/default/grub` 里无残留的 `nomodeset` / `nvidia-drm.modeset=1`,改完 `sudo update-grub`。

@@ -7,7 +7,7 @@
 三条口径贯穿全文,越界即视为设计缺陷:
 
 - **五步顺序不可更换**:① 在 Ubuntu 中把 `BootOrder` 首项改回 Windows Boot Manager → ② 备份当前 NVRAM 与 ESP 现状 → ③ 重启进 Windows 后删除 Linux 分区 → ④ 清理 NVRAM 中残留的 `ubuntu` 条目 → ⑤ 可选:把腾出的空间扩展进相邻分区(见步骤 5:本方案布局下能扩的是 `D:`,不是 `C:`)。
-- **明确禁止:先格式化 Linux 分区再修引导。** 删掉分区的一瞬间,`\EFI\ubuntu\shimx64.efi`(或 `grubx64.efi`)就不存在了,而 NVRAM 里的 `ubuntu` 条目**仍然存在**——如果它还排在 `BootOrder` 前面,固件会先去找这个已失效的引导器,GRUB 找不到自己的模块与 `grub.cfg`,开机停在 `grub rescue>`。这正是设计第 2 节要防的事故形态,也是"必须先把引导改回 Windows、再删分区"的全部理由。
+- **明确禁止:先格式化 Linux 分区再修引导。** 删掉分区的一瞬间,真正消失的是 **root/snapshot 分区上的 `/boot/grub`**(GRUB 的模块与 `grub.cfg` 都在那里);`\EFI\ubuntu\` 子树**通常仍留在 ESP 上**——ESP 在上一步被明确"保留、不碰",是否顺手清理见"失败处理"相应行。引导器真正失效的原因是"GRUB 所在的分区没了 + NVRAM 里的 `ubuntu` 条目仍指向它",所以**必须先把引导归位再删分区**:若那个条目还排在 `BootOrder` 前面,固件会先去找这个已失效的引导器,GRUB 找不到自己的模块与 `grub.cfg`,开机停在 `grub rescue>`。这正是设计第 2 节要防的事故形态,也是"必须先把引导改回 Windows、再删分区"的全部理由。
 - **永久启动顺序只在固件设置界面里改**:全程不得执行 `efibootmgr -o`,也不得用等价的 `bcdedit /set {fwbootmgr} displayorder`(I2;口径与 [L3 手册](04-ubuntu.md)"失败处理"里"重启默认进了 Ubuntu"一行一致)。一次性切换走 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。
 
 ## 目标
@@ -26,7 +26,7 @@
 
 本阶段的产物逐字就是入库的 [checklists/rollback.md](../checklists/rollback.md)(设计第 4 节 L5 行、[入口文档](00-overview.md)"阶段与文档映射"):它既是执行时的勾选清单,也是本阶段的执行记录。
 
-**退役不产出新的 `baseline/` 产物**:`baseline/` 的文件名契约(前缀 = 阶段号,见 [baseline/README.md](../baseline/README.md))只为 L0-L4 定义,退役阶段不在其中;`02-*` 基线是为"部署中的设备"服务的,设备退役后它不再需要(见"回滚"第 5 条)。退役期间真正要落盘的是"动手前现状"的备份,按步骤 2 写到仓库外的 `D:\dbk-l5-backup\`,不进 `baseline/`。
+**退役不产出新的 `baseline/` 产物**:`baseline/` 的文件名契约(前缀 = 阶段号,见 [baseline/README.md](../baseline/README.md))只为 L0-L4 定义,退役阶段不在其中;`02-*` 基线是为"部署中的设备"服务的,设备退役后它不再需要(见"回滚"第 5 条)。退役期间真正要落盘的是"动手前现状"的备份,按步骤 2 写到仓库外的 `D:\dbk-l5-backup\`,不进 `baseline/`——它是**仓库外产物、不是 `baseline/` 基线**(虽然产物名沿用 `02-*`,只为与 L2 口径对齐,不要把它误当成 L2 基线)。
 
 ## 前置条件
 
@@ -99,7 +99,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 要点:
 
 - **不要用默认的 `-OutDir baseline`**:那会覆盖 `baseline\02-esp-backup\`、`02-firmware-entries.txt`、`02-partitions.txt`,而它们正是本阶段的比对基准与基线回滚的来源。备份写到 `D:\dbk-l5-backup`(数据分区,退役后仍在);再稳妥一点,只写外置盘;
-- [backup-esp.ps1](../scripts/windows/backup-esp.ps1) 只写 `-OutDir`,ESP 只在备份期间临时挂一个盘符、收尾必然卸载,不改 ESP 内容;脚本产出的 `02-*` 名字表达的是"基线口径",与它落地在哪个目录无关;
+- [backup-esp.ps1](../scripts/windows/backup-esp.ps1) 只写 `-OutDir`,ESP 只在备份期间临时挂一个盘符、收尾必然卸载,不改 ESP 内容;脚本产出的 `02-*` 名字表达的是"基线口径",与它落地在哪个目录无关。**这批文件是仓库外产物、非 `baseline/` 基线**:它们记录的是"动手前现状"这最后一道保险,不参与 L0-L4 的基线判定,也不要拷进 `baseline/`;
 - [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 的期望:① `BootOrder` 首位、② `\EFI\Microsoft\` 逐文件比对、③ `{bootmgr}` 的 `path` 三项**全部"通过"**;④ BitLocker 一项若与 L2 报告里的记录不同(典型场景:L3 收尾已执行 `manage-bde -protectors -enable C:`,而 L2 记录的是"卷已加密、保护已关闭"),脚本会报"发生变化(提示人工确认)"并让整体退出码为 1——**这属预期差异,不是引导层问题**,记进清单即可。判据是"三项引导判据通过、差异被记录",而不是"退出码必须为 0"。
 
 怎么知道成功了:

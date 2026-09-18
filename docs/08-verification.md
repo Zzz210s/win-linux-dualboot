@@ -26,13 +26,14 @@
 ## 前置条件
 
 - **L0-L4 已全部收尾**:`baseline/` 产物齐备(L2 报告结论为"允许进入 L3"、L3 的 `03-efi-layout.txt`、L4 的 `04-first-boot.md` 与 `04-robustness.md` 在位);L2 的硬闸门已经过一次复核,见 [L2 手册](03-preflight.md)。
-- **设备参数表已填**([00 入口](00-overview.md)的设备参数表):`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`FIRMWARE_MODE`、`GPU`、`ESP_SIZE`、`WINDOWS_SYSTEM_SIZE`、`WINDOWS_DATA_SIZE`、`ROOT_SIZE`、`SNAPSHOT_SIZE`、`SECURE_BOOT`、`DISK_MODEL`、`DISK_SIZE`、`SHARED_PART_UUID`。验收中每一个"与基线/与目标值一致"的判据都要求先有这些取值,不允许现场凭记忆填。其中 `WINDOWS_SYSTEM_SIZE`/`WINDOWS_DATA_SIZE` 是 D2/D3"只格 `C:`"尺寸核对的目标值,缺任一项该条判据无法执行。
+- **设备参数表已填**([00 入口](00-overview.md)的设备参数表):`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`FIRMWARE_MODE`、`GPU`、`ESP_SIZE`、`WINDOWS_SYSTEM_SIZE`、`WINDOWS_DATA_SIZE`、`ROOT_SIZE`、`SNAPSHOT_SIZE`、`SECURE_BOOT`、`DISK_MODEL`、`DISK_SIZE`、`SHARED_PART_UUID`。验收中每一个"与基线/与目标值一致"的判据都要求先有这些取值,不允许现场凭记忆填。其中 `WINDOWS_SYSTEM_SIZE`/`WINDOWS_DATA_SIZE` 是 E3 回写对账的目标值(D3 选盘时也用于辨认 `C:`),缺任一项该条判据无法执行。
 - **L2 基线可读**:`baseline/02-esp-backup/manifest.sha256`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` 三份都在且能逐行校验;A3/A4/A7、D3/D5/D6 全部依赖它们。
 - **脚本在位**(全部 dry-run 优先):
   - Windows 侧:[verify-baseline.ps1](../scripts/windows/verify-baseline.ps1)(周期性巡检,A3/A4)、[set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性进 Linux,C1)、[backup-esp.ps1](../scripts/windows/backup-esp.ps1)(基线重做时用);
   - Ubuntu 侧:[reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)(一键回 Windows,C3)、[first-boot.sh](../scripts/linux/first-boot.sh) 及其模块([storage.sh](../scripts/linux/storage.sh)、[hardening.sh](../scripts/linux/hardening.sh)、[mount-shared.sh](../scripts/linux/mount-shared.sh)、[graphics.sh](../scripts/linux/graphics.sh)、[xdg-redirect.sh](../scripts/linux/xdg-redirect.sh))、[bt-keys-sync-wrapper.sh](../scripts/linux/bt-keys-sync-wrapper.sh)(B8)、[dbk-apt.sh](../scripts/linux/dbk-apt.sh) 与 [dbk-log.sh](../scripts/linux/dbk-log.sh)(被 source)。
 - **救援介质在位**(R4):L3 用过的 Ubuntu 安装 U 盘保持"已验证可用"且不回收——A7 演练与 D 组推演都可能在"进不去系统"时需要它。
 - **回 Windows 的入口可用**(设计第 6 节交接规则第 6 条):`BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1);二者任一可用即可。**任何情况下不得用 `efibootmgr -o` / `displayorder` 调整永久顺序**(I2)。
+- **另一台可 SSH 的机器**(用于 F6):F6 要求"从另一台机器 SSH 登录",需要第二台设备与目标机同网段。确无第二台设备时,按 [07-rescue.md](07-rescue.md) 第 8 节用本地 TTY 对照执行,并把"无第二台设备"记为**不阻塞的已知例外**(影响面:只能证明本地登录可用)。
 - **时间与重启预算**:本清单包含 A2(连续重启 3 次)、C 组(至少 3 轮双系统切换)、F1(回滚演练)、D 组(退役与重装推演),建议单独安排一次连续会话,**中途不要插入 Windows 更新**(一旦更新,基线即失效,见第 6 节规则 4 与 7.1 节巡检)。
 - **逐条执行记录**:本清单按勾选项给出判据,逐条动作用 `checklists/deploy.md` 记录(该清单属 Task 15 交付;交付前以各阶段手册的"验证"节与 [checklists/rollback.md](../checklists/rollback.md) 代替);高频疑问速查见 `docs/10-faq.md`(同为 Task 15 交付)。
 - **口径**:验收期间**不改分区表、不改固件设置**;若某项处置确实要动分区表或固件(如 `fstab` 之外的存储设置),先按 I4 重做基线备份再动手(见 [L2 手册](03-preflight.md)的基线生成步骤)。
@@ -80,7 +81,7 @@
     2. **另存 `\EFI\ubuntu\` 子树**(它不在 L2 基线里,原因见 [07-rescue.md](07-rescue.md) 3.1 节):Windows 管理员会话 `mountvol S: /s` -> `robocopy S:\EFI\ubuntu D:\dbk-verify\efi-ubuntu /E` -> `mountvol S: /d`。判据:`D:\dbk-verify\efi-ubuntu\` 里能看到该发行版实际的引导文件(如 `shimx64.efi`、`grubx64.efi`、`grub.cfg`,文件名以实机为准)。
     3. **删除 `\EFI\ubuntu\` 这一棵子树**,其他一律不动:ESP 分区保留、`\EFI\Microsoft\` 不碰、`ubuntu` 的 NVRAM 条目**故意保留**(本演练要证明的正是"条目指向的引导文件不存在时,固件会继续回落到 `BootOrder` 的下一个条目即 Windows")。
     4. **连续重启 3 次**:判据:每次都自动进 Windows;不出现 `grub>` / `grub rescue>`;不需要任何手工选择;`BootOrder` 首位始终是 Windows Boot Manager(I1 成立)。
-    5. **还原**:把第 2 步的副本拷回 `S:\EFI\ubuntu\`;副本损坏或不可用时,改走 live 环境 chroot 重建(`grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`,再 `efibootmgr -c -d <DISK> -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'` 建条目)。两条来源与完整命令见 [07-rescue.md](07-rescue.md) 3.1 节。
+    5. **还原**:把第 2 步的副本拷回 `S:\EFI\ubuntu\`;副本损坏或不可用时,改走 live 环境 chroot 重建(`grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`,它自建 `ubuntu` 条目;重复条目用 `efibootmgr -b <n> -B` 清理)。两条来源与完整命令见 [07-rescue.md](07-rescue.md) 3.1 节。
     6. **复测**:用一次性 `BootNext`(或 `BOOT_MENU_KEY`)进 Ubuntu 成功;再重启默认回 Windows;A1、A3、A4、A5 复检通过。
   - 判据:演练全程未执行 `efibootmgr -o`;演练后四不变量与演练前一致;整段过程与结果写进 `baseline/08-verification.md`。
   - 不做的设备:在本条写明"未演练"与理由,并按 E4 登记为**已知例外**(推荐设备,不阻塞"参考实现"判定,但参考设备不做即该设备的 A 组不成立)。
@@ -122,7 +123,7 @@
 
 - [ ] **B7 时间口径正确(`RTC in local TZ: no`)**
   - 怎么做:Ubuntu 侧 `timedatectl`;切到 Windows 复核系统时间。
-  - 判据:`RTC in local TZ: no`、`System clock synchronized: yes`;两系统显示的时间差在分钟级内(切换系统后各看一次)。
+  - 判据:`RTC in local TZ: no`、`System clock synchronized: yes`;两系统显示的时间差在分钟级内(切换系统后各看一次)。**离线设备(无 NTP 可达)只判 `RTC in local TZ: no`**,`System clock synchronized: no` 不算失败,记入已知例外。
   - 设计依据:第 8 节 B 组第 7 句、4.5 节时间行。
 
 - [ ] **B8 切换系统后蓝牙无需重新配对**
@@ -218,7 +219,7 @@
 
 ### D. 可撤除性组(D1-D6)
 
-顺序说明:D1 真做之后这台设备上不再有 Linux(退役会按 [L5 手册](06-decommission.md) 步骤 3/4 删掉 Linux 分区并清理 `ubuntu` 条目,`\EFI\ubuntu\` 也随之消失);D3/D4 是原地重装(至少真做一法)。所以**次序固定为:D6 -> D2 -> D3/D4 推演 -> D5 复检 -> D1 真做退役(全部动作的最后一步)**。理由:D6 依赖 ESP 与 Windows 引导,和是否有 Linux 无关;D5 的判据要求"`\EFI\ubuntu\` 与 `\EFI\Microsoft\` 两棵子树并存、Ubuntu 仍可经一次性入口启动",只有排在 D1 之前才可能成立。**动手前把 A-C、F 组的全部证据落盘**。
+顺序说明:D1 真做之后这台设备上不再有 Linux(Linux 分区与 `ubuntu` 条目被清,一次性入口不复存在);D3/D4 是原地重装(至少真做一法)。所以**次序固定为:D6 -> D2 -> D3/D4 推演 -> D5 复检 -> D1 真做退役(全部动作的最后一步)**。理由:D6 依赖 ESP 与 Windows 引导,和是否有 Linux 无关;D5 的判据要求"`\EFI\ubuntu\` 与 `\EFI\Microsoft\` 两棵子树并存、Ubuntu 仍可经一次性入口启动",只有排在 D1 之前才可能成立。**动手前把 A-C、F 组的全部证据落盘**。
 
 - [ ] **D1 按 L5 五步完整推演(参考设备真做一次)**
   - 怎么做:按 [L5 退役手册](06-decommission.md)与 [checklists/rollback.md](../checklists/rollback.md) 第 1 节执行,顺序为 1 -> 2 -> 3 -> 4 -> (5) 不可更换;第 5 步(扩展分区)可选。
@@ -232,7 +233,7 @@
 
 - [ ] **D3 原地重装办法一(Windows 崩溃)可推演,参考设备至少真做一法**
   - 怎么做:按 [07-rescue.md](07-rescue.md) 第 4 节与设计 4.8 办法一推演(参考设备真做一次:用官方 ISO 引导 -> 自定义安装 -> **只格式化 `C:`**)。
-  - 判据:只格式化 `C:`;`D:` 与两块 Linux 分区未动(用 `baseline/02-partitions.txt` 逐项对账偏移与大小);ESP 上只允许安装程序重建 `\EFI\Microsoft\` 与 BCD、以及可能被覆盖的 `\EFI\BOOT\bootx64.efi`(属正常,见设计 4.8 办法一第 3 步;`\EFI\ubuntu\` 不受影响);装完后重做三件事:关闭 Fast Startup 与休眠、重新完成激活、恢复已知文件夹重定向(设计与 L1 手册均列为必做)。
+  - 判据:只格式化 `C:`;`D:` 与两块 Linux 分区未动(用 `baseline/02-partitions.txt` 逐项对账偏移与大小);ESP 上只允许安装程序重建 `\EFI\Microsoft\` 与 BCD、以及可能被覆盖的 `\EFI\BOOT\bootx64.efi`(属正常,见设计 4.8 办法一第 3 步;`\EFI\ubuntu\` 不受影响);装完后重做三件事:关闭 Fast Startup 与休眠、重新完成激活、恢复已知文件夹重定向(设计与 L1 手册均列为必做);重定向恢复后**重跑 D2 的隔离核对**(重建 `C:` 会重做重定向,必须回到 D2 的判据重新确认一遍)。
   - 设计依据:第 8 节 D 组表格第 2 行、4.8 节办法一。
 
 - [ ] **D4 原地重装办法二(Ubuntu 崩溃)可推演**
@@ -243,11 +244,11 @@
 - [ ] **D5 重装(或推演)后 A 组四条不变量复检**
   - 怎么做:重装或推演完成后重跑 A1、A3、A4、A5(A3 按 A3 的**例外口径**判读:刚做过 D3 真做或 D6 时,`\EFI\Microsoft\`/`BCD` 的差异属预期);并复核"本次没有出现过 `efibootmgr -o`"。
   - 判据:四条**逐项判据**通过(A3/A4 只认 `verify-baseline.ps1` 的 ① ② ③ 三项对应行,不认脚本整体退出码,见"验证"节);`\EFI\ubuntu\` 与 `\EFI\Microsoft\` 两棵子树并存且互不影响;Ubuntu 仍可经一次性入口启动。
-  - 兜底口径:若本设备**已真做 D1**(即 D5 排在 D1 之后复检),则本条降级为只复检 A1/A3/A4,A5 与"两棵子树并存""Ubuntu 仍可经一次性入口启动"三项标为**不适用**并写明理由(退役后 `\EFI\ubuntu\` 与 `ubuntu` 条目按设计已被清理,不存在"并存"可言)。
+  - 兜底口径:若设备在本次验收前已执行过 L5 退役(即 D5 排在 D1 之后复检),则本条降级为只复检 A1/A3/A4,A5 与"两棵子树并存""Ubuntu 仍可经一次性入口启动"三项标为**不适用**并写明理由(退役后 Linux 分区与 `ubuntu` 条目已被清、一次性入口不复存在,不存在"并存"可言;ESP 上残留的 `\EFI\ubuntu\` 子树即便还在也已失效,不作为判据)。
   - 设计依据:第 8 节 D 组表格第 2 行末句、4.8 节两法的第 5 步。
 
 - [ ] **D6 非重装逃生路径可用(引导层损坏场景)**
-  - 怎么做:按 [07-rescue.md](07-rescue.md) 第 3 节(基线回滚)+ 第 2 节(`bcdboot` 重建)演练:Windows 管理员会话 `mountvol S: /s` -> `robocopy baseline\02-esp-backup\EFI S:\EFI /E`(**只复制 `EFI\` 子树**,`manifest.sha256` 不得拷回 ESP)-> `bcdboot C:\Windows /s S: /f UEFI` -> `mountvol S: /d` -> 复核。
+  - 怎么做:按 [07-rescue.md](07-rescue.md) 第 3 节(基线回滚)+ 第 2 节(`bcdboot` 重建)演练:Windows 管理员会话 `mountvol S: /s` -> `robocopy baseline\02-esp-backup\EFI S:\EFI /E`(**只复制 `EFI\` 子树**,`manifest.sha256` 不得拷回 ESP)-> `bcdboot C:\Windows /s S: /f UEFI` -> `mountvol S: /d` -> 复核(其余按 [07-rescue.md](07-rescue.md) 第 3 节第 1、6、8 步执行:校验备份完整性、清理 NVRAM 残留条目、连续重启 3 次)。
   - 判据:还原后 Windows 能正常启动;`{bootmgr}` 的 `path` 与基线一致;`BootOrder` 首位未变;`\EFI\Microsoft\` 里由 `bcdboot` 重写的 `bootmgfw.efi` 与 `BCD` 差异按 [07-rescue.md](07-rescue.md) 第 2 节第 3 条的"预期差异"解释,不作为失败判据;最后重跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 并留档。
   - 顺序提醒:本项要在 D1 真做退役**之前**完成(退役后 `baseline/02-esp-backup/` 虽仍在,但设备状态已不同,复盘口径会乱)。
   - 设计依据:第 8 节 D 组表格第 3 行、4.8 节"第三选择"、7.2 节基线回滚。
@@ -286,7 +287,7 @@
 - **逐组按勾选判定**:A、B、C、D、E、F 六组各自"全勾"即该组通过;六组全通过且 E4 的例外清单核对无误,**该设备验收通过**。
 - **通过定义**(逐字保留):任一组存在未勾选项且无在案记录的"已知例外" → 该设备判为未完成。至少一台设备完整跑通,方可称为"参考实现"。
 - **结论落盘**:在 `baseline/08-verification.md` 末尾写四行:① 六组逐组结论(A-F:通过/未通过);② 已知例外条数与编号;③ 参考实现判定(是/否,否的话列出缺口);④ 验收日期与执行人。
-- **证据可复核**:每一项的"怎么做"命令都能在本次设备上复跑并得到同一结论;**逐项判据优先于整体退出码**:`verify-baseline.ps1` 的"巡检通过"= 0、"需人工介入"= 1 只作参考,**退出码 1 也可能只是第 ④ 项 BitLocker 状态在 L3/L4 恢复保护后的预期差异**(口径见 [06-decommission.md](06-decommission.md) 步骤 2 与 [07-rescue.md](07-rescue.md) 第 2 节:判据是"三项引导判据通过、差异被记录",不是"退出码必须为 0");A3/A4/D6 只认 ① ② ③ 三项对应行的"通过"。
+- **证据可复核**:每一项的"怎么做"命令都能在本次设备上复跑并得到同一结论;**逐项判据优先于整体退出码**:`verify-baseline.ps1` 的"巡检通过"= 0、"需人工介入"= 1 只作参考,**退出码 1 也可能只是第 ④ 项 BitLocker 状态在 L3/L4 恢复保护后的预期差异**(口径见 [06-decommission.md](06-decommission.md) 步骤 2 与 [07-rescue.md](07-rescue.md) 第 2 节:判据是"三项引导判据通过、差异被记录",不是"退出码必须为 0");A3/A4/D6 只认 ① ② ③ 三行的逐行结果(A3 看 ②、A4 看 ③、D6 看 ①③),不认脚本整体退出码。
 - **维持条件(不属于勾选范围)**:每次 Windows 大版本更新或累积更新之后,按 7.1 节重跑巡检——`BootOrder` 首项、`\EFI\Microsoft\` 与基线比对、`{bootmgr}` 的 `path`、BitLocker 状态(即 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 的四项,见 [07-rescue.md](07-rescue.md) 第 7 节)。验收通过不等于永久通过。
 - **文档自检**:本文件改动后运行 `bash scripts/repo/check-docs.sh docs/08-verification.md`,期望 `check-docs: OK`;同时 `git status --porcelain` 里不得出现 `baseline/`。
 
@@ -296,7 +297,7 @@
 |---|---|
 | A 组任一项**逐项判据**不过(不是"脚本整体退出码非 0",见"验证"节) | **停手**,不进入 D 组真做(退役/重装)。`BootOrder` 首位不是 Windows Boot Manager 时,先进固件设置界面把它设回首位(**I1**);**不得**改用 `efibootmgr -o` 调整顺序(I2)。引导本身有问题时按 [07-rescue.md](07-rescue.md) 分类处置。注意:`verify-baseline.ps1` 退出码 1 若只来自第 ④ 项 BitLocker 的预期差异,不算 A 组不过(口径见 [06-decommission.md](06-decommission.md) 步骤 2 与 [07-rescue.md](07-rescue.md) 第 2 节) |
 | A2/A7 出现 `grub>` 或 `grub rescue>` | 按 [07-rescue.md](07-rescue.md) 第 1 节两条路现场处置;若是 A7 演练中出现的,说明 I1 被破坏(固件仍在优先选失效的 `ubuntu` 条目),处置后按 [07-rescue.md](07-rescue.md) 第 6 节复原启动顺序,并**重做** A7 |
-| A7 演练后 `\EFI\ubuntu\` 还原不回去 | 用副本拷回失败时改走 live chroot:`grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`,再 `efibootmgr -c ...` 建条目(两条来源见 [07-rescue.md](07-rescue.md) 3.1 节)。**不要**为了"能启动"去改 `{bootmgr}` 的 `path`(I3) |
+| A7 演练后 `\EFI\ubuntu\` 还原不回去 | 用副本拷回失败时改走 live chroot:`grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`(自建条目;重复项用 `efibootmgr -b <n> -B` 删多余)(两条来源见 [07-rescue.md](07-rescue.md) 3.1 节)。**不要**为了"能启动"去改 `{bootmgr}` 的 `path`(I3) |
 | A3 报 `\EFI\Microsoft\` 与基线不一致,且不是 D6/D3 真做所致 | 先判断是不是 Windows 更新重写了 ESP(设计第 9 节、7.1 节):按 [07-rescue.md](07-rescue.md) 第 3 节做基线还原 + `bcdboot`;若差异只涉及 `bootmgfw.efi` 与 `BCD`,按"预期差异"解释并留档 |
 | B4/B5 挂载失败、只读或中文乱码 | 回 [L4 手册](05-first-boot.md)步骤 1 核对四条前提(Windows 已关 Fast Startup 与休眠、`D:` 未加密、`uid/gid/umask` 与 `windows_names`、未把 POSIX 语义工作流放上共享盘)。**数据可疑时立即停用共享盘并做第二份备份**,不要继续写入(设计第 9 节 `ntfs3` 写入风险) |
 | B6 重定向指向错误目录,或某程序不认自定义 XDG 目录 | 按 [xdg-redirect.sh](../scripts/linux/xdg-redirect.sh) 的口径回退:`~/.config/user-dirs.dirs.dbk.bak` 换回去;只重定向文档类目录,**不要**把 `~/.config`、`~/.ssh`、代码仓库搬上 NTFS(设计第 9 节家目录兼容性) |
@@ -322,7 +323,7 @@
 
 | 改动 | 回滚方式 | 可逆性 |
 |---|---|---|
-| A7 演练删除了 `\EFI\ubuntu\` | 把 `D:\dbk-verify\efi-ubuntu\` 副本拷回 `S:\EFI\ubuntu\`;副本不可用时走 live chroot 的 `grub-install` + `efibootmgr -c`(3.1 节) | 可逆(前提:副本或 live 介质在位) |
+| A7 演练删除了 `\EFI\ubuntu\` | 把 `D:\dbk-verify\efi-ubuntu\` 副本拷回 `S:\EFI\ubuntu\`;副本不可用时走 live chroot 的 `grub-install` + `update-grub`(3.1 节) | 可逆(前提:副本或 live 介质在位) |
 | D6 用基线还原了 ESP | 还原本身即回到基线状态;由 `bcdboot` 重写的 `bootmgfw.efi` 与 `BCD` 差异属预期,不需再回滚(若要严格回到基线,再用同一份 `manifest.sha256` 校验并复制定稿文件) | 可逆 |
 | B4/F9 给 `fstab` 补了 `nofail` | `cp /etc/fstab.dbk.bak /etc/fstab` -> `sudo systemctl daemon-reload` -> `sudo findmnt --verify` | 可逆 |
 | B6 调整了家目录重定向 | 还原 `~/.config/user-dirs.dirs.dbk.bak` -> 以该用户身份 `xdg-user-dirs-update --force` | 可逆 |

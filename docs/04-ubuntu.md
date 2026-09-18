@@ -233,7 +233,7 @@ ESP 被改动、Windows 引导异常、或要放弃这次 Ubuntu 安装时:**用
 
 ### 4. 整体撤除 Linux
 
-要彻底删掉 Ubuntu:走 `06-decommission.md` 的五步顺序(先把 `BootOrder` 首项改回 Windows Boot Manager → 备份 NVRAM 与 ESP 现状 → 再从 Windows 删除 Linux 分区 → 清理残留 `ubuntu` 条目 → 可选扩展 C:)。**顺序不可更换**:**明确禁止**"先格式化 Linux 分区再修引导"——那正是 `grub rescue>` 事故的成因。在 L5 之前不要手工删 Linux 分区。
+要彻底删掉 Ubuntu:走 `06-decommission.md` 的五步顺序——先把 `BootOrder` 首项改回 Windows Boot Manager → 备份 NVRAM 与 ESP 现状 → 再从 Windows 删除 Linux 分区 → 清理残留 `ubuntu` 条目 → 可选:扩展 `D:`(见 `06-decommission.md` 步骤 5;`C:` 与未分配空间不相邻,扩不了)。**顺序不可更换**:**明确禁止**"先格式化 Linux 分区再修引导"——那正是 `grub rescue>` 事故的成因。在 L5 之前不要手工删 Linux 分区。
 
 ### 5. 显卡模式回滚(MUX 分支)
 

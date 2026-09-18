@@ -170,7 +170,7 @@ boot
 1. **先确认现场**:在 Windows 管理员会话跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1)(后面步骤 2 第 4、5 条),确认 `\EFI\Microsoft\` 与 `{bootmgr}` 没被改动;
 2. **判断要不要修 Linux 侧**:
    - 只是 NVRAM 条目指向的文件名不对(比如条目写 `grubx64.efi` 而 ESP 上只有 `shimx64.efi`)→ 在 Ubuntu 里用 `sudo efibootmgr -b <编号> -B` **删除该条目**,再从 live 环境用显式盘/分区重建:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(命令只新建条目,**绝不用 `-o` 调顺序**;口径与 [L3 手册](04-ubuntu.md) 的失败处理一致);
-   - 文件真丢了(`\EFI\ubuntu\` 被更新重写或清掉)→ 先走步骤 3 复原 `\EFI\Microsoft\`,再按步骤 3.1(b) 的具体步骤从 live 环境重建 Ubuntu 引导文件:`chroot` 后 `grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu` + `update-grub`,再用 `sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'` 建条目,最后断言 `BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾;
+   - 文件真丢了(`\EFI\ubuntu\` 被更新重写或清掉)→ 先走步骤 3 复原 `\EFI\Microsoft\`,再按步骤 3.1(b) 的具体步骤从 live 环境重建 Ubuntu 引导文件:`chroot` 后 `grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu`(它自建 NVRAM `ubuntu` 条目,不要再手工 `efibootmgr -c`)+ `update-grub`,最后断言 `BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾(若出现重复条目,按 3.1 用 `sudo efibootmgr -b <编号> -B` 清理);
 3. **不要顺手改启动顺序**:修完 `BootOrder` 首位必须仍是 `Windows Boot Manager`,`ubuntu` 在末尾(设计 8-A)。顺序被改动的场景走步骤 6;
 4. **记一笔**:把这次故障的现象、层级结论、做过的命令写进 [checklists/rollback.md](../checklists/rollback.md) 第 2 节的备注。
 
@@ -251,27 +251,31 @@ robocopy D:\dbk-l5-backup\02-esp-backup\EFI\ubuntu S:\EFI\ubuntu /E
 mountvol S: /d
 ```
 
+若 `ubuntu` 的 NVRAM 条目也已丢失(被清过),补建一条:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(盘与分区号按 `baseline/02-partitions.txt` 替换),建完立刻断言 `BootOrder` 首位仍是 `Windows Boot Manager`。
+
 **(b) 没有现成备份的** → 从 live 环境重建:挂上 root 与 ESP、`chroot` 后重装 GRUB 的 EFI 文件,再显式建 NVRAM 条目:
 
 ```bash
-# live 环境;盘与分区号按 baseline/02-partitions.txt 替换
+# live 环境(必须以 UEFI 启动:先 ls /sys/firmware/efi 确认存在;CSM/Legacy 启动的 U 盘会让 grub-install 走非 EFI 目标)
+# 盘与分区号按 baseline/02-partitions.txt 替换
 sudo mount /dev/nvme0n1p5 /mnt                  # Ubuntu root
 sudo mount /dev/nvme0n1p1 /mnt/boot/efi         # ESP
 for d in dev dev/pts proc sys run; do sudo mount --rbind /$d /mnt/$d; done
 sudo chroot /mnt /bin/bash
-grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu
+grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu   # 它自己会建 NVRAM ubuntu 条目,不要再手工 efibootmgr -c(会多一条重复项)
 update-grub
 exit
 sudo umount -R /mnt
-sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'
 sudo efibootmgr -v
 ```
+
+若上面跑完发现 `efibootmgr -v` 里出现**重复的 `ubuntu` 条目**(重装/换 ESP 后的常见残留),用 `sudo efibootmgr -b <编号> -B` 删掉多余项——保留 `BootOrder` 里实际生效的那一条。
 
 判据与纪律:
 
 - `/boot/efi/EFI/ubuntu/` 下出现 `shimx64.efi`、`grubx64.efi` 与 `grub.cfg`(与 `Microsoft/` 并存);
 - 建完条目**立刻断言**:`BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾;顺序不对就走步骤 6 处置,**不用 `efibootmgr -o`**(I2);
-- 全程保持 Secure Boot 开启:走的是 shim 签名链(设计 3.3),不要用 `--no-nvram` 或自签密钥之类的变通绕开;
+- 全程保持 Secure Boot 开启:走的是 shim 签名链(设计 3.3),不自签密钥、不关 Secure Boot;`grub-install` 不加 `--no-nvram`(那是为了"不写 NVRAM",与 Secure Boot 无关,本手册也不需要这种变通——NVRAM 条目正是我们要的);
 - **不要手工把别的机器或别的系统的 `\EFI\ubuntu\` 文件抄进来**:`shimx64.efi` 与 `grubx64.efi` 是一对,版本错配会被 Secure Boot 拒载(处置见"失败处理"的 `invalid signature` 一行)。
 
 ### 4. 办法一:只重装 Windows(仅格式化 `C:`)
@@ -294,7 +298,7 @@ sudo efibootmgr -v
 |---|---|---|
 | 误格 `D:` 或 Linux 分区 | **灾难性、不可逆** | 靠第 3 步的逐分区核对;已经格错就停手,`D:` 只能靠外部备份恢复,Linux 侧按步骤 5 重装并把 `/snapshots` 一起重建 |
 | 安装程序新建恢复分区 / 挪动 WinRE | 分区表偏离计划(占掉预留空间) | 属设计第 9 节已登记的版本敏感性风险:**尺寸偏差可接受**(唯一不可削减的是 ESP),把偏差写进 `baseline/` 与设备参数表即可,不要为了"回到计划"去挪分区 |
-| ESP 被安装器改写 | `\EFI\ubuntu\` 可能被清掉 → 重启停 `grub rescue>` | 装完先挂载 ESP 看 `S:\EFI\ubuntu\` 是否还在;不在则按步骤 3.1 的两条来源重建(**`\EFI\ubuntu\` 不在 L2 基线清单里——L2 基线生成于装 Ubuntu 之前,不能用 `baseline\02-esp-backup\EFI\ubuntu\` 还原**),再 `sudo efibootmgr -c ...` 重建条目(不用 `-o`) |
+| ESP 被安装器改写 | `\EFI\ubuntu\` 可能被清掉 → 重启停 `grub rescue>` | 装完先挂载 ESP 看 `S:\EFI\ubuntu\` 是否还在;不在则按步骤 3.1 的两条来源重建(**`\EFI\ubuntu\` 不在 L2 基线清单里——L2 基线生成于装 Ubuntu 之前,不能用 `baseline\02-esp-backup\EFI\ubuntu\` 还原**),再按该节的结论补建/清理 NVRAM 条目(不用 `-o`) |
 | BitLocker 索要恢复密钥 | 进不去系统 | 密钥在手直接输入;`C:` 重装后保护状态会回到"未加密或待启用",按设计第 9 节登记状态变化,不要在救援期间顺手开新保护 |
 
 ### 5. 办法二:只重装 Ubuntu(仅格式化 root)
@@ -424,7 +428,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 | 现象 | 立即动作 |
 |---|---|
 | `ls` 列不出任何分区(`(hd0)` 之后再无 `(hdX,gptY)`) | `insmod part_gpt` 后重试;仍不行说明 GRUB 的核心镜像/模块也丢了——不要在这里硬敲,改走步骤 1.3 直接回 Windows,或从 live U 盘进环境处理 |
-| `insmod normal` 报 `file not found` | `prefix` 指错分区/路径。回步骤 1.1 用 `ls (hdX,gptY)/` 逐个分区重找含 `/boot/grub` 的那个;**不要**改成 `normal` 硬试,也不要 `set prefix` 到 ESP(`/EFI/ubuntu` 里没有 `grub.cfg`) |
+| `insmod normal` 报 `file not found` | `prefix` 指错分区/路径。回步骤 1.1 用 `ls (hdX,gptY)/` 逐个分区重找含 `/boot/grub` 的那个;**不要**改成 `normal` 硬试,也不要 `set prefix` 到 ESP:`/EFI/ubuntu` 里**有**一个 stub `grub.cfg`,但没有 `x86_64-efi/` **模块目录**,`normal` 与各模块都加载不了(`insmod normal` 会报 `file not found`) |
 | `chainloader` 报 `unknown command` | 先 `insmod chain` 再重试;`insmod chain` 报 `file not found` 时,`chain` 模块来自 `$prefix`,按 1.1 / 1.2 把 `set prefix` 指到 root 的 `/boot/grub` 再试;仍不行就从固件启动菜单选 `Windows Boot Manager`,进 Windows 后按步骤 2 修 |
 | `chainloader` / 启动 Windows 报 `invalid signature`、`Verification failed`、`bad shim signature` | 属 Secure Boot 拒载:**不要关闭 Secure Boot、不要自签密钥**(设计 3.3)。先核查固件里 `Secure Boot Mode` 是否被改成 `Custom`(应为 `Standard`);用的是官方 ISO 吗?shim 是否在微软签名链内?SBAT 类事故按步骤 7 的处置清策略 |
 | `bcdboot` 报 `Failure when attempting to copy boot files` | 三种常见原因依次查:① `C:` 盘符写错(WinRE 里先 `dir` 确认含 `\Windows` 的卷);② ESP 没挂上或不是 FAT32(`S:\EFI` 不可见);③ ESP 空间不足(`dir S:\` 看剩余;2GiB 的目标尺寸下极少见)。修好后重跑,不要改别的判据 |

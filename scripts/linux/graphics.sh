@@ -31,8 +31,9 @@ APPLY=0; RC=0; N_NV=0; N_IG=0; HYBRID=0; INCONCLUSIVE=0; JUST_INSTALLED=0
 
 usage() { sed -n '2,15p' "$0"; }
 have() { command -v "$1" >/dev/null 2>&1; }
-# 已装 NVIDIA 驱动包清单(包名=版本,排序后一行):用于安装前后比对,判断本轮是否真的改变了包状态
-nv_pkgs() { dpkg-query -W -f='${Package}=${Version} ' 'nvidia-driver-*' 2>/dev/null | sort | tr '\n' ' '; }
+# 已装 NVIDIA 驱动包清单(包名=版本,排序后一行):用于安装前后比对,判断本轮是否真的改变了包状态。
+# 比对集覆盖驱动主包、内核模块包、库包与 dkms 包;格式串带 \n 否则 sort 只看到一行、等于不排序。
+nv_pkgs() { dpkg-query -W -f='${Package}=${Version}\n' 'nvidia-driver-*' 'linux-modules-nvidia-*' 'libnvidia-*' 'nvidia-dkms-*' 2>/dev/null | sort | tr '\n' ' '; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -101,7 +102,7 @@ verify() {
     elif [ "$N_NV" -gt 0 ] && [ "$JUST_INSTALLED" -eq 1 ]; then
       log "DBK-RESULT hint 驱动刚安装,需重启后重跑复核(判据:重启后 lsmod 有 nvidia 且 XDG_SESSION_TYPE=wayland)"; INCONCLUSIVE=1
     elif [ "$N_NV" -gt 0 ]; then
-      log "DBK-RESULT $RES_FAIL nvidia 模块未加载(lsmod 无 nvidia*):驱动未生效;若当前是 nouveau 兜底则桌面仍可用"; RC=1
+      log "DBK-RESULT $RES_FAIL nvidia 模块未加载(lsmod 无 nvidia*):驱动未生效;若驱动是本会话刚装/刚更新且还没重启,先重启再重跑复核,**不要就此卸载**;若当前是 nouveau 兜底则桌面仍可用"; RC=1
     else
       log "DBK-RESULT skipped nvidia 模块:本机未见 NVIDIA 独显(或无 lspci 数据)"
     fi
@@ -139,7 +140,7 @@ guide() {
   fi
   log "若装完驱动黑屏/闪烁: 切 TTY(Ctrl+Alt+F3)登录 -> 卸载专有驱动回 nouveau -> 再调驱动版本/PRIME 模式"
   log "回退 nouveau 三步(纯指引,不自动执行;不要用 apt purge '^nvidia-.*' 通配:apt 正则会把 nvidia-cuda-toolkit / nvidia-container-toolkit(-base) / nvidia-docker2 / nvidia-settings 等非驱动包一起摘掉,-y 又抹掉确认):"
-  log "  1) 先列将删项并人工过一眼: dpkg -l | grep -E '^(ii|iU) +(nvidia|libnvidia|linux-modules-nvidia|linux-signatures-nvidia)'"
+  log "  1) 先列将删项并人工过一眼: dpkg-query -W -f='\${db:Status-Abbrev} \${binary:Package}\n' | grep -E '^(ii|iU) +(nvidia|libnvidia|linux-modules-nvidia|linux-signatures-nvidia)'(不要用 dpkg -l:非 tty 下 80 列会截断包名)"
   log "  2) 按上面清单用**精确包名**逐个移除(不要通配、不要 -y): sudo apt-get remove --purge <逐个包名>"
   log "  3) sudo apt-get autoremove -> sudo update-initramfs -u -> sudo reboot;装了 CUDA/容器运行时要单独评估(它们不会随 nouveau 一起回来)"
   log "  再确认 /etc/modprobe.d/*nouveau*.conf 无 blacklist 残留、/etc/default/grub 无残留的 nomodeset / nvidia-drm.modeset=1"

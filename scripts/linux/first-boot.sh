@@ -64,19 +64,21 @@ record_mod() { MOD_NAMES+=("$1"); MOD_STATES+=("$2"); MOD_KEYS+=("$3"); log "DBK
 
 # 跑一个模块:$1=脚本文件名 $2=显示名,其余参数原样传给模块。失败不中断编排(仅记状态)
 run_module() {
-  local file="$1" name="$2" path mlog state key="" rc=0
+  local file="$1" name="$2" path mlog state key="" rc=0 before=0 slice
   path="$HERE/$file"; shift 2
   if [ ! -f "$path" ]; then record_mod "$name" skipped "脚本不存在:$path"; return; fi
   mlog="$LOG_DIR/${file%.sh}.log"
+  [ -f "$mlog" ] && before="$(wc -l <"$mlog")"
   log "--- 调用 $name:bash $path $* ---"
   bash "$path" "$@" >>"$mlog" 2>&1; rc=$?
   if [ "$rc" -eq 0 ]; then state=ok; else state=fail; fi
-  # 关键输出:失败模块优先取 DBK-RESULT fail 行(必须在摘要里一眼看到失败原因),否则取模块的结果行,最多两行
-  key="$(grep -hE 'DBK-RESULT fail|校验未通过' "$mlog" 2>/dev/null | tail -n 2 \
+  # 关键输出:只在"本次新增的输出区间"里取。日志是 >> 追加写入,直接 grep 会把上一次运行的陈旧 DBK-RESULT fail 行也抓进来
+  slice="$(tail -n "+$((before + 1))" "$mlog" 2>/dev/null || true)"
+  key="$(printf '%s\n' "$slice" | grep -hE 'DBK-RESULT fail|校验未通过' | tail -n 2 \
     | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}[+-][0-9]{4} //' | tr '\n' ';' | sed 's/;$//')"
-  [ -n "$key" ] || key="$(grep -hE 'DBK-RESULT|DBK-MODULE|校验通过|校验未通过|完成:|错误|失败' "$mlog" 2>/dev/null | tail -n 2 \
+  [ -n "$key" ] || key="$(printf '%s\n' "$slice" | grep -hE 'DBK-RESULT|DBK-MODULE|校验通过|校验未通过|完成:|错误|失败' | tail -n 2 \
     | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}[+-][0-9]{4} //' | tr '\n' ';' | sed 's/;$//')"
-  [ -n "$key" ] || key="$(tail -n 1 "$mlog" 2>/dev/null | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}[+-][0-9]{4} //' || true)"
+  [ -n "$key" ] || key="$(printf '%s\n' "$slice" | tail -n 1 | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}[+-][0-9]{4} //' || true)"
   record_mod "$name" "$state" "rc=$rc;${key}"
 }
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 校验脚本:行数上限 200、bash 语法、shellcheck(若有)、PowerShell 语法解析
+# 覆盖范围:仅 scripts/ 下的 *.sh 与 *.ps1;templates/ 下的文件(.snippet/.conf/partitions.txt 等)不在自动检查范围内,靠人工复核(扩展名/格式各不相同,无通用解析器)。
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
@@ -7,6 +8,8 @@ PS="$(command -v pwsh || command -v powershell.exe || true)"
 SC="$(command -v shellcheck || true)"
 
 # 环境缺失的检查项必须显式披露为 SKIP;SKIP 不影响退出码(退出码只由 fail 决定)。
+# templates/ 不在检查范围内(见文件头注释):这里显式声明,避免把"未报错"误读成"通过"。
+echo "NOTE 覆盖范围:仅 scripts/**.sh|ps1;templates/ 需人工复核"
 [ -n "$SC" ] || echo "SKIP shellcheck (not installed)"
 [ -n "$PS" ] || echo "SKIP powershell syntax (no pwsh)"
 

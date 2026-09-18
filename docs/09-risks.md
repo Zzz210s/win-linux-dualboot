@@ -44,7 +44,7 @@
 
 1. **回滚点在位**:第 24 条的缓解要求"快照失败即视为不得执行本次变更";内核/驱动变更必须有快照(R1),见 [L4 手册](05-first-boot.md)与 [验收 F1](08-verification.md)。
 2. **基线可读**:第 3、6、26、27 条的兜底都依赖 `baseline/02-esp-backup/` 与 `02-firmware-entries.txt`(I4);改动分区表或固件之前先按 [L2 手册](03-preflight.md)重做一次基线。
-3. **退路在位**:第 17、27 条的兜底是救援 U 盘与一次性入口;确认 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1) 可用,**不得**用 `efibootmgr -o`(I2)。
+3. **退路在位**:第 27 条的兜底是救援 U 盘;第 17 条(引导菜单阶段黑屏)不需要 U 盘——靠 `GRUB_TERMINAL=console` + 日常改用一次性 `BootNext`/厂商菜单键(见"前置条件"与 [L3 手册](04-ubuntu.md))。确认 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1) 可用,**不得**用 `efibootmgr -o`(I2)。
 4. **四条不变量未被破坏**:改完立刻复跑 [验收 A 组](08-verification.md)的 A1、A3、A4。
 5. **Windows 更新之后**:按 7.1 节巡检四项(第 3 条的正面对策),见 [07-rescue.md](07-rescue.md) 第 7 节。
 

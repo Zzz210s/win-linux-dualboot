@@ -15,7 +15,7 @@
   参数 -Match 是匹配 Ubuntu 条目的描述正则(默认 'ubuntu|grub');描述行在中文系统上可能是中文标签,故解析做了双语匹配。
   若匹配到**多条**(重装或换 ESP 后残留旧 ubuntu 条目的常见情形),脚本打印 GUID + description 清单并以非零退出;
   核对出当前有效的那条后用 -Guid <{GUID}> 显式指定重跑(绝不能随便取第一条:失效 GUID 会直接把重启落到 grub rescue>)。
-  退出码:0 = 计划打印完成,或设置成功且 I1 断言通过;1 = 失败(含条目歧义/未找到与 I1 断言失败)。
+  退出码:0 = 计划打印完成(-WhatIf 下"未找到目标条目"也只打印计划并返回 0),或设置成功且 I1 断言通过;1 = 失败(含条目歧义、非 -WhatIf 下未找到目标条目、-Guid 指向容器伪条目与 I1 断言失败)。
 #>
 [CmdletBinding()]
 param(
@@ -101,6 +101,12 @@ $target = $null
 # 先收集**全部**匹配:多条时绝不能静默取第一条(残留旧 ubuntu 条目的 GUID 可能已失效)
 $hits = @($entries | Where-Object { $_.Guid -ne $FWBM -and $_.Desc -and $_.Desc -match $Match })
 if ($Guid) {
+  # 显式拒绝容器伪条目:{fwbootmgr}/{bootmgr} 不是可引导的固件条目,落到 bootsequence 会绕过下面的"排除 Windows 自身"保护
+  if ($Guid -eq $FWBM -or $Guid -eq '{bootmgr}') {
+    Write-Host ('错误:-Guid ' + $Guid + ' 是容器伪条目({fwbootmgr} = 固件启动管理器,{bootmgr} = Windows 启动管理器),不是可引导的固件条目,拒绝使用。')
+    Write-Host '要重建 Windows 引导条目请走 docs/07-rescue.md 的 bcdboot 路径;本脚本只负责一次性进 Ubuntu。本次未执行任何命令。'
+    exit 1
+  }
   $target = @($hits | Where-Object { $_.Guid -eq $Guid }) | Select-Object -First 1
   if (-not $target) { $target = @($entries | Where-Object { $_.Guid -eq $Guid }) | Select-Object -First 1 }
   if (-not $target) {

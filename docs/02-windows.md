@@ -165,7 +165,7 @@ reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Fo
 
 期望输出:下列六项的值全部以 `D:\` 开头——`Desktop`(桌面)、`Personal`(文档)、`{374DE290-123F-4565-9164-39C4925E467B}`(下载)、`My Pictures`(图片)、`My Video`(视频)、`My Music`(音乐);同一份输出里其余值(如 `AppData`、`Local AppData`、`Cache`、`Fonts`)仍应留在 `C:\Users\<用户名>\...`,它们不在本次重定向范围内。等价写法:`Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"`。
 
-再用"新建文件落点"实测一次:在桌面新建一个文件(或改一次桌面壁纸),确认它出现在 `D:\Desktop` 而不是 `C:\Users\<用户名>\Desktop`。
+再用"新建文件落点"实测一次:在桌面新建一个文件,确认它出现在 `D:\Desktop` 而不是 `C:\Users\<用户名>\Desktop`。
 
 ### 5. KMS 激活(只做外链与流程,不分发脚本本体)
 
