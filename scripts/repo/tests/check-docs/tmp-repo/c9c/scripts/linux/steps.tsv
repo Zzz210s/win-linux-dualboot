@@ -1,0 +1,3 @@
+# 步骤号	脚本路径	破坏性	说明
+01-1	scripts/linux/a.sh	0	甲
+01-2	scripts/linux/orphan.sh	0	乙

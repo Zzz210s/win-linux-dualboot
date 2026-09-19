@@ -19,3 +19,6 @@ docs/superpowers/
 *.log
 .DS_Store
 Thumbs.db
+
+# check-docs 夹具套件:常驻样例入库(scripts/repo/tests/check-docs/),运行时产物每次重建不入库
+scripts/repo/tests/check-docs/.tmp/

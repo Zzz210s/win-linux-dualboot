@@ -75,6 +75,8 @@
 | C9c | **反向覆盖**:每个步骤脚本必须被至少一张卡引用(`grep` 卡内路径,正斜杠与反斜杠写法都认) |
 | C9d | 白名单(库/自检脚本:不要求 `# 对应卡:`、不要求被卡引用):`scripts/linux/dbk-log.sh`、`scripts/linux/dbk-cli.sh`、`scripts/linux/dbk-pkg.sh`、`scripts/linux/dbk.sh`、`scripts/linux/dbk-apt.sh`(legacy 库,将在任务 14 并入 `dbk-pkg.sh`)、`scripts/repo/check-docs.sh`、`scripts/repo/check-docs-lib.sh`(check-docs 公共解析库)、`scripts/repo/check-docs-repo.sh`(仓库级 C9b/c/d 检查)、`scripts/repo/check-scripts.sh`、`scripts/windows/dbk-cli.ps1`、`scripts/windows/dbk.ps1`。白名单以自检脚本内的 WL 为唯一实现,两处必须逐行一致(夹具额外校验 `extra-checks-c9.sh` 有断言);C9d 另校验 `scripts/{linux,windows}/steps.tsv` 与步骤脚本一一对应(索引行指向的脚本必须存在且是本侧步骤脚本,本侧步骤脚本必须登记进索引,缺索引时报「缺少步骤索引」) |
 
+**夹具套件(已版本化入库)**:check-docs 自身的夹具(常驻样例、边界回归、样例仓库模板)位于 `scripts/repo/tests/check-docs/`,验证命令:`bash scripts/repo/tests/check-docs/run-fixtures.sh`(末行 `PASS=n FAIL=m`,可从仓库任意工作目录运行;运行时副本建在 `scripts/repo/tests/check-docs/.tmp/`,不入库)。夹具是测试数据:路径中含 `/tests/` 的文件**不参与 C9b/C9c/C9d 扫描**(夹具里的假 `*.sh`/`*.ps1` 不应被要求 `# 对应卡:`),也不参与 `scripts/repo/check-scripts.sh` 的语法与行数扫描。
+
 C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档、或写了脚本却没人调用,自检当场报错。
 
 ## 5. 新增总控入口
@@ -147,7 +149,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 2. **失败路径**:至少一处判据为假 → 退出码 1,且输出指明是哪一项;
 3. **dry-run 不改系统**:`--check` 运行后夹具目录的时间戳/内容零变化;
 4. **破坏性脚本额外**:缺 `--yes` 时退出码 64 且**不产生任何写操作**;后置断言失败时退出码 1 并打印复读结果;
-5. 夹具放在 `.superpowers/sdd/fedora-reshape/fixtures/<script>/`,用假的 `rpm`/`dnf`/`efibootmgr`/`lsblk`/`sgdisk`/`diskpart`/`bcdedit` 可执行文件注入 PATH。
+5. 夹具放在 `.superpowers/sdd/fedora-reshape/fixtures/<script>/`,用假的 `rpm`/`dnf`/`efibootmgr`/`lsblk`/`sgdisk`/`diskpart`/`bcdedit` 可执行文件注入 PATH(本条指步骤脚本夹具;check-docs 自检脚本自身的夹具是例外,已入库到 `scripts/repo/tests/check-docs/`,见第 4 节)。
 
 ## 8. 诚实说明:这次扩充的代价
 
@@ -165,3 +167,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 日期 | 变更 |
 |---|---|
 | 2026-09-18 | 初版:确立 S1 双模式型 / S2 L3 人工 + 前置后置脚本 / S3 危险三步的三条硬规则;统一 CLI 与退出码;卡↔脚本双向绑定(C9);总控入口与步骤索引;43 卡映射表(新增 35 个步骤脚本、共 41 个新文件);夹具测试五条;代价与验证等级说明 |
+| 2026-09-18 | 修复轮 2:check-docs 夹具套件入库到 `scripts/repo/tests/check-docs/`(版本化,换机器可复跑);路径含 `/tests/` 的文件豁免 C9b/C9c/C9d 与 check-scripts 扫描 |

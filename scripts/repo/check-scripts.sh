@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 校验脚本:行数上限 200、bash 语法、shellcheck(若有)、PowerShell 语法解析
 # 覆盖范围:仅 scripts/ 下的 *.sh 与 *.ps1;templates/ 下的文件(.snippet/.conf/partitions.txt 等)不在自动检查范围内,靠人工复核(扩展名/格式各不相同,无通用解析器)。
+# 豁免:路径中含 /tests/ 的文件是测试夹具数据(如 scripts/repo/tests/check-docs/ 下的样例与运行时副本),
+#   不参与本脚本扫描——夹具是靠 run-fixtures.sh 实际执行验证的,且夹具里允许故意不合法的对照样本。
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
@@ -8,8 +10,8 @@ PS="$(command -v pwsh || command -v powershell.exe || true)"
 SC="$(command -v shellcheck || true)"
 
 # 环境缺失的检查项必须显式披露为 SKIP;SKIP 不影响退出码(退出码只由 fail 决定)。
-# templates/ 不在检查范围内(见文件头注释):这里显式声明,避免把"未报错"误读成"通过"。
-echo "NOTE 覆盖范围:仅 scripts/**.sh|ps1;templates/ 需人工复核"
+# templates/ 与 /tests/ 不在检查范围内(见文件头注释):这里显式声明,避免把"未报错"误读成"通过"。
+echo "NOTE 覆盖范围:仅 scripts/**.sh|ps1(豁免 /tests/);templates/ 需人工复核"
 [ -n "$SC" ] || echo "SKIP shellcheck (not installed)"
 [ -n "$PS" ] || echo "SKIP powershell syntax (no pwsh)"
 
@@ -31,7 +33,7 @@ while IFS= read -r f; do
           || { echo "PS_SYNTAX $f"; fail=1; }
       fi ;;
   esac
-done < <(find "$ROOT/scripts" -type f \( -name '*.sh' -o -name '*.ps1' \) | sort)
+done < <(find "$ROOT/scripts" -type f \( -name '*.sh' -o -name '*.ps1' \) -not -path '*/tests/*' | sort)
 
 if [ "$fail" -eq 0 ]; then echo "check-scripts: OK"; else echo "check-scripts: FAIL"; fi
 exit "$fail"

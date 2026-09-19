@@ -136,6 +136,8 @@
 
 **扫描范围与豁免**:缺省集合 = `docs/*.md`(仅深度 1)+ `checklists/*.md` + `README*.md`。`docs/design/*.md`(本方案的设计文档,含 `00-design.md` 与本文件)与 `baseline/README.md` **不属卡体系**,仅受 C5/C7/C8 约束;它们不参与 C1–C4 与 C6。
 
+**夹具豁免**:路径中含 `/tests/` 的文件是测试夹具数据,**不参与 C9b/C9c/C9d 扫描**——夹具里的假 `*.sh`/`*.ps1` 不应被要求 `# 对应卡:`(样例仓库有自己的 `steps.tsv`,也不进真实索引比对)。check-docs 夹具套件本身入库在 `scripts/repo/tests/check-docs/`(常驻样例 + 边界回归 + 样例仓库模板),一条命令跑全:`bash scripts/repo/tests/check-docs/run-fixtures.sh`(末行汇总 `PASS=n FAIL=m`,可从仓库任意工作目录运行);同一豁免也适用于 `scripts/repo/check-scripts.sh`(夹具是测试数据,不做语法与 200 行扫描)。
+
 ## 7. 引用与锚点策略
 
 | 类别 | 处置 |
@@ -198,3 +200,4 @@
 | 2026-09-18 | 初版:确立操作卡格式六条硬规则、11 份文档体裁与卡清单、自检规则 C1–C8、引用重写策略、内容去向表、完成判据 |
 | 2026-09-18 | 自审修订:补格式细则(3.2.1)与计数口径;明确 `05` 的 11 张卡;明确卡编号引用只允许两种写法;明确 `docs/design/*.md` 与 `baseline/README.md` 的豁免 |
 | 2026-09-18 | 与 `02`/`03` 对齐:自检新增 C9a–C9d(卡↔脚本双向绑定);卡格式新增 R7(`脚本:` 行);`05` 改为 12 张卡(含发行版升级);`04` 改名后的编号说明 |
+| 2026-09-18 | 修复轮 2 三项裁定:check-docs 夹具套件入库到 `scripts/repo/tests/check-docs/`(版本化,换机器可复跑);路径含 `/tests/` 的文件豁免 C9b/C9c/C9d 扫描;`scripts/linux/dbk-apt.sh` 进 C9 白名单(legacy 库,将在任务 14 被 `dbk-pkg.sh` 取代) |

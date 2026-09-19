@@ -9,11 +9,14 @@ ROOT="$(cd "$SELF/../.." && pwd)"
 
 # ==== C9b:步骤脚本必须声明对应卡,且该卡真实存在 ==============================
 # 扫描目录含 scripts/repo(仓库自检脚本之外的新脚本同样受检),白名单跳过。
+# 豁免:路径含 /tests/ 的文件是测试夹具(如 scripts/repo/tests/check-docs/ 下的样例仓库),
+#   夹具里的假 *.sh/*.ps1 不应被要求 `# 对应卡:`;C9c/C9d 消费同一个 $steps,故一并豁免。
 steps=""
 for d in repo linux windows; do
   for f in "$ROOT/scripts/$d"/*.sh "$ROOT/scripts/$d"/*.ps1; do
     [ -f "$f" ] || continue
     p="$(rel "$f")"; is_wl "$p" && continue
+    case "$p" in */tests/*) continue;; esac
     steps="$steps $p"
     hl="$(grep -n -m1 -E '^#[[:space:]]*(对应卡|Card):[[:space:]]*[0-9][0-9]-[0-9]+' "$f" | cut -d: -f1)"
     if [ -z "$hl" ]; then printf '%s:1 C9b 缺少脚本头「# 对应卡:NN-K」\n' "$p"
