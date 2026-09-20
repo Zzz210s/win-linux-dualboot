@@ -13,9 +13,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "verify-l3"
-BOOT_DIR="${DBK_BOOT_DIR:-/boot}"; ESP_DIR="${DBK_ESP_DIR:-/boot/efi}"; WIN_MNT="${DBK_WIN_ESP_MNT:-}"
+BOOT_DIR="${DBK_BOOT_DIR:-/boot}"; ESP_DIR="${DBK_ESP_DIR:-/boot/efi}"; WIN_MNT="${DBK_WIN_ESP_MNT:-}"; TMP_MNT=""
 ISSUES=()
 to_mib() { awk -v b="${1:-0}" 'BEGIN{printf "%d", b/1048576}'; }
+cleanup() { if [ -n "$TMP_MNT" ]; then umount "$TMP_MNT" 2>/dev/null || true; rmdir "$TMP_MNT" 2>/dev/null || true; fi; }
+trap cleanup EXIT
 
 # 1) ostree 部署存在(rpm-ostree status 的 Deployments 列表;退化到 ostree admin status)
 OST=""
@@ -54,11 +56,24 @@ else
   ISSUES+=("Fedora ESP 内容缺失:$ESP_DIR/EFI/fedora/ 下没有 shimx64.efi / grubx64.efi")
 fi
 
-# 4) Windows ESP 内容:靠固件条目与(可选)只读挂载点核对 \EFI\Microsoft\
+# 4) Windows ESP 内容:优先用注入的挂载点;否则按"目标盘上 ≈2048MiB 的 vfat 分区"只读挂载核对 \EFI\Microsoft\
+if [ -z "$WIN_MNT" ] && [ -n "$LSB" ]; then
+  WIN_DEV="$(printf '%s\n' "$LSB" | grep 'FSTYPE="vfat"' | while IFS= read -r line; do
+    m="$(printf '%s' "$line" | sed -n 's/.*SIZE="\([^"]*\)".*/\1/p')"
+    mib="$(to_mib "$m")"
+    if [ "$mib" -ge 1900 ] && [ "$mib" -le 2200 ]; then printf '/dev/%s' "$(printf '%s' "$line" | sed -n 's/^NAME="\([^"]*\)".*/\1/p')"; break; fi
+  done)"
+  if [ -n "$WIN_DEV" ]; then
+    TMP_MNT="$(mktemp -d)"
+    if mount -o ro "$WIN_DEV" "$TMP_MNT" 2>/dev/null; then WIN_MNT="$TMP_MNT"; else rmdir "$TMP_MNT" 2>/dev/null || true; TMP_MNT=""; fi
+  fi
+fi
 if [ -n "$WIN_MNT" ] && [ -d "$WIN_MNT/EFI/Microsoft" ]; then
   dbk_add_check "Windows ESP 内容:$WIN_MNT/EFI/Microsoft/ 在位"
 elif [ -n "$WIN_MNT" ]; then
   ISSUES+=("Windows ESP 内容缺失:$WIN_MNT/EFI/Microsoft/ 不存在")
+else
+  dbk_add_check "Windows ESP 内容:未能只读挂载(改以固件条目路径 \\EFI\\Microsoft\\ 核对)"
 fi
 
 # 5) 固件条目:efibootmgr -v 里 Windows Boot Manager 指向 \EFI\Microsoft\,Fedora 条目指向 \EFI\fedora\
