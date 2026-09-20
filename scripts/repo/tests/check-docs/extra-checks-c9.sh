@@ -129,7 +129,7 @@ else verdict 1 "F12 --repo 追加 C9b/C9c/C9d 且退出码 1(rc=$rc C9b=$n_b C9c
 
 # ==== 真实仓库样本(原补充 7/8/9) =============================================
 for f in docs/00-overview.md README.md README.zh-CN.md checklists/deploy.md checklists/rollback.md \
-         baseline/README.md docs/design/00-design.md docs/design/02-fedora-variant-design.md \
+         baseline/README.md docs/design/00-design.md docs/design/02-fedora-atomic-variant-design.md \
          docs/design/03-step-automation-design.md; do
   runcheck "真实样本 $f(应过)" OK 0 "$ROOT/$f"
 done

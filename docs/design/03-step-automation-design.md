@@ -3,13 +3,13 @@
 日期:2026-09-18
 状态:待实施(实施前需用户复审)
 适用:本仓库全部动作卡与 `scripts/`
-相关设计:`01-playbook-reshape-design.md`(卡格式)、`02-fedora-variant-design.md`(Fedora 变体)。本设计为第三层:**把"卡"与"脚本"一一绑定**。
+相关设计:`01-playbook-reshape-design.md`(卡格式与文档结构)、`02-fedora-atomic-variant-design.md`(Fedora 44 Silverblue 原子版:部署级回滚、ublue NVIDIA 路径、独立 ESP 与 `/boot`)。本设计为第三层:**把"卡"与"脚本"一一绑定**。
 
 ---
 
 ## 1. 背景与目标
 
-现状:**43 张动作卡**(L0 4 / L1 6 / L2 4 / L3 4 / L4 12 / L5 5 / 07 救援 8)对应 **18 个脚本**,其中真正覆盖动作的约 10 个,缺的恰是最危险的 L5(删分区、清 NVRAM)与 07(救援)。
+现状:**43 张动作卡**(底座 4 / 轨道 W 10 / 轨道 L 4 / 首启收敛 12 / 退役与救援 13;卡号按 `01-playbook-reshape-design.md` 第 4 节的三轨道结构)对应 **18 个脚本**,其中真正覆盖动作的约 10 个,缺的恰是最危险的 L5(删分区、清 NVRAM)与 07(救援)。
 
 目标:**每个动作卡都有一个脚本**,卡里的"做:"就是"跑哪个脚本、看什么判据";人工只保留两类无法自动化的动作(固件设置界面的开关、Anaconda 里的点击)。
 
@@ -60,7 +60,7 @@
 | 项 | 约定 |
 |---|---|
 | 卡内引用 | "做:"行给出可复制的调用,如 `scripts/linux/mount-shared.sh --check`;末尾 `脚本:` 行给出路径与对应的 `--check`/`--apply` 组合 |
-| 脚本命名 | **语义名**(如 `disable-faststartup.ps1`、`set-snapshots.sh`),不用 `step-NN-K` 编号名 —— 文件名可读性更重要,绑定关系靠脚本头的 `# 对应卡:` 与卡内的 `脚本:` 行双向记录 |
+| 脚本命名 | **语义名**(如 `disable-faststartup.ps1`、`dbk-rollback.sh`),不用 `step-NN-K` 编号名 —— 文件名可读性更重要,绑定关系靠脚本头的 `# 对应卡:` 与卡内的 `脚本:` 行双向记录 |
 | 无脚本的卡 | 卡内写 `脚本:无(人工)` 或 `脚本:无(纪律条款)`,并说明为什么不能自动化 |
 | 双向校验 | 新增自检规则 **C9**(见第 4 节) |
 
@@ -91,7 +91,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 ## 6. 逐卡脚本映射表(43 张动作卡 → 脚本)
 
-**图例**:`[有]` 已存在(可能需加 `--check/--json` 契约);`新` = 本次新增;`人工` = 无法自动化(卡内标注)。
+**图例**:`[有]` 已存在(可能需加 `--check/--json` 契约);`新` = 本次新增;`人工` = 无法自动化(卡内标注)。卡号取 `01-playbook-reshape-design.md` 第 4 节的三轨道结构(底座 = 01 / 轨道 W = 02 / 轨道 L = 04 / 首启收敛 = 05 / 退役与救援 = 07)。
 
 | 卡 | 动作 | 脚本 |
 |---|---|---|
@@ -99,49 +99,60 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 01-2 | 做两个安装介质 | 新 `windows/verify-install-media.ps1`(校验 ISO 存在与哈希、列出可移动盘;写入由 Ventoy 人工) |
 | 01-3 | 核对目标盘 | [有] `windows/preflight.ps1 -Only target-disk`(需新增 `-Only`) |
 | 01-4 | 落 L0 产物 | 新 `windows/collect-l0.ps1` |
-| 02-1 | diskpart 预建分区 | 新 `windows/create-partitions.ps1`(--apply 生成并执行 diskpart 脚本;前置断言:磁盘当前无有效分区表) |
+| 02-1 | diskpart 预建分区(含 115GiB 预留) | 新 `windows/create-partitions.ps1`(--apply 生成并执行 diskpart 脚本;前置断言:磁盘当前无有效分区表) |
 | 02-2 | 装 Windows | 新 `windows/verify-windows-baseline.ps1`(安装为人工;脚本核对版本/分区/WinRE 偏差) |
 | 02-3 | 关 Fast Startup 与休眠 | 新 `windows/disable-faststartup.ps1` |
 | 02-4 | 已知文件夹重定向 | 新 `windows/redirect-known-folders.ps1`(--check 读 `User Shell Folders` 比对) |
 | 02-5 | KMS 激活 | 新 `windows/check-activation.ps1`(激活动作人工、外链;脚本只读状态) |
 | 02-6 | 落 L1 产物 | 新 `windows/collect-l1.ps1` |
-| 03-1 | 跑只读体检 | [有] `windows/preflight.ps1` |
-| 03-2 | 读闸门结论 | 新 `windows/check-gate.ps1`(解析报告 → PASS/FAIL 并列红项) |
-| 03-3 | 跑基线备份 | [有] `windows/backup-esp.ps1`(加 `--check`:校验已有备份的 `manifest.sha256`) |
-| 03-4 | 落 L2 产物 | 新 `windows/collect-l2.ps1` |
+| 02-7 | 跑只读体检 | [有] `windows/preflight.ps1` |
+| 02-8 | 读闸门结论 | 新 `windows/check-gate.ps1`(解析报告 → PASS/FAIL 并列红项) |
+| 02-9 | 跑基线备份 | [有] `windows/backup-esp.ps1`(加 `--check`:校验已有备份的 `manifest.sha256`) |
+| 02-10 | 落 L2 产物 | 新 `windows/collect-l2.ps1` |
 | 04-1 | UEFI 启动进 live | [有] `windows/set-bootnext.ps1`(扩展 `-Device USB`:设置一次性从 U 盘启动) |
-| 04-2 | 手动分区(Anaconda) | 新 `linux/check-partition-plan.sh`(在 live 里跑:读 `lsblk`/`blkid`/`sgdisk -p` 比对计划,输出"下一步该建什么";分区动作人工) |
-| 04-3 | 装完重启验证 | 新 `linux/verify-l3.sh`(btrfs 挂载与子卷、ESP 内容、GRUB 条目名、`BootOrder` 首位) |
+| 04-2 | 手动分区(Anaconda) | 新 `linux/check-partition-plan.sh`(在 live 里跑:读 `lsblk`/`blkid`/`sgdisk -p` 比对计划,输出"下一步该建什么";分区动作人工;含"不让安装器动 Windows ESP"的前置提示) |
+| 04-3 | 装完重启验证 | 新 `linux/verify-l3.sh`(btrfs 与 ostree 部署、两块 ESP 各自内容、GRUB 部署条目、`BootOrder` 首位) |
 | 04-4 | 落 L3 产物 | 新 `linux/collect-l3.sh` |
 | 05-1 | 共享盘挂载 | [有] `linux/mount-shared.sh` |
 | 05-2 | 家目录重定向 | [有] `linux/xdg-redirect.sh` |
-| 05-3 | 显卡驱动与 MOK | [有] 改写 `linux/graphics.sh` + 新 `linux/graphics-mok.sh` |
+| 05-3 | 显卡驱动与 MOK | 改写 `linux/graphics.sh`(rebase 到 ublue NVIDIA 变体)+ 新 `linux/graphics-mok.sh`(`ujust enroll-secure-boot-key` 与签名复检) |
 | 05-4 | 时间 | 新 `linux/set-time.sh` |
 | 05-5 | 蓝牙 | [有] `linux/bt-keys-sync-wrapper.sh` |
-| 05-6 | zram 与 swapfile | [有] `linux/storage.sh` |
-| 05-7 | journald 与更新策略 | 新 `linux/set-journald.sh`、新 `linux/set-updates.sh`(dnf-automatic) |
-| 05-8 | SSH 与 SMART | 新 `linux/set-remote-health.sh` |
-| 05-9 | 快照与回滚 | 新 `linux/snapshot.sh`、新 `linux/set-snapshots.sh`(snapper + grub-btrfs) |
-| 05-10 | 发行版升级 | 新 `linux/upgrade-release.sh` |
+| 05-6 | zram 与 swapfile | [有] `linux/storage.sh`(zram 由"安装"改"核对";分层安装走 `linux/dbk-ostree.sh`) |
+| 05-7 | journald 与更新策略 | 新 `linux/set-journald.sh`、新 `linux/set-updates.sh`(`rpm-ostreed-automatic`:只 check/download,不自动应用与重启) |
+| 05-8 | SSH 与 SMART | 新 `linux/set-remote-health.sh`(分层装 `smartmontools`;`sshd` 语义) |
+| 05-9 | **部署回滚** | 新 `linux/dbk-rollback.sh`(列出部署 / pin / unpin / `rpm-ostree rollback` / 回滚后复检;被 07-7 的巡检复用) |
+| 05-10 | 发行版升级 | 新 `linux/upgrade-release.sh`(`rpm-ostree rebase` 到新分支;**前置 pin** 当前部署) |
 | 05-11 | 回 Windows 入口 | [有] `linux/reboot-to-windows.sh` |
 | 05-12 | 落 L4 产物 | 新 `linux/collect-l4.sh` |
-| 06-1 | 归位引导顺序 | 新 `windows/restore-boot-order.ps1`(前置断言;不改 `{bootmgr}` 路径) |
-| 06-2 | 备份现状 | [有] `windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup` |
-| 06-3 | 删 Linux 分区 | 新 `windows/delete-linux-partition.ps1`(**破坏性**:`--yes` + 前置断言 + 只按分区号/GUID 精确删除 + 后置复读) |
-| 06-4 | 清 NVRAM 与可选扩容 | 新 `windows/cleanup-nvram.ps1`、新 `windows/extend-data-partition.ps1` |
-| 06-5 | 只停用不删 | 新 `windows/disable-linux-entry.ps1` |
-| 07-1 | 判层 | 新 `linux/triage.sh`(只读采集:分区/挂载/`efibootmgr`/ESP 内容/固件) |
+| 07-1 | 判层 | 新 `linux/triage.sh`(只读采集:分区/挂载/`efibootmgr`/两块 ESP 内容/固件) |
 | 07-2 | 从 grub 提示符回去 | 新 `linux/gen-grub-rescue-commands.sh`(按当前磁盘参数生成可复制的 `search`/`chainloader` 与 `prefix/insmod normal` 两套命令;grub 内的输入本身人工) |
 | 07-3 | Windows 侧修引导 | 新 `windows/repair-windows-boot.ps1`(`mountvol` + `bcdboot` + 后置校验) |
 | 07-4 | 只重装 Windows | [有] `windows/verify-windows-baseline.ps1`(安装人工) |
-| 07-5 | 只重装 Fedora | [有] `linux/check-partition-plan.sh`(安装人工;含"ESP 绝不格式化"断言) |
+| 07-5 | 只重装 Silverblue | [有] `linux/check-partition-plan.sh`(安装人工;含"ESP 与 `/boot` 绝不格式化、先备份 `/var/home`"断言) |
 | 07-6 | 基线回滚 | 新 `windows/restore-esp.ps1`(从 `baseline/02-esp-backup` 还原 + 逐文件校验) |
-| 07-7 | 周期巡检 | [有] `windows/verify-baseline.ps1`(加 `--json`)+ 新 `linux/check-signature.sh`(nvidia 模块签名) |
+| 07-7 | 周期巡检 | [有] `windows/verify-baseline.ps1`(加 `--json`)+ 新 `linux/check-signature.sh`(`nvidia` 模块签名)+ `linux/dbk-rollback.sh --check`(部署列表与固定状态) |
 | 07-8 | 应急纪律 | 人工(纪律条款;卡内标注"本条无脚本") |
+| 07-9 | 归位引导顺序 | 新 `windows/restore-boot-order.ps1`(前置断言;不改 `{bootmgr}` 路径) |
+| 07-10 | 备份现状 | [有] `windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup` |
+| 07-11 | 删 Fedora 分区 | 新 `windows/delete-linux-partition.ps1`(**破坏性**:`--yes` + 前置断言 + 只按分区号/GUID 精确删除 + 后置复读) |
+| 07-12 | 清 NVRAM 与可选扩容 | 新 `windows/cleanup-nvram.ps1`、新 `windows/extend-data-partition.ps1` |
+| 07-13 | 只停用不删 | 新 `windows/disable-linux-entry.ps1` |
 | 08-A…F | 验收六组 | 新 `windows/verify-all.ps1`、新 `linux/verify-all.sh` + 两个 `collect-*` 复用 |
 
-**合计**:新增 **35 个步骤脚本**(L0 3 / L1 6 / L2 2 / L3 3 / L4 9 / L5 5 / 07 5 / 08 2)+ **2 个库**(`linux/dbk-cli.sh`、`windows/dbk-cli.ps1`)+ **2 个步骤索引**(`linux/steps.tsv`、`windows/steps.tsv`)+ **2 个总控**(`dbk.sh`、`dbk.ps1`)= **41 个新文件**。
-另需给既有脚本补 `--check/--json` 契约:**7 个**(`preflight.ps1`、`backup-esp.ps1`、`verify-baseline.ps1`、`set-bootnext.ps1`、`mount-shared.sh`、`xdg-redirect.sh`、`storage.sh`);`graphics.sh`(拆 + 改 Fedora)与 `hardening.sh`(拆 + 改 Fedora)、`dbk-apt.sh`→`dbk-pkg.sh` 的改写归 `02-fedora-variant-design.md` 的任务。
+**库文件与既有脚本的改写(不进卡映射表)**:
+
+| 文件 | 处置 |
+|---|---|
+| `linux/dbk-pkg.sh`(原 `linux/dbk-apt.sh`) | 改写为 **`linux/dbk-ostree.sh`**:`pkg_installed` → `rpm-ostree status --json` 查询;**分层安装** `rpm-ostree install`(带"需重启"提示);保留 `DBK_SKIP_*` 与退出码语义。属库文件(C9d 白名单),被 05-6/05-7/05-8 等卡间接使用 |
+| `linux/hardening.sh` | 逐项改原子版语义(分层装 `smartmontools`、`sshd` 用 `systemctl enable --now`、更新策略改 `rpm-ostreed-automatic`);`--check/--apply` 结构不变 |
+| `linux/graphics.sh` | 由 `akmods + MOK` 改为 **rebase 到 ublue NVIDIA 变体 + `ujust enroll-secure-boot-key`**;判据改为 `mokutil --list-enrolled` + `modinfo -F signer nvidia`(与卡 05-3 绑定) |
+| `linux/first-boot.sh` | 逐模块调用改原子版语义(`dbk-ostree.sh` / `rpm-ostreed-automatic` / 部署回滚);摘要与退出码语义不变 |
+| **删除** `linux/snapshot.sh`、`linux/set-snapshots.sh` | 不再存在(快照体系已作废,回滚由卡 05-9 的 `dbk-rollback.sh` 承担) |
+| 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受原子版语义影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约 |
+
+**合计**:新增 **34 个步骤脚本**(底座 3 / 轨道 W 8 / 轨道 L 3 / 首启收敛 8 / 退役与救援 10 / 验收 2)+ **2 个库**(`linux/dbk-cli.sh`、`windows/dbk-cli.ps1`)+ **2 个步骤索引**(`linux/steps.tsv`、`windows/steps.tsv`)+ **2 个总控**(`dbk.sh`、`dbk.ps1`)= **40 个新文件**(比上一版少 1:卡 05-9 由两个脚本缩为一个,`snapshot.sh`/`set-snapshots.sh` 删除)。
+另需给既有脚本补 `--check/--json` 契约:**7 个**(`preflight.ps1`、`backup-esp.ps1`、`verify-baseline.ps1`、`set-bootnext.ps1`、`mount-shared.sh`、`xdg-redirect.sh`、`storage.sh`);`graphics.sh`(拆 + 改 rebase/MOK)与 `hardening.sh`(拆 + 改 rpm-ostree 语义)、`dbk-apt.sh`→`dbk-pkg.sh`→**`dbk-ostree.sh`** 的改写归 `02-fedora-atomic-variant-design.md` 第 8 节的任务(四个 PowerShell 脚本不受影响)。
 
 ## 7. 夹具测试要求(每个脚本的最低验证)
 
@@ -155,7 +166,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 | 项 | 代价 |
 |---|---|
-| 规模 | 新增 41 个脚本类文件(其中 35 个是步骤脚本);仓库脚本总数从 **16 个**(不含 `.gitkeep`)增到 **57 个**;实施任务从 21 个增到约 28 个 |
+| 规模 | 新增 40 个脚本类文件(其中 34 个是步骤脚本);仓库脚本总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **56 个**;实施任务从 21 个增到约 28 个 |
 | 审查 | 每个脚本都要过"实现 + 审查 + 修复轮",工作量约翻倍 |
 | **验证等级** | 这些脚本**全部无法在真机上验证**(无 Fedora/无第二台 Windows)→ 只有夹具级验证。文档与**脚本头**都必须标注"夹具级验证,真机未跑";`08-verification.md` 的参考设备首次真跑即是对全套脚本的首次真机验证 |
 | 收益 | 每步可自动判定(减少"照着文档敲错"),危险步骤有前置断言与复读(比人手工点更安全),卡与脚本双向绑定(C9)防脱钩 |
@@ -168,3 +179,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 |---|---|
 | 2026-09-18 | 初版:确立 S1 双模式型 / S2 L3 人工 + 前置后置脚本 / S3 危险三步的三条硬规则;统一 CLI 与退出码;卡↔脚本双向绑定(C9);总控入口与步骤索引;43 卡映射表(新增 35 个步骤脚本、共 41 个新文件);夹具测试五条;代价与验证等级说明 |
 | 2026-09-18 | 修复轮 2:check-docs 夹具套件入库到 `scripts/repo/tests/check-docs/`(版本化,换机器可复跑);路径含 `/tests/` 的文件豁免 C9b/C9c/C9d 与 check-scripts 扫描 |
+| 2026-09-19 | 与 `02-fedora-atomic-variant-design.md` 对齐:第 6 节映射表按原子版改写——卡号同步三轨道结构(原 03 的 4 张卡并入 02,编号 02-7…02-10;原 06 的 5 张卡并入 07,编号 07-9…07-13);卡 05-9 由"快照与回滚"改为"**部署回滚**"(删除 `snapshot.sh`/`set-snapshots.sh`,新增 `dbk-rollback.sh`);新增库文件 `dbk-ostree.sh`(取代 `dbk-pkg.sh`:分层安装 + `rpm-ostree status --json`);`graphics.sh`/`graphics-mok.sh` 改 rebase + MOK、`set-updates.sh` 改 `rpm-ostreed-automatic`、`upgrade-release.sh` 改 `rpm-ostree rebase`、`set-remote-health.sh`/`storage.sh` 改 rpm-ostree 语义;四个 PowerShell 脚本不受影响;第 8 节代价表按新表重算(34 个步骤脚本 / 40 个新文件 / 总数 56);第 2–5 节 CLI 契约与第 7 节夹具要求不动 |
