@@ -7,3 +7,7 @@
 01-2	scripts/windows/verify-install-media.ps1	0	安装介质校验:Fedora CHECKSUM 比对 + Windows ISO 来源声明 + 可移动盘列举
 01-3	scripts/windows/preflight.ps1	0	核对目标盘:preflight.ps1 -Only target-disk(磁盘段)
 01-4	scripts/windows/collect-l0.ps1	0	落 L0 产物:写 baseline/00-firmware.md(BootOrder 首位原值)
+02-1	scripts/windows/check-partition-layout.ps1	0	分盘总则:三种轨道的目标布局只读核对
+02-2	scripts/windows/check-partition-layout.ps1	0	轨道 W 的分盘核对:只 Windows(ESP-Win/MSR/C:/WinRE)
+02-3	scripts/windows/check-partition-layout.ps1	0	轨道 L 的分盘核对:ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB
+02-4	scripts/windows/create-partitions.ps1	1	轨道 D 的分盘:diskpart 预建四区 + 预留 115GiB(破坏性,需 -Yes)
