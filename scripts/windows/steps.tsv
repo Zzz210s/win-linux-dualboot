@@ -3,3 +3,7 @@
 02-9	scripts/windows/backup-esp.ps1	0	基线备份:ESP 全量文件树 + manifest.sha256
 04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(写固件 NVRAM,不改 BootOrder,需 -Yes)
 07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线
+01-1	scripts/windows/check-firmware.ps1	0	固件核对:Secure Boot 与 VMD/RAID 推断 + 固件界面人工核对清单
+01-2	scripts/windows/verify-install-media.ps1	0	安装介质校验:Fedora CHECKSUM 比对 + Windows ISO 来源声明 + 可移动盘列举
+01-3	scripts/windows/preflight.ps1	0	核对目标盘:preflight.ps1 -Only target-disk(磁盘段)
+01-4	scripts/windows/collect-l0.ps1	0	落 L0 产物:写 baseline/00-firmware.md(BootOrder 首位原值)

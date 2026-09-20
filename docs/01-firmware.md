@@ -2,6 +2,12 @@
 
 本文件是 L0 阶段的手册。目标状态、参数名与四条不变量在[入口文档](00-overview.md)中定义;动机与依据在[设计文档](design/00-design.md) 4.1 节与 11.1 节。
 
+## 开始前
+
+- 前提:设备是单块 1TB 级 NVMe 的 Windows 机器,固件为 UEFI(CSM 关闭)、`Secure Boot` 可用。
+- 需要的东西:厂商 Setup 键与一次性启动菜单键(取值见入口页参数表)、两个官方安装 ISO、一个 ≥8GB 的 U 盘。
+- 产物落点:`baseline/00-firmware.md`(字段清单与写法见 `01-4`;多设备按 `baseline/<设备别名>/` 放置)。
+
 ## 目标
 
 把固件与安装介质调到"L1 能一次装成"的状态,并把全部取值落盘为 L0 产物 `baseline/00-firmware.md`。
@@ -250,3 +256,53 @@ Get-FileHash -Algorithm SHA256 .\ubuntu-26.04-desktop-amd64.iso   # 或 certutil
 3. **`Secure Boot` 不作为可回滚项**:本方案从 L0 到 L5 全程保持开启(关闭它会破坏 L3 / L4 的签名链前提)。
 4. 安装介质(U 盘)可整盘清空,无副作用;Ubuntu 安装 U 盘按健壮性设计 R4 保留为常备救援介质,装机结束后不回收。
 5. **I4 复核**:若该设备此前已有 `baseline/` 产物,回滚固件设置后固件启动项与分区表状态可能发生变化,需重新核对并更新基线(固件启动项快照归 L2 生成,见 [03-preflight.md](03-preflight.md)),之后再做任何分区或固件变更。
+
+## L0 操作卡(01-1 至 01-4)
+
+> 说明:本节四张卡是 L0 的正式操作卡(卡格式见 `design/01-playbook-reshape-design.md` 第 3 节);本文档上部的"步骤 / 验证 / 失败处理 / 回滚"四节尚未按卡重排。
+
+### 01-1 改固件设置(先抄原值,再逐项改到目标状态)
+做:进固件设置(厂商 Setup 键见入口页参数表),先记录原值,再改三组开关。
+  1. 抄下原值:存储控制器模式、启动模式、`Secure Boot`、`Fast Boot`、`BootOrder` 首位是谁(照实记录,不要先清理残留条目)
+     看到:五项原值都写在纸上;`BootOrder` 首位原值是后续阶段的比对基准,要落进 01-4 的产物
+  2. 存储控制器改为 AHCI(或 NVMe),关闭 VMD / RAID On / Intel RST
+     看到:固件里该取值已是 AHCI / NVMe,且 VMD 相关开关为关闭
+  3. `Secure Boot` 保持 Enabled;固件 `Fast Boot` 设为 Disabled;CSM / Legacy Boot 设为 Disabled
+     看到:三项取值依次为 Enabled / Disabled / Disabled(CSM)
+脚本:scripts/windows/check-firmware.ps1 -Check(自动判 `Secure Boot` 与控制器模式;固件界面内的开关按脚本输出的"人工核对"清单逐项看;本卡无自动写动作)
+坑:VMD / RAID On 必须在装 Windows 之前关(设计 4.1);已按 RAID On 装好系统再改会无法启动。不要为绕过介质报错而关掉 `Secure Boot`。
+出错时:固件里没有 AHCI / NVMe 选项或该项被置灰时,按[入口文档](00-overview.md)的偏离表处理;开机报 `INACCESSIBLE_BOOT_DEVICE` 说明系统是 RAID On 下装的,先按入口文档的附录分支处理。
+
+### 01-2 做两个安装介质(Fedora Silverblue 与 Windows 11)
+做:下载两个官方 ISO,校验后写入 U 盘。
+  1. 从官方发布页下载 Fedora Silverblue 安装镜像,连同同目录的官方 `CHECKSUM` 文件与它的签名文件(`.asc` / `.gpg`)一起下载
+     看到:`CHECKSUM` 里有 `SHA256 (Fedora-Silverblue-...iso) = <64 位十六进制>` 一行
+  2. 从微软官方下载页取 Windows 11 ISO;国内镜像站只当下载加速器,不作信任源
+     看到:ISO 来自微软官方下载域,没有经过第三方盘中转
+  3. 跑校验脚本(ISO 与 `CHECKSUM` 放同一目录)
+     看到:输出 Fedora ISO 的 SHA256 与官方值逐字符一致;不一致时脚本退 1 并打印期望值与实际值
+  4. 写入 U 盘:分盘写用 Rufus(GPT + UEFI);一盘多 ISO 用 Ventoy
+     看到:一次性启动菜单里出现带 `UEFI:` 前缀的 U 盘条目
+脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(官方不发布该镜像哈希,见设计 5.3)
+坑:`CHECKSUM` 与签名都要来自官方发布页,镜像站的文件可能滞后;Ventoy 在 `Secure Boot` 下必须先完成一次 MOK 密钥注册,否则报 `Verification failed`。
+出错时:哈希不一致就重新下载或换镜像站重下;U 盘引导被 `Secure Boot` 拒绝时先确认是不是 Ventoy,不要关掉 `Secure Boot`(见 `01-1`)。
+
+### 01-3 核对目标磁盘(防选错盘)
+做:列出所有磁盘的型号与容量,和参数表的 `DISK_MODEL` / `DISK_SIZE` 逐字比对。
+  1. 跑只读体检的磁盘段(或手工:`Shift + F10` → `diskpart` → `list disk` / `detail disk`)
+     看到:目标盘型号与参数表一致、容量约 953G,且磁盘 0 的最大连续未分配空间 ≥ 115GiB
+  2. 多盘设备把接线 / 插槽位置也记下来(哪一块是第一块盘)
+     看到:手上有"将被整盘分区的那块盘"的唯一识别依据
+脚本:scripts/windows/preflight.ps1 -Only target-disk(只打印磁盘段:磁盘 0 未分配空间 + ESP 大小与剩余;不写报告文件)
+坑:型号或容量对不上就停下核对,不要按"看起来差不多"推进——重装事故多出在选错目标盘(设计 11.1 第 9 条)。
+出错时:磁盘段判红(未分配不足 115GiB 或读不到)时先确认是不是选错了盘,再回到 `01-1` 复核控制器模式。
+
+### 01-4 落 L0 产物 `baseline/00-firmware.md`
+做:跑采集脚本写产物,再把人工项的实测值补齐。
+  1. 先看将写入的内容(`-Check` 零写),确认无误后加 `-Apply` 落盘
+     看到:产物里"启动顺序(`BootOrder` 首位)原值"一行是实测值(如 `Windows Boot Manager`),不是手册里的说明文字
+  2. 按 `01-1` / `01-2` 的记录补齐人工项(控制器原值、`Fast Boot`、启动菜单键、介质校验值)后重跑 `-Apply`
+     看到:脚本报字段采齐且退出 0;人工填写值在重跑后仍被沿用(幂等)
+脚本:scripts/windows/collect-l0.ps1 -Check(只打印将写入的内容);确认后 scripts/windows/collect-l0.ps1 -Apply
+坑:产物缺"启动顺序(`BootOrder` 首位)原值"这一行时,L2 预检会判黄(没有比对基准);`baseline/` 下除 README.md 外一律不入库。
+出错时:脚本报关键字段读不到(退出 1)时换管理员会话重跑;多设备按 `baseline/<设备别名>/00-firmware.md` 放置。
