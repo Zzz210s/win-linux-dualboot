@@ -79,6 +79,14 @@
 
 读法细节:行首允许 UTF-8 BOM(`.sh` 允许、`.ps1` 必须带);BOM 不算「#」行,所以 `.ps1` 里 `# 对应卡:` 要写在 `#Requires` 之类文件头指令之后。`dbk_assert_step` 靠 `BASH_SOURCE[1]` 定位调用方,必须由步骤脚本**顶层直接调用**。
 
+errtrap 的退出码与误用防护(与 O3 同级,修复轮 2 补齐):
+
+1. **退出码不得泄漏**:errtrap 触发后,`dbk_on_err` 报完即由 trap 以 `DBK_FAIL`(1)结束进程,不得沿用失败命令自身的状态(否则 `(exit 3)` 会退 3、不存在的命令会退 127,违反全仓 0/1/2/9/64 契约);JSON 因此只输出一次,`status:"fail"` 与进程码一致。
+2. **误用防护两层**:`dbk_enable_errtrap` 校验当前 shell 已开 `errexit`(`$-` 含 `e`),未开则打印用法错误并退 64(不装 trap);第二道防线在 `dbk_report`,一旦 `checks[]` 里已有 errtrap 失败条目就拒绝再报 PASS(退 64),避免出现 `status:"pass"` 与 `checks[].ok:false` 并存的自相矛盾输出。
+3. **PS 侧两条已知差异**(不强行改 PowerShell 参数绑定行为,由总控在调用前自行校验):`-Log`/`-Step` 缺值会被 PS 参数绑定先拦下,实测退 1(不是 bash 侧的用法错误 64);`-Log ''`/`-Step ''` 被 `dbk-cli.ps1` 归一成"未给"并静默接受。
+
+文本行尾约定:仓库根 `.gitattributes` 固定 `*.sh`/`*.tsv`/`*.md` 为 LF、`*.ps1` 为 CRLF(与 BOM 约定配套),避免本机 `core.autocrlf=true` 把 `steps.tsv` 转成 CRLF 后 C9d 的破坏性列比较(只认 `0`/`1`)误判。
+
 ## 3. 卡与脚本的绑定
 
 | 项 | 约定 |
@@ -207,3 +215,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 2026-09-18 | 修复轮 2:check-docs 夹具套件入库到 `scripts/repo/tests/check-docs/`(版本化,换机器可复跑);路径含 `/tests/` 的文件豁免 C9b/C9c/C9d 与 check-scripts 扫描 |
 | 2026-09-19 | 与 `02-fedora-atomic-variant-design.md` 对齐:第 6 节映射表按原子版改写——卡号同步三轨道结构(原 03 的 4 张卡并入 02,编号 02-7…02-10;原 06 的 5 张卡并入 07,编号 07-9…07-13);卡 05-9 由"快照与回滚"改为"**部署回滚**"(删除 `snapshot.sh`/`set-snapshots.sh`,新增 `dbk-rollback.sh`);新增库文件 `dbk-ostree.sh`(取代 `dbk-pkg.sh`:分层安装 + `rpm-ostree status --json`);`graphics.sh`/`graphics-mok.sh` 改 rebase + MOK、`set-updates.sh` 改 `rpm-ostreed-automatic`、`upgrade-release.sh` 改 `rpm-ostree rebase`、`set-remote-health.sh`/`storage.sh` 改 rpm-ostree 语义;四个 PowerShell 脚本不受影响;第 8 节代价表按新表重算(34 个步骤脚本 / 40 个新文件 / 总数 56);第 2–5 节 CLI 契约与第 7 节夹具要求不动 |
 | 2026-09-20 | 修复轮 1(任务 1 审查修正 + 用户新增硬要求 O-1):第 2 节新增 **2.1 可观测性**——失败不得只给退出码、三处可见(stderr / `--log` / JSON `checks[]`)、opt-in 的 `dbk_enable_errtrap`、库层不吞 stderr、PS 侧 UTF-8 输出;新增两侧可观测性库 `scripts/linux/dbk-obs.sh` 与 `scripts/windows/dbk-obs.ps1`(第 4 节 C9d 白名单与 `check-docs-lib.sh` 的 WL 两处同步);CLI 取值错误(`--log`/`--step` 缺值或空值)改为用法错误 64 且不落盘(不再经 `die()`);破坏性脚本必须在脚本头声明 `# 破坏性:1`,由库层在执行前拦 `--apply` 缺 `--yes`;卡头支持逗号列表(一脚本服务多张卡)与行首 BOM,C9b/C9d 同步升级并新增破坏性列、步骤号一致性、重复步骤号三项交叉校验;`--json` 增加 `message` 字段并在判据为空时补一条失败项;库不再替调用方打开 `errexit`;`--log` 缺省口径明确为“库不落盘、需要时由步骤脚本调 `dbk_log_default`/`Set-DbkLogDefault`”;第 6 节增库文件行与重算合计(42 个新文件 / 总数 58);第 7 节夹具新增第 6 条“失败必须可表现”;夹具套件新增 4 个样例仓库(带 BOM 的 `.ps1` 卡头、多卡列表头、破坏性列非法、步骤号重复) |
+| 2026-09-20 | 修复轮 2(任务 1 收尾):errtrap 触发后进程必须以 1 退出(trap 报完即 `exit "$DBK_FAIL"`,不再泄漏失败命令自身状态;JSON 只输出一次);`dbk_enable_errtrap` 新增 `errexit` 断言(未开 `set -e` 误用 → 64),`dbk_report` 新增第二道防线(已有 errtrap 条目时拒绝 PASS → 64);PS 侧 `Get-DbkHeaderField` 改 `-CaseSensitive`,与 C9b 的 `CARDRE` 对齐;第 2.1 节补 errtrap 退出码/误用防护/PS 两条已知差异(`-Log`/`-Step` 缺值被 PS 参数绑定拦下退 1、空串被归一成“未给”)与 `.gitattributes` 行尾约定;`check-docs-repo.sh` 的重复步骤号改报真实行号;两侧夹具新增 6 条断言(errtrap 退出码 2、未开 `set -e` 误用 1、errtrap 后报 PASS 1、PS errtrap/opt-in 各 1) |

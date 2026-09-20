@@ -14,7 +14,6 @@
 #   (那是 L4 脚本的退 1 语义);只有显式 --log(或调过 dbk_log_default)才记路径,且只在失败路径追加日志。
 # 本文件不设置 shell 选项:失败必须中断的步骤脚本自己 set -e;失败不中断的脚本(hardening.sh/first-boot.sh)不得 set -e。
 # 夹具级验证,真机未跑。依赖 dbk-log.sh(die/need_val/dbk_json_escape)与 dbk-obs.sh(报告/JSON/errtrap)。
-# 夹具级验证,真机未跑。依赖 dbk-log.sh(die/need_val/dbk_json_escape)与 dbk-obs.sh(报告/JSON/errtrap)。
 
 DBK_PASS=0
 DBK_FAIL=1

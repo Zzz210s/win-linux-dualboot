@@ -67,8 +67,10 @@ for d in linux windows; do
       fi
     fi
   done < <(awk -F'\t' '/^[0-9][0-9]-[0-9]+/ { print FNR "\t" $1 "\t" $2 "\t" $3 }' "$ROOT/$idx")
-  for s in $(awk -F'\t' '/^[0-9][0-9]-[0-9]+/ { print $1 }' "$ROOT/$idx" | sort | uniq -d); do
-    printf '%s:1 C9d 索引步骤号重复: %s\n' "$idx" "$s"
+  # 重复步骤号:逐行报真实行号(FNR),不再一律报 :1
+  dup_idx="$ROOT/$idx"
+  for s in $(awk -F'\t' '/^[0-9][0-9]-[0-9]+/ { print $1 }' "$dup_idx" | sort | uniq -d); do
+    awk -F'\t' -v s="$s" -v f="$idx" '/^[0-9][0-9]-[0-9]+/ && $1 == s { printf "%s:%d C9d 索引步骤号重复: %s\n", f, FNR, s }' "$dup_idx"
   done
   for p in $dir_steps; do
     grep -qE "^[0-9][0-9]-[0-9]+[[:space:]]+$p([[:space:]]|$)" "$ROOT/$idx" \

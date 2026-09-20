@@ -9,6 +9,9 @@
 #   3) 不吞 stderr:日志写不进去时把失败打到 stderr,不许用 2>/dev/null 蒙掉。
 # errtrap 是 opt-in:只有用 set -e 的步骤脚本才调 dbk_enable_errtrap;"失败不中断"的脚本(hardening.sh /
 #   first-boot.sh 这类逐项汇总、整体仍返回 0)不得启用,否则会把逐项失败升级成中断。
+#   库层会校验这一点:未开 errexit(`$-` 不含 e)时调 dbk_enable_errtrap → 用法错误 64,不装 trap。
+# errtrap 触发后进程必须**以 1 退出**(DBK_FAIL),不得把失败命令自身的状态(3/127…)泄漏成退出码:
+#   trap 里报完就 exit,保证 JSON 只输出一次、status:"fail" 与进程码一致。
 # 夹具级验证,真机未跑。
 
 # 人读信息一律走 stderr(保证 --json 模式下 stdout 只有一行 JSON)。只写 stderr,不落盘。
@@ -86,8 +89,18 @@ dbk_status_tag() {
   esac
 }
 
+# dbk_has_errtrap_entry:库层失败项里是否已有 errtrap 条目(用于拒绝"失败已登记还报 PASS"的自相矛盾输出)。
+dbk_has_errtrap_entry() {
+  local x
+  for x in ${DBK_CHECKS_JSON[@]+"${DBK_CHECKS_JSON[@]}"}; do
+    case "$x" in *'"id":"errtrap"'*) return 0 ;; esac
+  done
+  return 1
+}
+
 # dbk_report <PASS|FAIL|需人工|跳过> <说明>
 #   FAIL/需人工:说明不得为空(不得只给退出码);说明同时进 stderr+日志、JSON 的 message 与 checks[](判据为空时补一条)。
+#   已登记 errtrap 失败项时不得再报 PASS(否则出现 status:"pass" 与 checks[].ok:false 并存)→ 用法错误 64。
 #   文本模式打印 `[状态] 说明` 与判据/动作清单;JSON 模式打印单行 JSON。只打印,不改退出码。
 dbk_report() {
   local status="${1:-}" msg="${2:-}" key tag x
@@ -95,6 +108,10 @@ dbk_report() {
     dbk_note "用法错误: 未知状态 $status(只认 PASS/FAIL/需人工/跳过 或 pass/fail/manual/skip)"
     exit "$DBK_USAGE"
   }
+  if [ "$key" = pass ] && dbk_has_errtrap_entry; then
+    dbk_note "用法错误: 已存在 errtrap 失败条目,不得再报 PASS(errtrap 失败必须以 1 退出)"
+    exit "$DBK_USAGE"
+  fi
   DBK_LAST_STATUS="$key"
   tag="$(dbk_status_tag "$key")"
   case "$key" in
@@ -119,10 +136,19 @@ dbk_report() {
 }
 
 # dbk_enable_errtrap:opt-in 的失败可见机制(只给用 set -e 的步骤脚本;失败不中断的脚本不得启用)。
-# 启用后任何命令非零都会走 dbk_on_err,把失败写到 stderr、--log 日志、--json 的 checks[],并立刻输出一行报告。
+# 启用后任何命令非零都会走 dbk_on_err(三处可见),随后立刻以 DBK_FAIL=1 退出(不泄漏原始码)。
+# 误用防护:未开 errexit 时直接拒(64)——否则失败不中断,会先报 FAIL 行再继续跑出 PASS 的自相矛盾输出。
 dbk_enable_errtrap() {
+  case "$-" in
+    *e*) ;;
+    *)
+      dbk_note "用法错误: dbk_enable_errtrap 只在 set -e 的脚本里可用(当前 shell 未开 errexit)"
+      dbk_note "失败不中断的脚本(hardening.sh / first-boot.sh 这类逐项汇总、整体仍返回 0)不得启用 errtrap。"
+      exit "$DBK_USAGE"
+      ;;
+  esac
   DBK_ERRTRAP=1
-  trap 'dbk_on_err $? $LINENO "$BASH_COMMAND"' ERR
+  trap 'dbk_on_err $? $LINENO "$BASH_COMMAND"; exit "$DBK_FAIL"' ERR
   return 0
 }
 

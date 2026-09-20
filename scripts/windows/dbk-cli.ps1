@@ -10,6 +10,9 @@
 # 输出与 JSON 由 dbk-obs.ps1 提供(本文件 dot-source 它);-Json 时 stdout 只有 Write-DbkExit/Write-DbkErrTrap 的一行 JSON。
 # 只读保证:本文件只定义函数与常量;参数错误一律打印用法到 stderr 并 exit 64,不落盘。
 #   只有显式 -Log(或调过 Set-DbkLogDefault)才记路径,且只在失败路径追加日志(Write-DbkObs)。
+# 已知差异(与 bash 侧 dbk-cli.sh 的读法不同;由 Task 2 总控在调用前自行校验,不靠本库兜):
+#   1) -Log / -Step 缺值会被 PowerShell 参数绑定先拦下,实测 rc=1(不是 bash 侧的用法错误 64);
+#   2) -Log '' / -Step '' 被本库归一成"未给"并静默接受,不报 64。
 # 夹具级验证,真机未跑。
 
 $script:DBK_PASS = 0
@@ -49,11 +52,12 @@ function Show-DbkUsage {
 
 # Get-DbkHeaderField -File <脚本> -Field <字段名> -ValueRe <值正则>:读脚本头「# 字段:值」的第一个匹配(取不到返回空)。
 # 卡号头与破坏性声明共用这一个实现;行首允许 UTF-8 BOM(.ps1 必须带)。
+# 字段名与值都大小写敏感(-CaseSensitive),与仓库自检 C9b 的 CARDRE 对齐(否则会接受 `# card: 05-1`)。
 function Get-DbkHeaderField {
   param([string]$File = '', [string]$Field = '', [string]$ValueRe = '')
   if (-not $File -or -not (Test-Path -LiteralPath $File)) { return '' }
   $pattern = '^(?:' + [char]0xFEFF + ')?#\s*(?:' + $Field + '):\s*(' + $ValueRe + ')'
-  $hit = Select-String -LiteralPath $File -Pattern $pattern -List
+  $hit = Select-String -LiteralPath $File -Pattern $pattern -List -CaseSensitive
   if ($hit) { return $hit.Matches[0].Groups[1].Value.Trim() }
   return ''
 }

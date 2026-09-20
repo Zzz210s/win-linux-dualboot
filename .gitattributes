@@ -1,0 +1,9 @@
+# 文本属性:固定行尾,避免本机 core.autocrlf=true 在提交/检出时改掉仓库约定。
+# 背景:不加本文件时 git 会对 .sh/.tsv/.md 报 "LF will be replaced by CRLF",而 check-docs 的 C9d
+#   破坏性列比较(只认 0/1)不做 \r 清理,steps.tsv 一旦被 CRLF 化就立即误判。
+# .ps1 约定 = UTF-8 with BOM + CRLF(Windows PowerShell 5.1 按 BOM 解码;无 BOM 的 .ps1 会被当 ANSI/GBK)。
+*.sh  text eol=lf
+*.ps1 text eol=crlf
+*.tsv text eol=lf
+*.md  text eol=lf
+.gitattributes text eol=lf
