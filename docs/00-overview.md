@@ -1,34 +1,32 @@
-# 入口:目标、四条不变量与设备参数表
+# 入口:三轨道地图、四条不变量与设备参数表
 
-本文件是整套手册的入口与**命名契约**:四条不变量 I1-I4、设备参数表的字段名、阶段到文档的映射都在这里定义,`01-*` 至 `09-*` 全部引用本文档定义的名字。改名必须同时改这里。
+**本页是地图,不是流程**:它只回答"照着做之前必须知道什么"与"每一步去哪份文档、产出什么";动作级内容全部在手册的操作卡里,本页**不写操作卡**(不受卡格式约束,但仍受引用可解析、禁止跨文件锚点、相对链接存在性与 emoji 检查约束)。
 
-为什么这样设计(目标、决策记录、事实清单)在 [设计文档](design/00-design.md)。本文件只回答"照着做之前必须知道什么"。
+本文件同时是整套手册的**命名契约**:四条不变量 I1-I4、设备参数表的字段名、各阶段产物名都在这里定义,手册与脚本引用这些名字时不得改名。
 
-- 适用:单块 NVMe、UEFI + GPT、混合显卡、允许整盘格式化的设备。
-- 目标系统:Windows 11 专业版 + Ubuntu 26.04 LTS(GNOME 50,默认 Wayland 会话)。
-- 状态:设计已定稿,手册按执行顺序编号,01-09 逐份补齐。
+方案依据(目标、决策记录、事实清单、34 条风险)在 [设计文档](design/00-design.md);原子版变体的决定与证据在 [02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md),本页不复述。
 
----
+**必须同时满足**(缺一项先按下方偏离表处置):
 
-## 这套方案解决什么问题
+- 单块 NVMe SSD,标称 1TB 级(实际可用约 **953GiB**,即"近似但小于 1TB",不是 1TiB);UEFI + GPT 引导;混合显卡(集成显卡 + 独立显卡);允许整盘格式化(两个系统都是全新安装)。
+- 目标系统:**Windows 11 专业版 + Fedora 44 Silverblue**(原子版,GNOME 50,默认 Wayland 会话)。
+- 覆盖范围:三轨道 **W**(只 Windows)/ **L**(只 Silverblue)/ **D**(双系统)+ 共用底座;机器动作量约 9 / 10 / 19 步。
 
-网上多数双系统教程有两条典型死法,本方案就是为绕开它们而设计的:
+**偏离项处置**:
 
-1. **在生产系统上"缩小分区"**。缩容失败、不可移动文件挡路、BitLocker 索要恢复密钥、安装器看不到 NVMe——这些事故几乎都出自"在已有系统上做分区手术"这一步。
-2. **启动顺序指向了 Linux**。装完之后固件 NVRAM 里 Linux 的条目排到了前面。等你哪天格式化掉 Linux 分区,下一次重启就停在 `grub>` / `grub rescue>`,Windows 也一起进不去。
-
-由此立两个前提:
-
-- **整盘重装**:所有分区在安装 Windows 之前一次分好(见 L1),不做后期缩容。分区表只规划一次,容量规划因此可预测。
-- **可撤除**:把"安全删掉 Linux 且不影响 Windows"当作一等公民流程来设计与验收,而不是事后补救。真正保证这一点的不是某个工具,而是下面四条不变量。
-
-两条死法的完整成因分析、被否方案与理由见 [设计文档](design/00-design.md) 第 1 节与第 3 节。
+| 偏离 | 处置 |
+|---|---|
+| 两块及以上磁盘 | 走"双盘分支":Linux 独占一块盘 + 独立 ESP;四条不变量不变 |
+| 容量明显偏离 1TB 级(512GiB / 2TiB) | 按比例调整 `C:` 与 Linux 侧容量;分区布局与四条不变量不变 |
+| 双盘机型且固件只从第一块盘引导 | ESP **必须留在第一块盘**;Linux 分区可放第二块盘,但引导文件不能放第二块盘 |
+| BitLocker 已启用 | 先挂起保护并备份 48 位恢复密钥,再进入 L1;无法挂起则**不适用** |
+| VMD / RAID 锁定、桌面非 GNOME 50、需要磁盘加密 | VMD / RAID 锁定与磁盘加密**不适用于 v1**;桌面走 Kinoite(原子 KDE,Plasma 6.6.4)对等替代 |
 
 ---
 
 ## 四条不变量
 
-这是整个方案的骨架。手册中的任何步骤都不得违反;违反视为设计缺陷,而不是操作失误。遇到"某步骤似乎与不变量冲突"时,先改设计文档,再改手册。
+整个方案的骨架。手册中任何步骤不得违反;违反即视为设计缺陷,而非操作失误。
 
 | 编号 | 不变量 | 防住的事故 |
 |---|---|---|
@@ -37,184 +35,86 @@
 | **I3** | 绝不覆盖 `\EFI\Microsoft\`,绝不修改 `{bootmgr}` 的 `path` | Windows 引导路径被第三方接管,系统更新后翻车 |
 | **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照)——**首次装机时**,分区表在 L1 一次定稿、基线在 L2 生成;**此后的任何分区表或固件变更,都必须先有可用的基线备份** | 除重装外无路可退 |
 
-上表表述与 [设计文档](design/00-design.md) 第 2 节一致。
+**I1–I4 的落地方式(本次修订更新)**:Linux 侧条目(`\EFI\fedora\`)现在写在自己独立的 1GiB ESP 上(I3 由**结构**保证,不再只靠纪律),启动项名称的匹配串以实施时实测为准。另注:I1 举例中的 `\EFI\ubuntu\`(该举例按"逐字不改"要求保留)在本方案对应 `\EFI\fedora\`。
 
-**为什么是这四条**:卡在 `grub` 命令行的根因不是 GRUB 坏了,而是固件 NVRAM 里的启动条目仍指向已被删除的引导文件,并且它排在启动顺序前面。只要 I1 与 I2 成立,即使 Linux 侧被彻底清除,固件也会在失效条目之后继续回落到 Windows。这比"记得先修引导再删分区"可靠——后者依赖人的记忆。
-
-**怎么在机器上证明每条不变量成立**(检查点,详细命令在 L1-L3 各文档中):
-
-| 不变量 | 检查动作 | 通过判据 |
-|---|---|---|
-| I1 | 读固件启动顺序 | 第一位是 Windows Boot Manager(不是 ubuntu) |
-| I2 | 安装 Ubuntu 期间与之后复查启动顺序 | 没有任何步骤写过 `efibootmgr -o`;进 Linux 走一次性 `BootNext` 或厂商菜单键 |
-| I3 | 对比 ESP 上 `\EFI\Microsoft\` 与基线镜像 | 目录树与文件哈希与基线一致;`{bootmgr}` 的 `path` 未被改写 |
-| I4 | **进入 L3 前的 L2 闸门检查** | `baseline/02-preflight-report.md` 结论为"允许进入 L3"(无红项),且四项齐备:ESP 备份 `baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、分区记录(`baseline/01-partitions.txt` 与 `baseline/02-partitions.txt`)、BitLocker 挂起记录(报告里的保护状态行) |
+**为什么是这四条**:网络上"卡 grub 命令行"的根因不是 GRUB 坏了,而是固件 NVRAM 里的启动条目仍指向已被删除的引导文件,且它排在启动顺序前面。只要 I1 与 I2 成立,即使 Linux 侧被彻底清除,固件也会在失效条目后继续回落到 Windows。这比"记得先修引导再删分区"可靠——后者依赖人的记忆。
 
 ---
 
-## 适用设备类
-
-**必须同时满足**(缺一项就不是本方案的目标设备,先按下面的偏离表处置):
-
-- 单块 NVMe SSD,标称 1TB 级(实际可用约 953GiB,即"近似但小于 1TB",不是 1TiB);
-- UEFI + GPT 引导;
-- 混合显卡(集成显卡 + 独立显卡);
-- 允许整盘格式化(Windows 与 Linux 都是全新安装,不存在"保留现有系统"的路径);
-- 目标组合:Windows 11 专业版 + Ubuntu 26.04 LTS。
-
-**偏离项处置**:
-
-| 偏离 | 处置 |
-|---|---|
-| 两块及以上磁盘 | 走"双盘分支":Linux 独占一块盘 + 独立 ESP;四条不变量不变 |
-| 磁盘容量明显偏离 1TB 级(如 512GiB / 2TiB) | 按比例调整 C: 与 Linux 侧容量;分区布局与四条不变量不变 |
-| 已有 ESP 小于 1GiB 且不愿重装 | **不适用**:本方案依赖重装时可直接定尺寸的 ESP |
-| BitLocker 已启用 | 先执行挂起与恢复密钥备份,再进入 L1;无法挂起则**不适用** |
-| VMD / RAID 模式已锁定且无法改为 AHCI/NVMe | **不适用**(Linux 侧看不到磁盘) |
-| 仅独显(无集显) | 走"NVIDIA 单显卡分支":不配置 PRIME offload,显示输出直接由独显承担 |
-| 无法接受 Linux 写入 NTFS | 把共享挂载降级为只读,或改用独立共享分区(变体) |
-| 桌面非 GNOME 50(如 Kubuntu) | 走"桌面替换分支";注意 Kubuntu LTS 支持期为 3 年而非 5 年 |
-| 需要磁盘加密 | **不适用于 v1**(见本文档末节的非目标;LUKS 变体在设计文档第 10 节) |
-| 双盘机型且固件只从第一块盘引导(部分厂商) | ESP **必须留在第一块盘**;Linux 分区可放第二块盘,但引导文件不能放第二块盘 |
-
-偏离表对应的厂商差异(vendor 差异)在实际执行时落到下面的 `VENDOR` 与 `BOOT_MENU_KEY` 两项参数上。
-
----
-
-## 设备参数表
-
-**每台设备部署前填写一份**,与 `baseline/` 的子目录一一对应。手册与模板脚本里的 `DISK`、`ESP_SIZE` 这类写法全部指本表的字段;字段名逐字固定,不得改名、不得新增同义字段。
-
-| 参数 | 含义 | 填写说明 | 示例 |
-|---|---|---|---|
-| `DISK` | Linux 侧设备名 | 在 Ubuntu 安装器的"手动分区"界面确认;与 `DISK_MODEL` 交叉核对 | `/dev/nvme0n1` |
-| `VENDOR` | 固件厂商 | 决定 `BOOT_MENU_KEY` 与固件界面术语 | Dell / HP / Lenovo / ASUS |
-| `BOOT_MENU_KEY` | 厂商启动菜单键 | 开机时按键进入一次性启动菜单(替代改 `BootOrder`) | Dell F12、HP F9、Lenovo F12/F10、通用 ESC |
-| `FIRMWARE_MODE` | 存储控制器模式 | 目标值为 AHCI / NVMe,且 VMD 关闭;必须在装 Windows 之前设定 | AHCI / NVMe(VMD 关闭) |
-| `GPU` | 显卡组合 | 决定 L4 是否配置 PRIME offload | Intel + NVIDIA(混合) |
-| `ESP_SIZE` | 目标 ESP 大小 | 共用 ESP,Windows 与 Ubuntu 各占一部分 | 2GiB |
-| `WINDOWS_SYSTEM_SIZE` | 目标 Windows 系统分区大小 | 只放系统与程序;原地重装时唯一被格式化的分区 | 200GiB |
-| `WINDOWS_DATA_SIZE` | 目标 Windows 数据分区大小 | 同时是双系统共享盘;容量 = 全盘减去其余六项 | ≈635GiB |
-| `ROOT_SIZE` | 目标 root 大小 | Ubuntu 的 `/`;内核在 root 内的 `/boot`,不额外分区 | 100GiB |
-| `SNAPSHOT_SIZE` | 目标快照分区大小 | 挂 `/snapshots`,存放变更前快照 | 15GiB |
-| `SECURE_BOOT` | Secure Boot 目标状态 | 全程保持开启,不关闭、不换密钥 | 开启 |
-| `DISK_MODEL` | 目标磁盘型号(安装前核对,**防装错盘**) | 与整盘格式化前的分区表输出核对 | Samsung MZVLQ1T0HBLB |
-| `DISK_SIZE` | 目标磁盘容量 | 用于验证"容量偏离"是否需要走偏离分支 | 标称 1TB / 约 953GiB |
-| `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | L1 只记录 `D:` 的卷标与分区位置(不含 UUID);UUID 在 L3/L4 由 `blkid` 取得后回填本表,并写入 [templates/fstab.snippet](../templates/fstab.snippet) | 例如 `blkid` 输出的 UUID 值 |
-
-说明:
-
-- `ESP_SIZE` / `WINDOWS_SYSTEM_SIZE` / `ROOT_SIZE` / `SNAPSHOT_SIZE` 是"目标值",写入 L1 的 `diskpart` 脚本;实际分区表以 L1 产物为准并记录偏差。
-- `SHARED_PART_UUID` 是唯一一个安装后才能确定的字段;它在 L4 挂载共享分区时使用,必须在 L3/L4 回填本表后与 `fstab` 里的值一致。
-- 参数表任何一格都不允许写序列号、机器名、用户名;多设备适配靠本表,不靠文档分支。
-
----
-
-## 阶段与文档映射
-
-| 阶段 | 名称 | 手册文档 | 该阶段结束时该有的产物 |
-|---|---|---|---|
-| 入口 | 目标与契约 | 本文件 | 无(读,不执行) |
-| **L0** | 装机前准备 | [01-firmware.md](01-firmware.md) | `baseline/00-firmware.md` |
-| **L1** | Windows 全新安装 | [02-windows.md](02-windows.md) | `baseline/01-partitions.txt`、`01-activation.md`(分区表与激活状态) |
-| **L2** | 预检与基线(硬闸门) | [03-preflight.md](03-preflight.md) | `baseline/02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` |
-| **L3** | Ubuntu 安装 | [04-ubuntu.md](04-ubuntu.md) | `baseline/03-efi-layout.txt` |
-| **L4** | 首启收敛 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`04-robustness.md`(首启收敛与健壮性核对) |
-| **L5** | 退役与救援 | [06-decommission.md](06-decommission.md) + [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |
-| 验收 | 唯一判据 | [08-verification.md](08-verification.md) | 验收清单(A-F 组)全绿 |
-| 风险 | 风险登记表 | [09-risks.md](09-risks.md) | 无(查,不执行) |
-| 附录 | 高频疑问速查 | [10-faq.md](10-faq.md) | 无(查,不执行) |
-
-注:产物名前缀 = 所在阶段号。L1 定稿分区表(`baseline/01-partitions.txt`)并记录激活状态(`baseline/01-activation.md`);ESP 文件树备份(`baseline/02-esp-backup/`,含 `manifest.sha256`)与固件启动项快照(`baseline/02-firmware-entries.txt`)是 **L2 生成的基线产物**(设计文档 4.3),L2 另产出分区快照 `baseline/02-partitions.txt`;四项是否齐备统一由 `baseline/02-preflight-report.md` 判定。
-
-逐项执行时的勾选记录:L0-L4 用 [checklists/deploy.md](../checklists/deploy.md),L5 的退役、引导救援、原地重装两法与基线回滚用 [checklists/rollback.md](../checklists/rollback.md)。
-
-**从哪一节开始读**:
-
-1. 第一次在本设备上部署:先读完本文件,然后严格按 L0 → L1 → L2 → L3 → L4 顺序推进,每阶段完成后再进入下一阶段;动手时对照 [checklists/deploy.md](../checklists/deploy.md) 逐行勾选。
-2. 只想确认"能不能用这套方案":读本文件的"适用设备类"与"目标分区表",再读 [设计文档](design/00-design.md) 第 1、3 节。
-3. 正在装、卡在某一步:回到对应阶段的文档;L2 报红项时不要跳过,先解决再进 L3。
-4. 机器出问题了:先 [07-rescue.md](07-rescue.md)(判断是引导层还是系统盘),**不要直接重装**。
-5. 想删掉 Linux:直接 [06-decommission.md](06-decommission.md),并先读本文档的"阶段产物与交接规则"与四条不变量。
-6. 只想查一件事:先 [10-faq.md](10-faq.md);风险与已知事故看 [09-risks.md](09-risks.md)。
-7. 想改设计:先 [设计文档](design/00-design.md),再回来改手册与参数名。
-
----
-
-## 目标分区表
+## 目标分区表(8 项)
 
 标称 1TB 的 NVMe,实际可用约 953GiB。下表为安装器 / 磁盘管理的 GUI 显示值,`diskpart` 脚本按同一组目标值编写。
 
 | 序号 | 分区 | 大小 | 类型 | 挂载 / 用途 |
 |---|---|---|---|---|
-| 1 | ESP | **2GiB** | EFI System(FAT32) | Windows 与 Ubuntu 共用;Ubuntu 侧挂 `/boot/efi` |
+| 1 | ESP-Windows | **2GiB** | EFI System(FAT32) | **只给 Windows**;只放 `\EFI\Microsoft\` 与 `\EFI\BOOT\` |
 | 2 | MSR | 16MiB | Microsoft Reserved | Windows 保留 |
 | 3 | Windows 系统 C: | **200GiB** | NTFS | 系统与程序;**原地重装时唯一被格式化的分区** |
-| 4 | Windows 数据 D: | **≈635GiB** | NTFS | 游戏库、下载、文档、容器镜像;已知文件夹重定向的目标;双系统共享分区 |
-| 5 | Ubuntu root | **100GiB** | ext4 | `/`(内核位于 root 内的 `/boot`,不额外分区) |
-| 6 | Snapshot | **15GiB** | ext4 | `/snapshots`,变更前快照的存放位置 |
-| 7 | WinRE | 1GiB | Recovery | Windows 恢复环境,置于磁盘末尾 |
+| 4 | Windows 数据 D: | **≈635GiB** | NTFS | 游戏库、下载、文档、容器镜像;已知文件夹重定向的目标;**双系统共享分区** |
+| 5 | **ESP-Fedora** | **1GiB** | EFI System(FAT32) | Silverblue 独立 ESP;只放 `\EFI\fedora\`;挂 `/boot/efi` |
+| 6 | **`/boot`** | **1GiB** | ext4 | 原子版**必须独立**;每个 deployment 的内核与 initrd 在此 |
+| 7 | **Fedora root** | **≈113GiB** | btrfs | `/`;ostree 部署 + `var` 子卷(`/home` 是到 `/var/home` 的符号链接) |
+| 8 | WinRE | 1GiB | Recovery | Windows 恢复环境,置于磁盘末尾 |
 
-合计 ≈953GiB(2 + 0.016 + 200 + 635 + 100 + 15 + 1)。其中:
+合计 ≈ 953GiB:2 + 0.016 + 200 + 635 + 1 + 1 + 113 + 1。Fedora 侧合计 **115GiB**(= 1 + 1 + 113),与参数表一致。
 
-- Linux 侧合计 115GiB(= root 100 + Snapshot 15);
-- 共享数据盘 `D:` ≈635GiB,约占全盘(约 953GiB)三分之二;
-- 无 swap 分区,交换空间由 zram 与 swapfile 在 L4 配置;
-- ESP 尺寸不允许被削减;若 Windows 安装程序自行新建恢复分区并占用预留空间,记录偏差并据实调整。
-
-为什么把 Windows 也拆成系统盘与数据盘,见 [设计文档](design/00-design.md) 第 5.1.1 节。
+- **Fedora 侧三块分区在 L1 预留的 115GiB 未分配区内创建**:L1 的 `diskpart` 只分到 `D:` 为止,余量**不分配**;L3 安装器在这个区间里切出上述三块(ESP-Fedora 1GiB + `/boot` 1GiB + root ≈113GiB)。共享数据盘 `D:` ≈635GiB NTFS(约占全盘三分之二,两个系统都能读写);无 swap 分区,交换空间由 zram 与 swapfile 在 L4 配置;ESP 尺寸不允许被削减,若 Windows 安装程序自行占用预留空间则记录偏差并据实调整。
 
 ---
 
-## 阶段产物与交接规则
+## 设备参数表
 
-1. **没有产物的阶段视为未完成**,不得进入下一阶段。
-2. **`baseline/` 不入库**(含单机信息:分区表、ESP 镜像、固件启动项、激活状态);仓库内只保留结构与命名规范,每台设备一个子目录。
-3. **L2 是唯一硬闸门**:存在红项则禁止进入 L3;存在黄项则记录后带风险继续。
-4. **L1 与 L2 必须在同一次会话内连续完成**:中途若 Windows 发生更新,基线即失效,须重做。
-5. **L3 期间不改动 `BootOrder`**(I2 的落地方式)。
-6. **L4 任何驱动变更之前**,先确认"回 Windows 的入口"可用。
+每台设备部署前填一份,与 `baseline/` 的子目录一一对应;字段名逐字固定,不得改名、不得新增同义字段。
 
----
+| 参数 | 含义 | 示例 |
+|---|---|---|
+| `DISK` | Linux 侧设备名 | `/dev/nvme0n1` |
+| `VENDOR` | 固件厂商 | Dell / HP / Lenovo / ASUS |
+| `BOOT_MENU_KEY` | 厂商启动菜单键 | Dell F12、HP F9、Lenovo F12/F10、通用 ESC |
+| `FIRMWARE_MODE` | 存储控制器模式 | AHCI / NVMe(VMD 关闭) |
+| `GPU` | 显卡组合 | Intel + NVIDIA(混合) |
+| `ESP_SIZE` | 目标 ESP-Windows 大小 | 2GiB |
+| `FEDORA_ESP_SIZE` | 目标 ESP-Fedora 大小(**新增**) | 1GiB |
+| `BOOT_SIZE` | 目标 `/boot` 大小(**新增**) | 1GiB(ext4,必须独立) |
+| `ROOT_SIZE` | 目标 Fedora root 大小(**新增**) | ≈113GiB(btrfs) |
+| `UBLUE_IMAGE` | ublue NVIDIA 变体的镜像与分支引用(**新增**;值**待核实**) | 形如 `ostree-image-signed:docker://ghcr.io/ublue-os/<变体>-nvidia:<分支>` |
+| `WINDOWS_SYSTEM_SIZE` | 目标 Windows 系统分区大小 | 200GiB |
+| `WINDOWS_DATA_SIZE` | 目标 Windows 数据分区大小 | ≈635GiB |
+| `SECURE_BOOT` | Secure Boot 目标状态 | 开启 |
+| `DISK_MODEL` | 目标磁盘型号(安装前核对,**防装错盘**) | Samsung MZVLQ1T0HBLB |
+| `DISK_SIZE` | 目标磁盘容量 | 标称 1TB / 约 953GiB |
+| `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | 安装后由 `blkid` 获取 |
 
-## 文档写作规范
-
-`01-*` 至 `09-*` 各文档统一遵守下列约定:
-
-1. **六段式章节**:每份手册依次包含 `## 目标`、`## 前置条件`、`## 步骤`、`## 验证`、`## 失败处理`、`## 回滚`。本文件不受此约束;[10-faq.md](10-faq.md) 为附录,已按同构的六段标题书写,`check-docs.sh` 仍在白名单里排除它(只跳过六段式校验,链接与 emoji 检查照常执行)。
-2. **步骤级粒度**:每步写清"做什么 + 关键命令 + 怎么知道成功了";不追求逐条可复制的命令级,也不写只有结论的说明级。
-3. **禁用 emoji**:文档、脚本、提交信息一律不用 emoji;需要视觉区分时用文字符号。
-4. **步骤编号从 1 开始**:每份文档内的步骤独立编号,不跨文档连续编号。
-5. **每条命令必须给出"期望输出"或"验证方式"**;无法给出可观测判据的步骤,应改为检查点或删除。
-6. **自检**:改完任一文档后运行 [check-docs.sh](../scripts/repo/check-docs.sh)(`bash scripts/repo/check-docs.sh docs/<文件>.md`),期望输出 `check-docs: OK`。不传参数运行时会对尚未写出的文档报 `MISSING`,属预期。
-
----
-
-## 不做什么(v1 非目标)
-
-以下能力明确不在 v1 范围内,遇到相关需求应说明"不适用"并给出替代路径,不要现场扩展方案:
-
-- 用户数据与浏览器凭据迁移;
-- 磁盘加密与 TPM-FDE;
-- 休眠;
-- btrfs 快照回滚;
-- 自定义 Secure Boot 密钥;
-- 图形化安装器;
-- 多发行版模板(本方案只针对 Ubuntu 26.04 LTS)。
-
-砍掉这些不是省事:它们的失败模式(凭据泄露、TPM 与引导链测量冲突、休眠与 NVIDIA + Wayland 冲突、自签密钥触发 BitLocker 恢复)会把方案从"可复现"拖成"每次都得现场救火"。依据见 [设计文档](design/00-design.md) 第 1.3 节。
-
-**注意**:"两个系统都能访问的共享数据分区"(即 `D:`)不属于非目标,它是 v1 的正式组成部分。
+- Linux 侧参数由旧方案的"`ROOT_SIZE` 100GiB + `SNAPSHOT_SIZE` 15GiB"改为"`FEDORA_ESP_SIZE` 1GiB + `BOOT_SIZE` 1GiB + `ROOT_SIZE` ≈113GiB"(`SNAPSHOT_SIZE` 不再存在);`UBLUE_IMAGE` 的镜像名与分支、`ujust` 任务名、MOK 密码**均须在实施时核实**,未核实前不得写成确定步骤。
+- `*_SIZE` 各字段是"目标值",写入 L1 的 `diskpart` 脚本,实际分区表以 L1 产物为准并记录偏差;`SHARED_PART_UUID` 是唯一一个安装后才能确定的字段,回填后必须与 [templates/fstab.snippet](../templates/fstab.snippet) 里的值一致。
 
 ---
 
-## 已知事故类型(先看这一条再动手)
+## 原子版硬语义与两项否决
 
-**2024-08 SBAT / Secure Boot DBX 更新导致 Linux 无法引导**:微软通过 Windows 更新推送的 Secure Boot DBX 更新,会把若干 Linux 引导器的 SBAT 版本判为"过旧",在部分双系统设备上更新后无法引导进 Linux(微软已确认该问题存在)。装完 Windows 后第一次正常联网更新就可能触发,所以动手前先知道处置方式。
+- **`/usr` 只读**:系统本体由 ostree 管理,不能就地 `dnf install`;系统级工具必须用 `rpm-ostree install` 分层。
+- **分层安装需重启**:每次分层 / 更新 / rebase 都产生**新 deployment**,必须重启才生效;判据要区分"命令成功"与"重启后生效"。
+- **`/var` 与 `/home` 不随部署回滚**:`/var/home` 是真正的家目录,`/home` 是指向它的符号链接;回滚系统不回退用户数据(用户数据不丢),这也是"只重装 root 时数据可保留"的前提。
 
-缓解手段两条:
+口径补充:GUI 应用优先 Flatpak,开发环境走 `toolbox` / `distrobox`;回滚粒度四级 —— 单步撤销 -> 部署级(`rpm-ostree rollback` 或 GRUB 菜单选上一个 deployment)-> 基线级(ESP / NVRAM)-> 阶段级(退役)。
 
-1. **清理 SBAT 策略**:在 Windows 侧清除固件下发的 SBAT 策略(注册表中 `SbatLevel` 相关值),重启后固件不再因 SBAT 版本过旧而拒绝 Linux 引导器;随后按 [07-rescue.md](07-rescue.md) 复原引导。
-2. **常备安装 U 盘**:Ubuntu 安装 U 盘在装机结束后不回收,保持"已验证可用"状态;引导被拒时从 U 盘进入 live 环境修复,而不是原地重装。
+**明确否决两项**:**不使用 snapd**(应用分发走 Flatpak,系统层走 `rpm-ostree` 分层);**不使用 snapper / grub-btrfs / btrfs 快照**(回滚是系统部署级,不是文件系统快照级,v1 非目标里已剔除一切 btrfs 快照回滚与第三方快照工具)。
 
-其余事故类型(Windows 更新重写 ESP、BitLocker 恢复提示、Secure Boot 下 NVIDIA 模块签名、两系统间时间与蓝牙状态分裂等)与完整缓解手段登记在 [09-risks.md](09-risks.md)。
+---
+
+## 三轨道地图
+
+| 轨道 | 步骤(做什么) | 去哪份文档 | 产出什么 |
+|---|---|---|---|
+| **共用底座**(三条轨道都要) | 固件设置 -> 做两个安装介质(Windows 11 ISO + Fedora Silverblue 镜像)-> 核对目标盘 -> 落 L0 产物 | [01-firmware.md](01-firmware.md) | `baseline/00-firmware.md`(含 `BootOrder` 首位原值) |
+| **W** L1 | 整盘分区(整盘重排,一次分好)-> 装 Windows -> 关快速启动与休眠 -> 已知文件夹重定向 -> 激活 -> 落 L1 产物 | [02-windows.md](02-windows.md) | `baseline/01-partitions.txt`、`baseline/01-activation.md` |
+| **W** L2 闸门 | 只读体检 -> 读闸门结论(红项停)-> 基线备份 -> 落 L2 产物 | [02-windows.md](02-windows.md) | `baseline/02-preflight-report.md`、`baseline/02-esp-backup/`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` |
+| **L** L3 | UEFI 启动进 live -> 在 115GiB 预留区手工建 Fedora 三块分区(Anaconda 只指定挂载点,不动 Windows 的 ESP)-> 装完重启验证 -> 落 L3 产物 | `04-silverblue.md` | `baseline/03-efi-layout.txt` |
+| **L / D** L4 | 首启收敛:共享盘挂载 / 家目录重定向 / 显卡驱动与 MOK(rebase 到 ublue NVIDIA 变体)/ 时间 / 蓝牙 / zram 与 swapfile / journald 与更新策略 / SSH 与 SMART / **部署回滚** / 发行版升级 / 回 Windows 入口 / 落 L4 产物 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`baseline/04-robustness.md` |
+| **D** 共存增量 4 步 | 115GiB 预留(在 L1 做)/ 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 | 落在 [02-windows.md](02-windows.md)、[05-first-boot.md](05-first-boot.md)、[07-rescue.md](07-rescue.md) | 见对应轨道的产物 |
+| **D** L5 | 退役与救援:判层 / 从 grub 提示符回去 / Windows 侧修引导 / 只重装某一系统 / 基线回滚 / 周期巡检 / 应急纪律 / 退役五步 | [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |
+| 验收 / 查询 | A-F 六组勾选(唯一判据);症状速查 + 分阶段风险(34 条风险总表在 [设计文档](design/00-design.md) 第 9 节) | [08-verification.md](08-verification.md)、[10-faq.md](10-faq.md) | 每台设备填写版落 `baseline/` |
+
+- **共用卡 vs 专属卡**:固件、安装介质、目标盘核对、KMS 激活与"部署回滚演练"属共用或双轨复用;**双系统专属**只有 4 条 —— 115GiB 预留、引导不变量核查(`BootOrder` 首位 = Windows Boot Manager)、`ntfs3` 共享盘、退役与救援。
+- 逐项勾选:L0-L4 用 [checklists/deploy.md](../checklists/deploy.md),L5 用 [checklists/rollback.md](../checklists/rollback.md)。交接规则:没有产物的阶段视为未完成,不得进入下一阶段;`baseline/` 不入库(含单机信息,每台设备一个子目录);L2 是唯一硬闸门(红项禁止进 L3);L1 与 L2 必须在同一次会话内连续完成;L4 任何驱动 / 分层 / 升级变更之前先确认"回 Windows 的入口"可用,并先 `rpm-ostree pin` 当前部署。
+- 写作规范:旧的六段式体裁已作废、不再复述;卡格式(R1-R7)、文档级约定与引用写法见 [01-playbook-reshape-design.md](design/01-playbook-reshape-design.md) 第 3 节,依据只留指针;改完任一文档后运行 [check-docs.sh](../scripts/repo/check-docs.sh),期望 `check-docs: OK`(不传参数会对尚未写出的文档报 MISSING,属预期)。
