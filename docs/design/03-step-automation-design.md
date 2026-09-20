@@ -9,7 +9,7 @@
 
 ## 1. 背景与目标
 
-现状:**43 张动作卡**(底座 4 / 轨道 W 10 / 轨道 L 4 / 首启收敛 12 / 退役与救援 13;卡号按 `01-playbook-reshape-design.md` 第 4 节的三轨道结构)对应 **18 个脚本**,其中真正覆盖动作的约 10 个,缺的恰是最危险的 L5(删分区、清 NVRAM)与 07(救援)。
+现状:**46 张动作卡**(底座 4 / 分盘 4 / 轨道 W 9 / 轨道 L 4 / 首启收敛 12 / 退役与救援 13;卡号按 `01-playbook-reshape-design.md` 第 4 节的"三轨道 + 分盘前置章节"结构)对应 **18 个脚本**,其中真正覆盖动作的约 10 个,缺的恰是最危险的 L5(删分区、清 NVRAM)与 07(救援)。
 
 目标:**每个动作卡都有一个脚本**,卡里的"做:"就是"跑哪个脚本、看什么判据";人工只保留两类无法自动化的动作(固件设置界面的开关、Anaconda 里的点击)。
 
@@ -49,7 +49,7 @@
 **硬规则**
 
 1. 每个脚本 ≤200 行;超出则拆文件(拆出的公共逻辑放库文件,不计入卡)。
-2. 脚本头必须有一行 `# 对应卡:NN-K`(或 `# Card: NN-K`),与卡一一对应;一脚本服务多张卡时写逗号列表(`# 对应卡:02-9,07-10`);
+2. 脚本头必须有一行 `# 对应卡:NN-K`(或 `# Card: NN-K`),与卡一一对应;一脚本服务多张卡时写逗号列表(`# 对应卡:03-9,07-10`);
 3. 库文件(不被卡直接调用的)写 `# 库文件:非步骤脚本`,并进入 C9 白名单;
 4. 脚本默认 dry-run 的语义**不允许反转**(任何脚本都不许"默认就执行");
 5. 未在真机验证过的命令,脚本内注释标 `# 待核实(以官方文档为准)`,并在 `--check` 输出里以 `需人工` 呈现;
@@ -123,9 +123,9 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 步骤索引文件:`scripts/windows/steps.tsv`、`scripts/linux/steps.tsv`(列:步骤号、脚本路径、是否破坏性、说明)。总控读它分发,C9d 也校验它的一致性:脚本路径必须存在且属本侧、本侧步骤脚本必须登记进索引、破坏性列 ∈ {0,1}、索引步骤号必须落在脚本头卡号集合里、同一索引内步骤号不得重复(一脚本服务多张卡时按步骤号各占一行,同一脚本路径允许出现多行)。**索引行不是装饰**:它既是总控的分发表,也是“这一步会不会改系统”的第二道记录。
 
-## 6. 逐卡脚本映射表(43 张动作卡 → 脚本)
+## 6. 逐卡脚本映射表(46 张动作卡 → 脚本)
 
-**图例**:`[有]` 已存在(可能需加 `--check/--json` 契约);`新` = 本次新增;`人工` = 无法自动化(卡内标注)。卡号取 `01-playbook-reshape-design.md` 第 4 节的三轨道结构(底座 = 01 / 轨道 W = 02 / 轨道 L = 04 / 首启收敛 = 05 / 退役与救援 = 07)。
+**图例**:`[有]` 已存在(可能需加 `--check/--json` 契约);`新` = 本次新增;`人工` = 无法自动化(卡内标注)。卡号取 `01-playbook-reshape-design.md` 第 4 节的"三轨道 + 分盘前置章节"结构(底座 = 01 / **分盘(安装前的前置章节)= 02** / **轨道 W = 03** / 轨道 L = 04 / 首启收敛 = 05 / 退役与救援 = 07)。
 
 | 卡 | 动作 | 脚本 |
 |---|---|---|
@@ -133,16 +133,19 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 01-2 | 做两个安装介质 | 新 `windows/verify-install-media.ps1`(校验 ISO 存在与哈希、列出可移动盘;写入由 Ventoy 人工) |
 | 01-3 | 核对目标盘 | [有] `windows/preflight.ps1 -Only target-disk`(需新增 `-Only`) |
 | 01-4 | 落 L0 产物 | 新 `windows/collect-l0.ps1` |
-| 02-1 | diskpart 预建分区(含 115GiB 预留) | 新 `windows/create-partitions.ps1`(--apply 生成并执行 diskpart 脚本;前置断言:磁盘当前无有效分区表) |
-| 02-2 | 装 Windows | 新 `windows/verify-windows-baseline.ps1`(安装为人工;脚本核对版本/分区/WinRE 偏差) |
-| 02-3 | 关 Fast Startup 与休眠 | 新 `windows/disable-faststartup.ps1` |
-| 02-4 | 已知文件夹重定向 | 新 `windows/redirect-known-folders.ps1`(--check 读 `User Shell Folders` 比对) |
-| 02-5 | KMS 激活 | 新 `windows/check-activation.ps1`(激活动作人工、外链;脚本只读状态) |
-| 02-6 | 落 L1 产物 | 新 `windows/collect-l1.ps1` |
-| 02-7 | 跑只读体检 | [有] `windows/preflight.ps1` |
-| 02-8 | 读闸门结论 | 新 `windows/check-gate.ps1`(解析报告 → PASS/FAIL 并列红项) |
-| 02-9 | 跑基线备份 | [有] `windows/backup-esp.ps1`(加 `--check`:校验已有备份的 `manifest.sha256`) |
-| 02-10 | 落 L2 产物 | 新 `windows/collect-l2.ps1` |
+| 02-1 | 分盘总则与三种轨道的目标布局(8 项分区表 + 铁律) | 新 `windows/check-partition-layout.ps1`(--check 读 `Get-Disk`/`Get-Partition` 对照定稿布局逐项判定;总则与铁律本身是纪律条款,无写动作) |
+| 02-2 | 轨道 W 的分盘(只装 Windows) | 新 `windows/check-partition-layout.ps1 -Track W`(安装器自动分区为人工;脚本只核对 Windows 侧布局与"未预留 Linux 空间") |
+| 02-3 | 轨道 L 的分盘(只装 Silverblue) | 新 `linux/check-partition-plan.sh`(live 环境内核对 ESP-Fedora / `/boot` / root 三块;Anaconda 分区动作人工;**与 04-2 同一脚本**) |
+| 02-4 | 轨道 D 的分盘(双系统,含 115GiB 预留) | 新 `windows/create-partitions.ps1`(--apply 生成并执行 diskpart 脚本;前置断言:磁盘当前无有效分区表)+ 新 `windows/check-partition-layout.ps1` 复读核对 |
+| 03-1 | 装 Windows | 新 `windows/verify-windows-baseline.ps1`(安装为人工;脚本核对版本/分区/WinRE 偏差) |
+| 03-2 | 关 Fast Startup 与休眠 | 新 `windows/disable-faststartup.ps1` |
+| 03-3 | 已知文件夹重定向 | 新 `windows/redirect-known-folders.ps1`(--check 读 `User Shell Folders` 比对) |
+| 03-4 | KMS 激活 | 新 `windows/check-activation.ps1`(激活动作人工、外链;脚本只读状态) |
+| 03-5 | 落 L1 产物 | 新 `windows/collect-l1.ps1` |
+| 03-6 | 跑只读体检 | [有] `windows/preflight.ps1` |
+| 03-7 | 读闸门结论 | 新 `windows/check-gate.ps1`(解析报告 → PASS/FAIL 并列红项) |
+| 03-8 | 跑基线备份 | [有] `windows/backup-esp.ps1`(加 `--check`:校验已有备份的 `manifest.sha256`) |
+| 03-9 | 落 L2 产物 | 新 `windows/collect-l2.ps1` |
 | 04-1 | UEFI 启动进 live | [有] `windows/set-bootnext.ps1`(扩展 `-Device USB`:设置一次性从 U 盘启动) |
 | 04-2 | 手动分区(Anaconda) | 新 `linux/check-partition-plan.sh`(在 live 里跑:读 `lsblk`/`blkid`/`sgdisk -p` 比对计划,输出"下一步该建什么";分区动作人工;含"不让安装器动 Windows ESP"的前置提示) |
 | 04-3 | 装完重启验证 | 新 `linux/verify-l3.sh`(btrfs 与 ostree 部署、两块 ESP 各自内容、GRUB 部署条目、`BootOrder` 首位) |
@@ -174,6 +177,8 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 07-13 | 只停用不删 | 新 `windows/disable-linux-entry.ps1` |
 | 08-A…F | 验收六组 | 新 `windows/verify-all.ps1`、新 `linux/verify-all.sh` + 两个 `collect-*` 复用 |
 
+**本次结构变更对映射表的影响**:原轨道 W 的 02-1 diskpart 预建分区(含 115GiB 预留)一卡与其脚本 `windows/create-partitions.ps1` **整体移入分盘前置章节**(落 02-4 轨道 D 的分盘 — 只有轨道 D 才需要 diskpart 预建与 115GiB 预留);分盘章节另新增一张核对脚本 `windows/check-partition-layout.ps1`,覆盖 02-1/02-2/02-4 三张卡(轨道 L 的 02-3 复用 04-2 的 `linux/check-partition-plan.sh`);原 02-2…02-10 九张卡顺序不变,整体改号为 03-1…03-9。
+
 **库文件与既有脚本的改写(不进卡映射表)**:
 
 | 文件 | 处置 |
@@ -186,7 +191,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | **删除** `linux/snapshot.sh`、`linux/set-snapshots.sh` | 不再存在(快照体系已作废,回滚由卡 05-9 的 `dbk-rollback.sh` 承担) |
 | 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受原子版语义影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约 |
 
-**合计**:新增 **34 个步骤脚本**(底座 3 / 轨道 W 8 / 轨道 L 3 / 首启收敛 8 / 退役与救援 10 / 验收 2)+ **4 个库**(两侧各二:`linux/dbk-cli.sh`+`linux/dbk-obs.sh`、`windows/dbk-cli.ps1`+`windows/dbk-obs.ps1`)+ **2 个步骤索引**(`linux/steps.tsv`、`windows/steps.tsv`)+ **2 个总控**(`dbk.sh`、`dbk.ps1`)= **42 个新文件**(比上一版少 1 个步骤脚本:卡 05-9 由两个脚本缩为一个,`snapshot.sh`/`set-snapshots.sh` 删除;另加两侧可观测性库 2 个,见第 2.1 节)。
+**合计**:新增 **35 个步骤脚本**(底座 3 / **分盘 2**(`windows/check-partition-layout.ps1` 新增 + `windows/create-partitions.ps1` 由轨道 W 移入)/ 轨道 W 7 / 轨道 L 3 / 首启收敛 8 / 退役与救援 10 / 验收 2;其中轨道 L 的 `linux/check-partition-plan.sh` 同时服务 02-3 与 04-2,按文件只计一次)+ **4 个库**(两侧各二:`linux/dbk-cli.sh`+`linux/dbk-obs.sh`、`windows/dbk-cli.ps1`+`windows/dbk-obs.ps1`)+ **2 个步骤索引**(`linux/steps.tsv`、`windows/steps.tsv`)+ **2 个总控**(`dbk.sh`、`dbk.ps1`)= **43 个新文件**(较上一版多 1 个步骤脚本:`windows/check-partition-layout.ps1` 是分盘前置章节的核对脚本;卡 05-9 仍为一个脚本,`snapshot.sh`/`set-snapshots.sh` 仍删除;两侧可观测性库 2 个见第 2.1 节)。
 另需给既有脚本补 `--check/--json` 契约:**7 个**(`preflight.ps1`、`backup-esp.ps1`、`verify-baseline.ps1`、`set-bootnext.ps1`、`mount-shared.sh`、`xdg-redirect.sh`、`storage.sh`);`graphics.sh`(拆 + 改 rebase/MOK)与 `hardening.sh`(拆 + 改 rpm-ostree 语义)、`dbk-apt.sh`→`dbk-pkg.sh`→**`dbk-ostree.sh`** 的改写归 `02-fedora-atomic-variant-design.md` 第 8 节的任务(四个 PowerShell 脚本不受影响)。
 
 ## 7. 夹具测试要求(每个脚本的最低验证)
@@ -202,7 +207,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 | 项 | 代价 |
 |---|---|
-| 规模 | 新增 **42 个脚本类文件**(其中 34 个是步骤脚本、4 个契约库);仓库脚本总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **58 个**;实施任务从 21 个增到约 28 个 |
+| 规模 | 新增 **43 个脚本类文件**(其中 35 个是步骤脚本、4 个契约库);仓库脚本总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **59 个**;实施任务从 21 个增到约 29 个 |
 | 审查 | 每个脚本都要过"实现 + 审查 + 修复轮",工作量约翻倍 |
 | **验证等级** | 这些脚本**全部无法在真机上验证**(无 Fedora/无第二台 Windows)→ 只有夹具级验证。文档与**脚本头**都必须标注"夹具级验证,真机未跑";`08-verification.md` 的参考设备首次真跑即是对全套脚本的首次真机验证 |
 | 收益 | 每步可自动判定(减少"照着文档敲错"),危险步骤有前置断言与复读(比人手工点更安全),卡与脚本双向绑定(C9)防脱钩 |
@@ -219,3 +224,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 2026-09-20 | 修复轮 1(任务 1 审查修正 + 用户新增硬要求 O-1):第 2 节新增 **2.1 可观测性**——失败不得只给退出码、三处可见(stderr / `--log` / JSON `checks[]`)、opt-in 的 `dbk_enable_errtrap`、库层不吞 stderr、PS 侧 UTF-8 输出;新增两侧可观测性库 `scripts/linux/dbk-obs.sh` 与 `scripts/windows/dbk-obs.ps1`(第 4 节 C9d 白名单与 `check-docs-lib.sh` 的 WL 两处同步);CLI 取值错误(`--log`/`--step` 缺值或空值)改为用法错误 64 且不落盘(不再经 `die()`);破坏性脚本必须在脚本头声明 `# 破坏性:1`,由库层在执行前拦 `--apply` 缺 `--yes`;卡头支持逗号列表(一脚本服务多张卡)与行首 BOM,C9b/C9d 同步升级并新增破坏性列、步骤号一致性、重复步骤号三项交叉校验;`--json` 增加 `message` 字段并在判据为空时补一条失败项;库不再替调用方打开 `errexit`;`--log` 缺省口径明确为“库不落盘、需要时由步骤脚本调 `dbk_log_default`/`Set-DbkLogDefault`”;第 6 节增库文件行与重算合计(42 个新文件 / 总数 58);第 7 节夹具新增第 6 条“失败必须可表现”;夹具套件新增 4 个样例仓库(带 BOM 的 `.ps1` 卡头、多卡列表头、破坏性列非法、步骤号重复) |
 | 2026-09-20 | **用户撤回指令**:用户声明触发 2.1 节的那条指令为错误输入并撤回其相关生成内容。裁定:2.1 节与两侧可观测性库**保留为工程约定**(非用户需求,已在 2.1 开头加归因说明);同批提交中来自**审查者发现**的修复(C-1、I-1…I-5、M-1…M-5、F3/F5…F8)**不受影响**。 |
 | 2026-09-20 | 修复轮 2(任务 1 收尾):errtrap 触发后进程必须以 1 退出(trap 报完即 `exit "$DBK_FAIL"`,不再泄漏失败命令自身状态;JSON 只输出一次);`dbk_enable_errtrap` 新增 `errexit` 断言(未开 `set -e` 误用 → 64),`dbk_report` 新增第二道防线(已有 errtrap 条目时拒绝 PASS → 64);PS 侧 `Get-DbkHeaderField` 改 `-CaseSensitive`,与 C9b 的 `CARDRE` 对齐;第 2.1 节补 errtrap 退出码/误用防护/PS 两条已知差异(`-Log`/`-Step` 缺值被 PS 参数绑定拦下退 1、空串被归一成“未给”)与 `.gitattributes` 行尾约定;`check-docs-repo.sh` 的重复步骤号改报真实行号;两侧夹具新增 6 条断言(errtrap 退出码 2、未开 `set -e` 误用 1、errtrap 后报 PASS 1、PS errtrap/opt-in 各 1) |
+| 2026-09-20 | **结构重构:分盘抽为安装前的前置章节**(用户裁定,与 `01-playbook-reshape-design.md` 同步):第 1/6 节按新基数重算——动作卡 43 -> **46 张**(底座 4 / 分盘 4 / 轨道 W 9 / 轨道 L 4 / 首启收敛 12 / 退役与救援 13);映射表把原 02-1 diskpart 预建分区 一卡与其脚本 `windows/create-partitions.ps1` 移入分盘章节(落 02-4 轨道 D 的分盘),原 02-2…02-10 九张卡改号为 03-1…03-9,并新增 02-1/02-2/02-3 三行(核对脚本 `windows/check-partition-layout.ps1`、`linux/check-partition-plan.sh`);第 6 节合计与第 8 节代价表重算(**35 个步骤脚本 / 43 个新文件 / 总数 59**);第 2–5 节 CLI 契约与第 7 节夹具要求不动 |

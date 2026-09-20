@@ -62,7 +62,7 @@ function Get-DbkHeaderField {
   return ''
 }
 
-# Get-DbkCardTokens <文本>:把「02-9,07-10」之类抽成空格分隔的卡号列表。
+# Get-DbkCardTokens <文本>:把「03-9,07-10」之类抽成空格分隔的卡号列表。
 function Get-DbkCardTokens {
   param([string]$Text = '')
   if (-not $Text) { return '' }

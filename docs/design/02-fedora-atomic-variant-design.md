@@ -147,7 +147,7 @@
 | `mount-shared.sh`、`xdg-redirect.sh`、`bt-keys-sync-wrapper.sh`、`reboot-to-windows.sh` | 仅文案/语义微调(路径与单元名不变) |
 | PowerShell 四个脚本 | **完全不受影响** |
 
-**文档**:11 份 → **约 7 份**(底座 / 轨道 W / 轨道 L / 轨道 D 共存增量 / 退役与救援 / 验收 / FAQ);`04-ubuntu.md` 当年改名 `04-fedora.md` 的动作,现改为 **`04-silverblue.md`**(安装手册)。
+**文档**:11 份 → **约 8 份**(底座 / **分盘前置章节** / 轨道 W / 轨道 L / 轨道 D 共存增量 / 退役与救援 / 验收 / FAQ);`04-ubuntu.md` 当年改名 `04-fedora.md` 的动作,现改为 **`04-silverblue.md`**(安装手册)。
 
 ## 9. 验收与风险增补
 
