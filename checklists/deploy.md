@@ -50,7 +50,7 @@
 
 **本阶段产物**:`baseline/03-efi-layout.txt` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L3-1 以 UEFI 模式从安装 U 盘启动(先确认 `/sys/firmware/efi` 存在),选"手动分区" | 见 [04-ubuntu.md](../docs/04-ubuntu.md) 步骤 1
+- `[ ]` L3-1 以 UEFI 模式从安装 U 盘启动(先确认 `/sys/firmware/efi` 存在),选"手动分区" | 见 [04-silverblue.md](../docs/04-silverblue.md) 步骤 1
 - `[ ]` L3-2 只切两块新分区:root 100GiB ext4 挂 `/`、Snapshot 15GiB ext4 挂 `/snapshots`;ESP 复用挂 `/boot/efi` 且**不勾选格式化**;不建 swap 分区 | 判据:只有 root 那一行带格式化勾选 | 步骤 2
 - `[ ]` L3-3 确认引导写入 `\EFI\ubuntu\`,期间**不改 `BootOrder`** | 判据:装完 `\EFI\` 下 `Microsoft` 与 `ubuntu` 并存,`BootOrder` 首位仍是 Windows Boot Manager | 步骤 3
 - `[ ]` L3-4 Secure Boot 全程保持开启 | 判据:`mokutil --sb-state` 显示已启用 | 步骤 4

@@ -169,7 +169,7 @@ boot
 
 1. **先确认现场**:在 Windows 管理员会话跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1)(后面步骤 2 第 4、5 条),确认 `\EFI\Microsoft\` 与 `{bootmgr}` 没被改动;
 2. **判断要不要修 Linux 侧**:
-   - 只是 NVRAM 条目指向的文件名不对(比如条目写 `grubx64.efi` 而 ESP 上只有 `shimx64.efi`)→ 在 Ubuntu 里用 `sudo efibootmgr -b <编号> -B` **删除该条目**,再从 live 环境用显式盘/分区重建:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(命令只新建条目,**绝不用 `-o` 调顺序**;口径与 [L3 手册](04-ubuntu.md) 的失败处理一致);
+   - 只是 NVRAM 条目指向的文件名不对(比如条目写 `grubx64.efi` 而 ESP 上只有 `shimx64.efi`)→ 在 Ubuntu 里用 `sudo efibootmgr -b <编号> -B` **删除该条目**,再从 live 环境用显式盘/分区重建:`sudo efibootmgr -c -d /dev/nvme0n1 -p 1 -L ubuntu -l '\EFI\ubuntu\shimx64.efi'`(命令只新建条目,**绝不用 `-o` 调顺序**;口径与 [L3 手册](04-silverblue.md) 的失败处理一致);
    - 文件真丢了(`\EFI\ubuntu\` 被更新重写或清掉)→ 先走步骤 3 复原 `\EFI\Microsoft\`,再按步骤 3.1(b) 的具体步骤从 live 环境重建 Ubuntu 引导文件:`chroot` 后 `grub-install --efi-directory=/boot/efi --bootloader-id=ubuntu`(它自建 NVRAM `ubuntu` 条目,不要再手工 `efibootmgr -c`)+ `update-grub`,最后断言 `BootOrder` 首位仍是 `Windows Boot Manager`、`ubuntu` 在末尾(若出现重复条目,按 3.1 用 `sudo efibootmgr -b <编号> -B` 清理);
 3. **不要顺手改启动顺序**:修完 `BootOrder` 首位必须仍是 `Windows Boot Manager`,`ubuntu` 在末尾(设计 8-A)。顺序被改动的场景走步骤 6;
 4. **记一笔**:把这次故障的现象、层级结论、做过的命令写进 [checklists/rollback.md](../checklists/rollback.md) 第 2 节的备注。
@@ -239,7 +239,7 @@ boot
 
 #### 3.1 `\EFI\ubuntu\` 不在 L2 基线里:两条真实来源
 
-**`\EFI\ubuntu\` 不在 L2 基线清单里**(`baseline\02-esp-backup\` 由 L2 预检产出,而 L2 生成于装 Ubuntu **之前**,产出阶段见 [baseline/README.md](../baseline/README.md);[L3 手册](04-ubuntu.md) 的验证第 2 行已写死同一口径:"清单里 `EFI/ubuntu/` 属新增,不在基线行内")。**所以不能用 `baseline\02-esp-backup\EFI\ubuntu\` 还原 Ubuntu 引导文件——那个目录根本不存在**;基线只能复原 `\EFI\Microsoft\` 相关内容,固件条目现状看 `baseline\02-firmware-entries.txt`。
+**`\EFI\ubuntu\` 不在 L2 基线清单里**(`baseline\02-esp-backup\` 由 L2 预检产出,而 L2 生成于装 Ubuntu **之前**,产出阶段见 [baseline/README.md](../baseline/README.md);[L3 手册](04-silverblue.md) 的验证第 2 行已写死同一口径:"清单里 `EFI/ubuntu/` 属新增,不在基线行内")。**所以不能用 `baseline\02-esp-backup\EFI\ubuntu\` 还原 Ubuntu 引导文件——那个目录根本不存在**;基线只能复原 `\EFI\Microsoft\` 相关内容,固件条目现状看 `baseline\02-firmware-entries.txt`。
 
 `\EFI\ubuntu\` 被清掉或损坏时,只有两条真实来源(任何依赖 L2 基线的写法都无效):
 
@@ -328,7 +328,7 @@ sudo efibootmgr -v
 
 ### 6. 启动顺序偏差复原(固件没有顺序选项时)
 
-适用:`BootOrder` 首位变成了 `ubuntu`(重启默认进 Ubuntu),而固件设置界面**只提供"删除条目"、不给顺序调整**。这是 [L3 手册](04-ubuntu.md) 失败处理里"重启默认进了 Ubuntu"一行所指的偏差分支,也是 [L5 退役手册](06-decommission.md) 步骤 1 的同一支路——**口径必须一致,本步骤以那两处为准**。
+适用:`BootOrder` 首位变成了 `ubuntu`(重启默认进 Ubuntu),而固件设置界面**只提供"删除条目"、不给顺序调整**。这是 [L3 手册](04-silverblue.md) 失败处理里"重启默认进了 Ubuntu"一行所指的偏差分支,也是 [L5 退役手册](06-decommission.md) 步骤 1 的同一支路——**口径必须一致,本步骤以那两处为准**。
 
 铁律:**不得用 `efibootmgr -o`**(I2 与交接规则第 5 条)。固件才是永久启动顺序的权威,NVRAM 与固件视图不一致时会被固件在下一次开机改回去,用工具"赢了"只是暂时现象。这里的次序调整手段是**删除条目、让固件回落到 Windows**,而删除本身就是一次 NVRAM 变更,所以**必须先有备份**——次序不可颠倒:
 

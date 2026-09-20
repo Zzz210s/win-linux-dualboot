@@ -5,7 +5,6 @@
 01-4	scripts/windows/collect-l0.ps1	0	落 L0 产物:写 baseline/00-firmware.md(BootOrder 首位原值)
 02-1	scripts/windows/check-partition-layout.ps1	0	分盘总则:三种轨道的目标布局只读核对
 02-2	scripts/windows/check-partition-layout.ps1	0	轨道 W 的分盘核对:只 Windows(ESP-Win/MSR/C:/WinRE)
-02-3	scripts/windows/check-partition-layout.ps1	0	轨道 L 的分盘核对:ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB
 02-4	scripts/windows/create-partitions.ps1	1	轨道 D 的分盘:diskpart 预建四区 + 预留 115GiB(破坏性,需 -Yes)
 03-1	scripts/windows/verify-windows-baseline.ps1	0	装 Windows 后核对版本/内部版本与分区布局(含 WinRE 偏差判据)
 03-2	scripts/windows/disable-faststartup.ps1	0	关快速启动与休眠:powercfg /h off + HiberbootEnabled=0(需 -Yes)
@@ -16,5 +15,5 @@
 03-7	scripts/windows/check-gate.ps1	0	读闸门结论:列红项并给退出码(只有它判能否进入 L3)
 03-8	scripts/windows/backup-esp.ps1	0	基线备份:ESP 全量文件树 + manifest.sha256(-Check 校验已有备份)
 03-9	scripts/windows/collect-l2.ps1	0	核对 L2 四件产物齐全(报告/ESP 备份/固件启动项/分区快照)
-04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(写固件 NVRAM,不改 BootOrder,需 -Yes)
+04-1	scripts/windows/set-bootnext.ps1	0	一次性从 U 盘启动(-Device USB;写 bootsequence,不改 BootOrder)
 07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线

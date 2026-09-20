@@ -8,7 +8,7 @@
 
 - **五步顺序不可更换**:① 在 Ubuntu 中把 `BootOrder` 首项改回 Windows Boot Manager → ② 备份当前 NVRAM 与 ESP 现状 → ③ 重启进 Windows 后删除 Linux 分区 → ④ 清理 NVRAM 中残留的 `ubuntu` 条目 → ⑤ 可选:把腾出的空间扩展进相邻分区(见步骤 5:本方案布局下能扩的是 `D:`,不是 `C:`)。
 - **明确禁止:先格式化 Linux 分区再修引导。** 删掉分区的一瞬间,真正消失的是 **root/snapshot 分区上的 `/boot/grub`**(GRUB 的模块与 `grub.cfg` 都在那里);`\EFI\ubuntu\` 子树**通常仍留在 ESP 上**——ESP 在上一步被明确"保留、不碰",是否顺手清理见"失败处理"相应行。引导器真正失效的原因是"GRUB 所在的分区没了 + NVRAM 里的 `ubuntu` 条目仍指向它",所以**必须先把引导归位再删分区**:若那个条目还排在 `BootOrder` 前面,固件会先去找这个已失效的引导器,GRUB 找不到自己的模块与 `grub.cfg`,开机停在 `grub rescue>`。这正是设计第 2 节要防的事故形态,也是"必须先把引导改回 Windows、再删分区"的全部理由。
-- **永久启动顺序只在固件设置界面里改**:全程不得执行 `efibootmgr -o`,也不得用等价的 `bcdedit /set {fwbootmgr} displayorder`(I2;口径与 [L3 手册](04-ubuntu.md)"失败处理"里"重启默认进了 Ubuntu"一行一致)。一次性切换走 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。
+- **永久启动顺序只在固件设置界面里改**:全程不得执行 `efibootmgr -o`,也不得用等价的 `bcdedit /set {fwbootmgr} displayorder`(I2;口径与 [L3 手册](04-silverblue.md)"失败处理"里"重启默认进了 Ubuntu"一行一致)。一次性切换走 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)。
 
 ## 目标
 
@@ -73,7 +73,7 @@ sudo lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT | tee ~/l5-before-lsblk.txt
 **固件没有顺序选项时**(部分机型只给"删除条目",不给顺序调整):这不算违规,按偏差处置。这一支路是**全文唯一允许的次序调整**,而且比正文多走两次重启(共三段),物理闭环如下——先备份、后删条目,次序不可颠倒(理由:删条目本身就是一次 NVRAM 变更,必须先有备份):
 
 1. **第一段:回 Windows 做备份**。在当前的 Ubuntu 会话里先完成步骤 0 的只读取证与 `sudo efibootmgr -v` 记录(步骤 1 第 2 条),然后重启回 Windows,按步骤 2 把 NVRAM 与 ESP 现状备份到 `D:\dbk-l5-backup\`。**这份备份没做完,就不要往下走**;
-2. **第二段:回 Ubuntu 删条目**。在 Windows 里按 `BOOT_MENU_KEY` 选 `ubuntu`,或执行 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 BootNext,不改顺序),回 Ubuntu 后执行 `sudo efibootmgr -b <ubuntu 条目编号> -B` 删除 `ubuntu` 条目,让固件回落到 `Windows Boot Manager`(设计 4.8 第三选择与 [L3 手册](04-ubuntu.md)同一手段);删完用 `sudo efibootmgr -v` 确认条目已消失;
+2. **第二段:回 Ubuntu 删条目**。在 Windows 里按 `BOOT_MENU_KEY` 选 `ubuntu`,或执行 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 BootNext,不改顺序),回 Ubuntu 后执行 `sudo efibootmgr -b <ubuntu 条目编号> -B` 删除 `ubuntu` 条目,让固件回落到 `Windows Boot Manager`(设计 4.8 第三选择与 [L3 手册](04-silverblue.md)同一手段);删完用 `sudo efibootmgr -v` 确认条目已消失;
 3. **第三段:重启回 Windows,接着做步骤 3**。此后**再也不需要进 Linux**。条目删掉后,"残留清理"就等于步骤 4 已完成,清单上照勾并在备注里写明;最后按 [07-rescue.md](07-rescue.md) 与 L2 基线(`baseline/02-firmware-entries.txt`)核对现场,并把这个偏差记进清单。
 
 怎么知道成功了:
@@ -239,7 +239,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 | 进行到 | 还能回到什么状态 | 做法 |
 |---|---|---|
 | 只做完步骤 1 | **什么都没丢**:分区、`/snapshots`、Linux 系统、配置全在 | 用 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1) 进 Linux 即可。**不要**把 `BootOrder` 改回 Ubuntu 在首位——I1 要求首位永远是 Windows,进 Linux 一律走一次性入口 |
-| 做完步骤 3(分区已删) | Linux 侧数据永久丢失;Windows 侧一字未动 | 要 Linux 就按设计 4.8 办法二重装:只格 root 并挂 `/`、ESP **复用且绝不勾选格式化**、Windows 各分区不动;`/snapshots` 分区已随退役消失,重装时按 [L3 手册](04-ubuntu.md) 从预留空间再切——本方案不提供"在已有系统上缩容 Windows 分区"的路径(设计 3.5 被否方案) |
+| 做完步骤 3(分区已删) | Linux 侧数据永久丢失;Windows 侧一字未动 | 要 Linux 就按设计 4.8 办法二重装:只格 root 并挂 `/`、ESP **复用且绝不勾选格式化**、Windows 各分区不动;`/snapshots` 分区已随退役消失,重装时按 [L3 手册](04-silverblue.md) 从预留空间再切——本方案不提供"在已有系统上缩容 Windows 分区"的路径(设计 3.5 被否方案) |
 | 做完步骤 4 | 同上 | 重装时安装器会重新创建 `ubuntu` 条目(设计 4.4);起步用 live U 盘或厂商启动菜单 |
 | 做过步骤 5 的 `D:` 扩展 | 数据与引导都不受影响 | 想退回原容量需要"缩小 `D:`",而 NTFS 缩容受不可移动文件限制、且要先移出数据,**不建议**(设计 3.5);把这 115GiB 的归属记成设备参数偏差即可 |
 

@@ -45,7 +45,7 @@
 | L0 装机前准备 | [docs/01-firmware.md](docs/01-firmware.md) | `00-firmware.md` |
 | L1 Windows 全新安装 | [docs/03-windows.md](docs/03-windows.md) | `01-partitions.txt`、`01-activation.md` |
 | L2 预检与基线(硬闸门) | [docs/03-windows.md](docs/03-windows.md) | `02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` |
-| L3 Ubuntu 安装 | [docs/04-ubuntu.md](docs/04-ubuntu.md) | `03-efi-layout.txt` |
+| L3 Ubuntu 安装 | [docs/04-silverblue.md](docs/04-silverblue.md) | `03-efi-layout.txt` |
 | L4 首启收敛 | [docs/05-first-boot.md](docs/05-first-boot.md) | `04-first-boot.md`、`04-robustness.md` |
 | L5 退役与救援 | [docs/06-decommission.md](docs/06-decommission.md)、[docs/07-rescue.md](docs/07-rescue.md) | 勾选记录落在 [checklists/rollback.md](checklists/rollback.md) |
 

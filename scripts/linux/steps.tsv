@@ -1,4 +1,8 @@
 步骤号	脚本路径	破坏性(0/1)	说明
+02-3	scripts/linux/check-partition-plan.sh	0	轨道 L 的分盘核对(live):ESP-Fedora 1GiB + /boot 1GiB ext4 + root 约 113GiB btrfs
+04-2	scripts/linux/check-partition-plan.sh	0	手动分区前核对:Windows ESP 未被挂载/未被改动 + 输出下一步该建什么
+04-3	scripts/linux/verify-l3.sh	0	装完重启验证:ostree 部署 / /boot 独立 ext4 / 两块 ESP / BootOrder 首位
+04-4	scripts/linux/collect-l3.sh	0	落 L3 产物:baseline/03-efi-layout.txt
 05-1	scripts/linux/mount-shared.sh	1	挂载共享盘 D:(写 /etc/fstab,需 --yes)
 05-2	scripts/linux/xdg-redirect.sh	1	家目录重定向(写 user-dirs.dirs,需 --yes)
 05-3	scripts/linux/graphics.sh	1	显卡栈收敛(ublue NVIDIA rebase + MOK,需 --yes)

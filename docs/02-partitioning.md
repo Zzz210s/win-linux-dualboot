@@ -50,9 +50,9 @@ Fedora 侧三块分区(ESP-Fedora 1GiB + `/boot` 1GiB + root 约 113GiB)建在�
      看到:待分区的空间是目标盘上那段整块未分配空间,容量与 `DISK_SIZE` 一致
   2. 三块依次建:ESP 1024MB(FAT32,挂 `/boot/efi`)、`/boot` 1024MB(ext4)、root(btrfs),安装器里只指定挂载点
      看到:分区列表只有这三块,没有动到任何 Windows 分区与它自己的 ESP
-脚本:scripts/windows/check-partition-layout.ps1 -Track L
+脚本:scripts/linux/check-partition-plan.sh --track L --check
 坑:`/boot` 不独立会让部署切换与回滚失效(设计 3.6);把 ESP-Fedora 与 Windows 的 ESP 混用,一次 Windows 更新就可能覆盖引导(I3)。
-出错时:三块分区对不上或找不到挂载点 -> 进 live 后按 `04-silverblue`(原 `04-ubuntu.md`)的 04-2 手动分区卡核对(用 `check-partition-plan.sh`),不要就地重排。
+出错时:三块分区对不上或找不到挂载点 -> 进 live 后按 -> 04-2 手动分区卡(手册 `04-silverblue`)核对(用 `check-partition-plan.sh`),不要就地重排。
 
 ### 02-4 轨道 D 的分盘(双系统,含 115GiB 预留)
 

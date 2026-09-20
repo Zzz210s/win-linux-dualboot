@@ -77,7 +77,7 @@
 
 **依据与细节**:`nomodeset` 是评论区被反复点名的"伪万能修复"——它让 live 环境跑起来,却与 Wayland 直接冲突(Wayland 需要 KMS);把它当长期配置,后续会以"会话异常 / 进不去桌面"的形式回来。判据:`cat /proc/cmdline` 不再包含 `nomodeset`,且 `echo $XDG_SESSION_TYPE` 输出 `wayland`。
 
-**指向更详细的章节**:[L3 手册](04-ubuntu.md) 步骤 5;L4 [05-first-boot.md](05-first-boot.md) 步骤 3 与"失败处理";[design/00-design.md](design/00-design.md) 决策 3.17 与 11.1 第 1、2 条;[09-risks.md](09-risks.md) 第 7、21 条;[08-verification.md](08-verification.md) B10。
+**指向更详细的章节**:[L3 手册](04-silverblue.md) 步骤 5;L4 [05-first-boot.md](05-first-boot.md) 步骤 3 与"失败处理";[design/00-design.md](design/00-design.md) 决策 3.17 与 11.1 第 1、2 条;[09-risks.md](09-risks.md) 第 7、21 条;[08-verification.md](08-verification.md) B10。
 
 ### 2. 装完没网 / 键盘失灵,要不要换个发行版
 
@@ -110,7 +110,7 @@
 
 **依据与细节**:ESP 复用挂载且不格式化是 I3 在安装器里的唯一落地点;一旦勾上格式化,`\EFI\Microsoft\` 随之消失,Windows 引导当场失效。
 
-**指向更详细的章节**:[04-ubuntu.md](04-ubuntu.md) 步骤 2(含该卡点的专门说明);[design/00-design.md](design/00-design.md) 3.20 与 11.1 第 7 条;[08-verification.md](08-verification.md) A3(直接判据:`\EFI\Microsoft\` 与 L2 基线逐文件一致);A7 是"可撤除性演练"口径补充,证明条目指向的引导文件缺失时固件会回落到 Windows。
+**指向更详细的章节**:[04-silverblue.md](04-silverblue.md) 步骤 2(含该卡点的专门说明);[design/00-design.md](design/00-design.md) 3.20 与 11.1 第 7 条;[08-verification.md](08-verification.md) A3(直接判据:`\EFI\Microsoft\` 与 L2 基线逐文件一致);A7 是"可撤除性演练"口径补充,证明条目指向的引导文件缺失时固件会回落到 Windows。
 
 ### 4. 是不是必须切独显直连才能进系统
 
@@ -127,7 +127,7 @@
 
 **依据与细节**:把独显直连当默认是"续航与显存双输",所以方案把它定位为排障分支;因驱动问题降级发行版同样属被否方案。
 
-**指向更详细的章节**:[04-ubuntu.md](04-ubuntu.md) 步骤 5(b)与"回滚"第 5 条;[05-first-boot.md](05-first-boot.md) 步骤 3 的 MUX 段;[design/00-design.md](design/00-design.md) 决策 3.17、11.1 第 1 条。
+**指向更详细的章节**:[04-silverblue.md](04-silverblue.md) 步骤 5(b)与"回滚"第 5 条;[05-first-boot.md](05-first-boot.md) 步骤 3 的 MUX 段;[design/00-design.md](design/00-design.md) 决策 3.17、11.1 第 1 条。
 
 ### 5. 引导菜单阶段黑屏,但键盘还能用
 

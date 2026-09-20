@@ -1,6 +1,6 @@
 # 验收:唯一判据与 A-F 六组清单
 
-本文件是整套方案的**唯一判据**:不以"装完了"为准,只以本清单全绿为准。设计依据是[设计文档](design/00-design.md)第 8 节(验收标准)与第 2 节(I1-I4)、第 3 节(关键决策)、4.7 节(健壮性 R1-R9)、4.8 节(原地重装两法)、7.1 节(周期性巡检)、11.1 节(评论区实战证据);执行依据是已交付手册 [00 入口](00-overview.md)、[L0](01-firmware.md)、[L1](03-windows.md)、[L2](03-windows.md)、[L3](04-ubuntu.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)、[L5 救援](07-rescue.md)与 [checklists/rollback.md](../checklists/rollback.md)。
+本文件是整套方案的**唯一判据**:不以"装完了"为准,只以本清单全绿为准。设计依据是[设计文档](design/00-design.md)第 8 节(验收标准)与第 2 节(I1-I4)、第 3 节(关键决策)、4.7 节(健壮性 R1-R9)、4.8 节(原地重装两法)、7.1 节(周期性巡检)、11.1 节(评论区实战证据);执行依据是已交付手册 [00 入口](00-overview.md)、[L0](01-firmware.md)、[L1](03-windows.md)、[L2](03-windows.md)、[L3](04-silverblue.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)、[L5 救援](07-rescue.md)与 [checklists/rollback.md](../checklists/rollback.md)。
 
 **记录载体**:每台设备把本文件复制一份、就地填写勾选与证据,落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`)。产物名前缀 = 所在阶段号;`baseline/` 全部内容不入库(仅 [baseline/README.md](../baseline/README.md) 例外),规则见 [baseline/README.md](../baseline/README.md)。
 
@@ -71,7 +71,7 @@
   - 设计依据:第 8 节 A 组第 4 行前半;**I1**。
 
 - [ ] **A6 全程未使用 `efibootmgr -o`**
-  - 怎么做:复核本次部署的全部操作记录([L2](03-windows.md)、[L3](04-ubuntu.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)各步骤的执行记录与 [checklists/rollback.md](../checklists/rollback.md) 备注);辅助检查 `git grep -n 'efibootmgr -o'` 的输出只出现在各文档/脚本的"禁止"表述里。
+  - 怎么做:复核本次部署的全部操作记录([L2](03-windows.md)、[L3](04-silverblue.md)、[L4](05-first-boot.md)、[L5 退役](06-decommission.md)各步骤的执行记录与 [checklists/rollback.md](../checklists/rollback.md) 备注);辅助检查 `git grep -n 'efibootmgr -o'` 的输出只出现在各文档/脚本的"禁止"表述里。
   - 判据:没有任何一次用 `efibootmgr -o` 或 `bcdedit /set {fwbootmgr} displayorder ...` 调整过永久顺序;进 Linux 全部走一次性入口。
   - 设计依据:第 8 节 A 组第 4 行后半;**I2**。
 
@@ -311,7 +311,7 @@
 | F8 `smartctl -H` 非 PASSED 或 `smartd` 日志有告警 | 按硬件问题处理:先备份数据、评估更换;把它记入已知例外并**暂停** D 组真做(带故障盘做重装会放大风险) |
 | F9 `fstab` 缺 `nofail`(限 L4 写入的共享盘/`/snapshots`/swapfile 三条) | 先 `cp /etc/fstab /etc/fstab.dbk.bak`,给缺项补 `nofail`,然后 `sudo systemctl daemon-reload`、`sudo findmnt --verify` 复测;补齐动作记入偏差。若缺的是 `/boot/efi` 的反向情形(ESP 行被加了 `nofail`),按同样备份口径**去掉**该选项并记偏差说明理由(见 F9 判据)。若补完仍进不去系统,在 GRUB 中追加 `systemd.unit=emergency.target` 进急救(第 7 节 L4 `fstab` 行) |
 | D1 推演中途想反悔 | 按 [06-decommission.md](06-decommission.md) 的"变体:只想暂时停用 Linux"处理:分区与 `ubuntu` 条目保留、日常用一次性入口进 Linux;**不要**把 `BootOrder` 改成 Ubuntu 优先(I1) |
-| D 组真做(退役/重装)后想恢复 Linux | 按设计 4.8 办法二重装:[07-rescue.md](07-rescue.md) 第 5 节。只格 root、ESP 复用且**绝不勾选格式化**、Windows 各分区不动;`/snapshots` 随退役消失,需按 [L3 手册](04-ubuntu.md)从预留空间重建(本方案不提供在已有系统上缩容的路径,决策 3.5) |
+| D 组真做(退役/重装)后想恢复 Linux | 按设计 4.8 办法二重装:[07-rescue.md](07-rescue.md) 第 5 节。只格 root、ESP 复用且**绝不勾选格式化**、Windows 各分区不动;`/snapshots` 随退役消失,需按 [L3 手册](04-silverblue.md)从预留空间重建(本方案不提供在已有系统上缩容的路径,决策 3.5) |
 | D3/D4 发现误格了 `D:` 或 Linux 分区 | 立刻停止一切写盘动作(不再建分区、不跑安装器)。ESP 被破坏走 D6/D1 的基线还原;`D:` 被删以数据恢复优先,不要再写入原盘 |
 | 验收期间两个系统一起异常、频繁死机 | **先按硬件问题排查**(内存测试、SMART、温度、电源),不要归因于"双系统互相影响"——两系统运行期不共享状态,只有引导层会互相干扰(设计第 7 节与第 9 节) |
 | E2 发现 `baseline/` 内容会入库 | 先确认混入的具体路径,按 [.gitignore](../.gitignore) 的 `baseline/*` 规则排查;`git rm --cached` 移除索引后重查;**不得**把单机产物(分区表、ESP 镜像、固件条目、激活状态)提交到公开仓库(第 6 节规则 2) |

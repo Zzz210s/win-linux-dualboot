@@ -45,7 +45,7 @@ Start at [docs/00-overview.md](docs/00-overview.md): it defines the four invaria
 | L0 pre-install preparation | [docs/01-firmware.md](docs/01-firmware.md) | `00-firmware.md` |
 | L1 Windows install | [docs/03-windows.md](docs/03-windows.md) | `01-partitions.txt`, `01-activation.md` |
 | L2 preflight and baseline (hard gate) | [docs/03-windows.md](docs/03-windows.md) | `02-preflight-report.md`, `02-esp-backup/`, `02-firmware-entries.txt`, `02-partitions.txt` |
-| L3 Ubuntu install | [docs/04-ubuntu.md](docs/04-ubuntu.md) | `03-efi-layout.txt` |
+| L3 Ubuntu install | [docs/04-silverblue.md](docs/04-silverblue.md) | `03-efi-layout.txt` |
 | L4 first-boot convergence | [docs/05-first-boot.md](docs/05-first-boot.md) | `04-first-boot.md`, `04-robustness.md` |
 | L5 decommission and rescue | [docs/06-decommission.md](docs/06-decommission.md), [docs/07-rescue.md](docs/07-rescue.md) | checkoff in [checklists/rollback.md](checklists/rollback.md) |
 
