@@ -78,7 +78,7 @@
 | **L** | 只装 Silverblue | 6 步 | 装 -> 首启(驱动/挂载/时间/分层) -> 收敛 -> 回滚演练 |
 | **D** | 双系统 | 底座 + W + L + **共存增量 4 步** | 预留 115GiB / 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 |
 
-机器上的动作量(粗算):只装 Windows **约 9 步**;只装 Silverblue **约 10 步**;双系统 **约 27 步**。
+机器上的动作量(粗算):只装 Windows **约 9 步**;只装 Silverblue **约 10 步**;双系统 **约 19 步**(按本表轨道口径;若按 L0–L5 阶段逐个动作口径,则为 30 步)。
 
 **共用卡 vs 专属卡**:固件、安装介质、目标盘核对、KMS 激活与"部署回滚演练"属于共用或双轨复用;**双系统专属**只有 4 条 —— 预留分区(115GiB)、引导不变量核查(`BootOrder` 首位 = Windows)、`ntfs3` 共享盘、退役与救援。
 
@@ -97,7 +97,7 @@
 | **I3** | 绝不覆盖 `\EFI\Microsoft\`,绝不修改 `{bootmgr}` 的 `path` | Windows 引导路径被第三方接管,系统更新后翻车 |
 | **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照)——**首次装机时**,分区表在 L1 一次定稿、基线在 L2 生成;**此后的任何分区表或固件变更,都必须先有可用的基线备份** | 除重装外无路可退 |
 
-**I1–I4 的落地方式(本次修订更新)**:Linux 侧条目(`\EFI\fedora\`)现在写在自己独立的 1GiB ESP 上(I3 由**结构**保证,不再只靠纪律),启动项名称的匹配串以实施时实测为准。
+**I1–I4 的落地方式(本次修订更新)**:Linux 侧条目(`\EFI\fedora\`)现在写在自己独立的 1GiB ESP 上(I3 由**结构**保证,不再只靠纪律),启动项名称的匹配串以实施时实测为准。另注:I1 举例中的 `\EFI\ubuntu\`(该举例按"逐字不改"要求保留)在本方案对应 `\EFI\fedora\`。
 
 **为什么是这四条**:网络上"卡 grub 命令行"的根因不是 GRUB 坏了,而是固件 NVRAM 里的启动条目仍指向已被删除的引导文件,且它排在启动顺序前面。只要 I1 与 I2 成立,即使 Linux 侧被彻底清除,固件也会在失效条目后继续回落到 Windows。这比"记得先修引导再删分区"可靠——后者依赖人的记忆。
 
@@ -138,7 +138,7 @@
 | 双系统需**独立** `/boot/efi` 与 `/boot`,且不应让 Anaconda 使用 Windows 的 ESP | 官方文档 + Fedora Discussion | 中高 |
 | Anaconda 在已有 ESP 的盘上装 Silverblue 可能失败(`fedora-silverblue/issue-tracker#284`,自 F34 起) | 上游 issue 存在已确认;**F44 是否已修需在参考设备实测复核** | 中 |
 | `rpm-ostree install` 时 akmods 不签名(`#499`);`akmod-nvidia` 会卡住内核升级(`#632`) | 已确认(上游 issue) | 高 |
-| ublue NVIDIA 变体镜像内模块**已预签名**,配一次性 MOK 注册(`ujust enroll-secure-boot-key`,上游 MOK 密码 `universalblue`) | 文档与论坛 | 中高 —— **镜像名、分支、`ujust` 任务名、MOK 密码均须在实施时复核** |
+| ublue NVIDIA 变体镜像内模块**已预签名**,配一次性 MOK 注册(`ujust enroll-secure-boot-key`,上游 MOK 密码 `universalblue`) | 待核实 | 中高(来源:文档与论坛)—— **镜像名、分支、`ujust` 任务名、MOK 密码均须在实施时复核** |
 | `/var`(以及作为其子目录的 `/home`,`/home` 是符号链接)不属于部署,**不随回滚回退** | 已确认(ostree 部署模型) | 高 |
 | `rpm-ostreed-automatic` 策略位于 `/etc/rpm-ostreed.conf`(`AutomaticUpdatePolicy = none/check/download/stage`) | 已确认(Fedora 文档) | 高 |
 | 系统级工具用 `rpm-ostree install` 分层安装,**每次分层需重启**;GUI 应用优先 Flatpak;开发环境用 `toolbox`/`distrobox` | 已确认(官方原子桌面文档) | 高 |
@@ -197,7 +197,7 @@
 | L4 | L + D | [docs/05-first-boot.md](../05-first-boot.md)(首启收敛与健壮性;其中"共享盘挂载""家目录重定向"两张卡是 D 轨道的共存增量) |
 | L5 | D | [docs/07-rescue.md](../07-rescue.md)(退役与救援;原 `06-decommission.md` 并入) |
 | 验收 | 全部 | [docs/08-verification.md](../08-verification.md) |
-| 风险与速查 | 全部 | [docs/10-faq.md](../10-faq.md)(症状卡 + 阶段风险速查;28 条风险总表保留在第 9 节) |
+| 风险与速查 | 全部 | [docs/10-faq.md](../10-faq.md)(症状卡 + 阶段风险速查;34 条风险总表保留在第 9 节) |
 
 | 阶段 | 名称 | 目的 | 产物 | 完成判据 |
 |---|---|---|---|---|
@@ -217,7 +217,7 @@
 ### 4.2 L1 Windows 全新安装
 
 - 整盘重排:ESP-Windows 2GiB -> MSR 16MiB -> **Windows 系统 C: 200GiB** -> **Windows 数据 D: ≈635GiB** -> **为 Fedora 预留 115GiB 未分配空间** -> WinRE;
-- **`templates/partitions.txt` 不变**:预留仍是"D: 之后一段 115GiB 未分配";L3 再在这段空间里切出 Fedora 的 ESP 1GiB + `/boot` 1GiB + root ≈113GiB(见 5.1);
+- **`templates/partitions.txt` 不变**:预留仍是"D: 之后一段 115GiB 未分配";L3 再在这段空间里切出 Fedora 的 ESP 1GiB + `/boot` 1GiB + root ≈113GiB(见 5.1)。**该模板的操作逻辑(预留 115GiB)不变,但注释文本仍描述旧设计**:第 1 段写"Windows 与 Ubuntu 共用 ESP"、第 5 段写"L3 的 root 100GiB + Snapshot 15GiB"、`D:` 段写"Ubuntu 侧 ntfs3 读写",与 3.4/3.16/5.1 冲突,**须由脚本任务把注释同步为"两块 ESP + Fedora 侧三块分区(ESP 1GiB + `/boot` 1GiB + root 113GiB)"**;
 - **系统盘隔离**:C: 只放系统与程序;桌面/文档/下载/图片/视频/音乐等**已知文件夹、游戏库与容器镜像全部重定向到 D:**。所以"崩溃后原地重装"只需格式化 C:,数据与 Linux 侧均不受影响(见 4.8);
 - ESP-Windows 必须**预建**(Windows 安装界面无法把自动创建的 100MB ESP 改成 2GiB),因此使用 `diskpart` 预建分区表;
 - 安装完成后立即:关闭 Fast Startup 与休眠文件、完成脚本激活、记录激活状态;
@@ -245,7 +245,7 @@
 
 | 项目 | 做法 | 回滚点 |
 |---|---|---|
-| 显卡驱动 | 安装后 **`rpm-ostree rebase` 到 ublue 的 NVIDIA 变体**(镜像名/分支**待核实**)+ **一次性 MOK 注册**(`ujust enroll-secure-boot-key`,上游 MOK 密码待核实);镜像内模块已预签名 | `rebase` 回 stock Silverblue(部署级);保留 nouveau 作为兜底 |
+| 显卡驱动 | 安装后 **`rpm-ostree rebase` 到 ublue 的 NVIDIA 变体**(镜像名/分支**待核实**)+ **一次性 MOK 注册**(`ujust enroll-secure-boot-key` 任务名待核实、上游 MOK 密码待核实);镜像内模块已预签名 | `rebase` 回 stock Silverblue(部署级);保留 nouveau 作为兜底 |
 | 显示策略 | 集成显卡主显示 + 独显 PRIME offload(独显单显卡设备跳过) | 恢复默认 PRIME 模式 |
 | 共享数据分区挂载 | `ntfs3` **读写**挂载 `D:`,固定 `uid/gid/umask` + `windows_names` + `nofail` + `noatime`;`fstab` 写错时带 `nofail` 不阻断启动 | 改成只读挂载或移除该行 |
 | 家目录数据重定向 | 用 `~/.config/user-dirs.dirs` 把**文档/下载/图片/桌面**指向共享盘;`~/.config`、`~/.ssh`、代码仓库**留在本地**(NTFS 无 POSIX 权限语义) | 改回默认目录即可 |
@@ -424,7 +424,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | L3 | 停在 `grub>` / `grub rescue>` | ① `ls` 找分区 -> `set prefix` -> `insmod normal` -> `normal`;② 直接回 Windows:`search --file --set=root /EFI/Microsoft/Boot/bootmgfw.efi` -> `chainloader` -> `boot` | 基线回滚(ESP 镜像) |
 | L3 | Secure Boot 拒载 | 核查 `mokutil --sb-state`;先完成 4.5 的 MOK 注册,不在 L3 引入自签 | 无副作用 |
 | L4 | 装驱动(rebase)后黑屏 / 闪烁 | 开机菜单选回上一个部署;或在 GRUB 里临时切 TTY 检查 | **部署级回滚**(R2) |
-| L4 | 模块签名被拒(`nvidia` 不加载) | `mokutil --list-enrolled` 核对;重跑 `ujust enroll-secure-boot-key` 并重启;`modinfo -F signer nvidia` 复核 | `rebase` 回 stock(用 nouveau 兜底) |
+| L4 | 模块签名被拒(`nvidia` 不加载) | `mokutil --list-enrolled` 核对;重跑 `ujust enroll-secure-boot-key`(任务名待核实)并重启;`modinfo -F signer nvidia` 复核 | `rebase` 回 stock(用 nouveau 兜底) |
 | L4 | `fstab` 写坏导致进不去系统 | GRUB 中追加 `systemd.unit=emergency.target` | 模板已含 `nofail` |
 | L4 | 时间错乱 / 蓝牙反复重配对 | RTC=UTC(或 Windows `RealTimeIsUniversal=1`);密钥同步脚本 | 均可逆 |
 | L4 | **分层安装后命令仍找不到**(忘了重启) | 重启使新部署生效;`rpm-ostree status` 确认当前部署 | 无副作用 |
