@@ -107,11 +107,12 @@
 | 轨道 | 步骤(做什么) | 去哪份文档 | 产出什么 |
 |---|---|---|---|
 | **共用底座**(三条轨道都要) | 固件设置 -> 做两个安装介质(Windows 11 ISO + Fedora Silverblue 镜像)-> 核对目标盘 -> 落 L0 产物 | [01-firmware.md](01-firmware.md) | `baseline/00-firmware.md`(含 `BootOrder` 首位原值) |
-| **W** L1 | 整盘分区(整盘重排,一次分好)-> 装 Windows -> 关快速启动与休眠 -> 已知文件夹重定向 -> 激活 -> 落 L1 产物 | [02-windows.md](02-windows.md) | `baseline/01-partitions.txt`、`baseline/01-activation.md` |
-| **W** L2 闸门 | 只读体检 -> 读闸门结论(红项停)-> 基线备份 -> 落 L2 产物 | [02-windows.md](02-windows.md) | `baseline/02-preflight-report.md`、`baseline/02-esp-backup/`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` |
+| **共用底座之二** | 分盘:认下本机轨道的目标布局 -> 按轨道分盘(整盘重排、一次分好,禁止事后缩容) | [02-partitioning.md](02-partitioning.md) | 分区记录进 `baseline/`(W/D 落 `01-partitions.txt`;L 落 `03-efi-layout.txt` 的分区段) |
+| **W** L1 | 装 Windows -> 关快速启动与休眠 -> 已知文件夹重定向 -> 激活 -> 落 L1 产物 | [03-windows.md](03-windows.md) | `baseline/01-partitions.txt`、`baseline/01-activation.md` |
+| **W** L2 闸门 | 只读体检 -> 读闸门结论(红项停)-> 基线备份 -> 落 L2 产物 | [03-windows.md](03-windows.md) | `baseline/02-preflight-report.md`、`baseline/02-esp-backup/`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` |
 | **L** L3 | UEFI 启动进 live -> 在 115GiB 预留区手工建 Fedora 三块分区(Anaconda 只指定挂载点,不动 Windows 的 ESP)-> 装完重启验证 -> 落 L3 产物 | `04-silverblue.md` | `baseline/03-efi-layout.txt` |
 | **L / D** L4 | 首启收敛:共享盘挂载 / 家目录重定向 / 显卡驱动与 MOK(rebase 到 ublue NVIDIA 变体)/ 时间 / 蓝牙 / zram 与 swapfile / journald 与更新策略 / SSH 与 SMART / **部署回滚** / 发行版升级 / 回 Windows 入口 / 落 L4 产物 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`baseline/04-robustness.md` |
-| **D** 共存增量 4 步 | 115GiB 预留(在 L1 做)/ 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 | 落在 [02-windows.md](02-windows.md)、[05-first-boot.md](05-first-boot.md)、[07-rescue.md](07-rescue.md) | 见对应轨道的产物 |
+| **D** 共存增量 4 步 | 115GiB 预留(在 `02-partitioning` 做)/ 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 | 落在 [02-partitioning.md](02-partitioning.md)、[03-windows.md](03-windows.md)、[05-first-boot.md](05-first-boot.md)、[07-rescue.md](07-rescue.md) | 见对应轨道的产物 |
 | **D** L5 | 退役与救援:判层 / 从 grub 提示符回去 / Windows 侧修引导 / 只重装某一系统 / 基线回滚 / 周期巡检 / 应急纪律 / 退役五步 | [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |
 | 验收 / 查询 | A-F 六组勾选(唯一判据);症状速查 + 分阶段风险(34 条风险总表在 [设计文档](design/00-design.md) 第 9 节) | [08-verification.md](08-verification.md)、[10-faq.md](10-faq.md) | 每台设备填写版落 `baseline/` |
 

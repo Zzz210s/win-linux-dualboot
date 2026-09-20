@@ -224,7 +224,7 @@ boot
 
 适用:**引导层损坏而系统分区完好**——ESP 上的引导文件被删改(Windows 更新重写 ESP、误删 `\EFI\ubuntu\`(按 3.1 处置)、`\EFI\Microsoft\` 与基线不一致),但 `C:`、`D:`、Linux 分区都在、数据都在。设计 4.8 的"第三选择"就是这一条:**不是重装**。
 
-这一节只做勾选级指引,完整命令与判据以 [L2 手册](03-preflight.md)"回滚"第 1 条为准(**避免同一段命令两处维护**),与 [checklists/rollback.md](../checklists/rollback.md) 第 4 节逐项对应:
+这一节只做勾选级指引,完整命令与判据见 [回滚清单](../checklists/rollback.md) 第 4 节(**避免同一段命令两处维护**),与本节逐项对应:
 
 1. **校验备份完整性**:逐行核对 `baseline\02-esp-backup\manifest.sha256` 与备份树里的文件哈希(`Get-FileHash -Algorithm SHA256`)。备份与清单由 [backup-esp.ps1](../scripts/windows/backup-esp.ps1) 生成(清单格式见该脚本说明);备份本身坏了,这一条路就不成立;
 2. **挂载 ESP**:`mountvol S: /s`;
@@ -292,7 +292,7 @@ sudo efibootmgr -v
 2. **用官方 Windows ISO 引导,进入"自定义安装"**:在分区列表里能列出磁盘与全部分区(看不到驱动器 → 回 [L0 手册](01-firmware.md) 核查存储控制器模式为 AHCI / NVMe、VMD 关闭,不要在这个界面上反复重试)。
 3. **逐分区核对后,只格式化 `C:`**:安装界面里按大小与类型核对(200GiB NTFS = `C:`、≈635GiB NTFS = `D:`、100GiB + 15GiB ext4 = Linux 侧、2GiB FAT32 = ESP、16MiB = MSR、1GiB = WinRE,与 `baseline\02-partitions.txt` 对账)。**逐个分区看清楚再点**,不确定就退回去重看。
 4. **让安装程序在 ESP 上重建 Windows 引导**:它会写 `\EFI\Microsoft\` 与 BCD,并可能覆盖 `\EFI\BOOT\bootx64.efi`(属正常;`\EFI\ubuntu\` 不受影响)。
-5. **首启收尾**:关 Fast Startup 与休眠、重新完成 KMS 激活、按 [L1 手册](02-windows.md) 重做已知文件夹到 `D:` 的重定向(这是重装后最容易漏的一项——数据落在 `C:` 就等于下次重装再丢一次);然后复查四条不变量并用厂商菜单键验证 Ubuntu 仍能启动。
+5. **首启收尾**:关 Fast Startup 与休眠、重新完成 KMS 激活、按 [03-windows.md](03-windows.md) 的 `03-3` 重做已知文件夹到 `D:` 的重定向(这是重装后最容易漏的一项——数据落在 `C:` 就等于下次重装再丢一次);然后复查四条不变量并用厂商菜单键验证 Ubuntu 仍能启动。
 
 风险与处置:
 
@@ -415,7 +415,7 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 |---|---|---|
 | 1 | 崩溃层级有文字结论 | 结论是"引导层 / 系统分区 / 硬件"三选一,并附判据(步骤 0.2 里回答了哪几条、实测值是什么);**引导层场景下未执行任何格式化** |
 | 2 | 默认启动项与重启实测 | `bcdedit /enum firmware`(或 `sudo efibootmgr -v`)的 `BootOrder:` 第一项对应 `Windows Boot Manager`;连续重启 **3 次**都默认进 Windows(设计 8-A) |
-| 3 | Windows 可正常启动 | 进桌面无异常;Fast Startup 与休眠处于关闭状态:`powercfg /a` 里"休眠"与"快速启动"均显示不可用,且 `reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled` 为 `0x0`(与 [L1 手册](02-windows.md) 验证第 5 行、[L4 手册](05-first-boot.md) 1.1 第 1 条同一颗粒度);若走过步骤 4,激活状态与已知文件夹重定向已重做 |
+| 3 | Windows 可正常启动 | 进桌面无异常;Fast Startup 与休眠处于关闭状态:`powercfg /a` 里"休眠"与"快速启动"均显示不可用,且 `reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled` 为 `0x0`(与 [03-windows.md](03-windows.md) 的 `03-2`、[L4 手册](05-first-boot.md) 1.1 第 1 条同一颗粒度);若走过步骤 4,激活状态与已知文件夹重定向已重做 |
 | 4 | Windows 引导未被污染 | `\EFI\Microsoft\` 与 `baseline\02-esp-backup\manifest.sha256` 逐文件一致;若过程中执行过 `bcdboot`,`bootmgfw.efi` 与 `BCD` 的差异属**预期**,以"能正常启动 + 第 5 行的 `path` 一致"为准([verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 的 ② 项) |
 | 5 | 引导路径未被篡改 | `{bootmgr}` 的 `path` 与 `baseline\02-firmware-entries.txt` 一致(verify-baseline.ps1 的 ③ 项) |
 | 6 | Linux 侧可用且不抢默认 | `\EFI\ubuntu\` 仍在 ESP 上;`ubuntu` 条目位于 `BootOrder` 末尾(或按已登记的偏差处理);用 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1) 能进 Ubuntu,且重启后默认仍是 Windows |

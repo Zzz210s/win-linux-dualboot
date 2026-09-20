@@ -43,7 +43,7 @@
 变更 = 内核/驱动更新、分区表或固件设置改动、退役、重装。动手前的确认清单:
 
 1. **回滚点在位**:第 24 条的缓解要求"快照失败即视为不得执行本次变更";内核/驱动变更必须有快照(R1),见 [L4 手册](05-first-boot.md)与 [验收 F1](08-verification.md)。
-2. **基线可读**:第 3、6、26、27 条的兜底都依赖 `baseline/02-esp-backup/` 与 `02-firmware-entries.txt`(I4);改动分区表或固件之前先按 [L2 手册](03-preflight.md)重做一次基线。
+2. **基线可读**:第 3、6、26、27 条的兜底都依赖 `baseline/02-esp-backup/` 与 `02-firmware-entries.txt`(I4);改动分区表或固件之前先按 [L2 手册](03-windows.md)重做一次基线。
 3. **退路在位**:第 27 条的兜底是救援 U 盘;第 17 条(引导菜单阶段黑屏)不需要 U 盘——靠 `GRUB_TERMINAL=console` + 日常改用一次性 `BootNext`/厂商菜单键(见"前置条件"与 [L3 手册](04-ubuntu.md))。确认 `BOOT_MENU_KEY` 或 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1) 可用,**不得**用 `efibootmgr -o`(I2)。
 4. **四条不变量未被破坏**:改完立刻复跑 [验收 A 组](08-verification.md)的 A1、A3、A4。
 5. **Windows 更新之后**:按 7.1 节巡检四项(第 3 条的正面对策),见 [07-rescue.md](07-rescue.md) 第 7 节。
@@ -55,7 +55,7 @@
 | # | 风险 | 后果 | 缓解 | 关联 |
 |---|---|---|---|---|
 | 1 | **Intel VMD / RAID On** | Linux 安装器看不到磁盘 | 在装 Windows **之前**就设为 AHCI/NVMe(全新设备的最大红利,见 [L0 手册](01-firmware.md));已装好才改则走"驱动预置 + 安全模式"的分支(附录路径,不属主路径) | L0 记录 `FIRMWARE_MODE`;L2 报告核验 |
-| 2 | **BitLocker** | 改分区表或固件设置触发恢复密钥索要 | 备份 48 位恢复密钥 -> 挂起保护(`manage-bde -protectors -disable C: -rebootcount 0`)-> 操作 -> 恢复保护;见 [L2 手册](03-preflight.md) | L2 报告的保护状态行;A1/A3/A4 复检 |
+| 2 | **BitLocker** | 改分区表或固件设置触发恢复密钥索要 | 备份 48 位恢复密钥 -> 挂起保护(`manage-bde -protectors -disable C: -rebootcount 0`)-> 操作 -> 恢复保护;见 [L2 手册](03-windows.md) | L2 报告的保护状态行;A1/A3/A4 复检 |
 | 3 | **Windows 更新重写 ESP / SBAT-DBX 事件** | Linux 引导消失,或出现签名校验失败("Something has gone seriously wrong")| ESP 镜像备份 + 常备救援 U 盘;必要时清理 SBAT 策略(`mokutil --set-sbat-policy delete`,7.1 节);事故后按 [07-rescue.md](07-rescue.md) 第 3 节基线回滚 | 周期性巡检(A3/A4);7.1 节 |
 | 4 | **Fast Startup + 双写 NTFS** | 共享数据分区损坏 | L1 强制关闭 Fast Startup 与休眠;**共享盘禁止在 Windows 处于休眠/混合关机状态时被 Linux 挂载**;见 [L4 手册](05-first-boot.md)步骤 1 的三条前提 | B4、B5 |
 | 5 | **ESP 过小** | 后续内核/引导文件放不下 | 整盘重装时把 ESP 定为 **2GiB**(决策 3.4);ESP 尺寸不允许被削减,安装器自行改小即视为偏差并据实调整 | L2 闸门报告;D5 |
@@ -127,9 +127,9 @@
 | 15 反复长按电源强断之后 | 启动前先做一次 `fsck`(必要时从 live 环境);以后用 REISUB 代替长按电源 | [07-rescue.md](07-rescue.md) 第 8 节 |
 | 16 怀疑硬件故障 | **硬件优先 triage**:内存测试、`smartctl`、温度与电源;同时停掉一切重装/退役动作,避免带故障盘做不可逆操作 | F8 判据 + 验收"失败处理" |
 | 1 / 18 / 19 安装期选错盘或看不到盘 | 立即停手,不继续安装;回 L0 核对 `FIRMWARE_MODE`、`DISK_MODEL`/`DISK_SIZE`;两盘机型确认 ESP 在第一块盘 | [L0 手册](01-firmware.md)、[L3 手册](04-ubuntu.md) |
-| 2 BitLocker 索要恢复密钥 | 输入已备份的 48 位恢复密钥;进系统后恢复保护状态;下次涉及 `C:` 或其相邻布局的变更前先挂起保护 | [L2 手册](03-preflight.md) |
+| 2 BitLocker 索要恢复密钥 | 输入已备份的 48 位恢复密钥;进系统后恢复保护状态;下次涉及 `C:` 或其相邻布局的变更前先挂起保护 | [L2 手册](03-windows.md) |
 | 20 / 21 / 22 / 28 环境与兼容类 | 第 20 条:重新下载并核对官方校验值;第 21 条:换内核(HWE)或换驱动,**不降发行版**;第 22 条:回退 `user-dirs.dirs`;第 28 条:重做一遍重定向核对 | [L0](01-firmware.md)、[L3](04-ubuntu.md)、[L4](05-first-boot.md) |
-| 10 KMS 激活失效 | 检查续期任务与 KMS 主机可达性,手动触发一次续期;仍失败则重新执行一次在线激活流程 | [L1 手册](02-windows.md)激活章节 |
+| 10 KMS 激活失效 | 检查续期任务与 KMS 主机可达性,手动触发一次续期;仍失败则重新执行一次在线激活流程 | [03-windows.md](03-windows.md) 的 `03-4` |
 | 23 合规问题 | 立即下架仓库内任何激活脚本本体或密钥材料,只保留外链与流程说明;在 README 与相关手册加风险与责任声明 | 治理动作,无技术兜底 |
 
 **纪律**(三条最容易犯的错):

@@ -253,11 +253,11 @@ powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1
 4. 卸载 ESP(`mountvol S: /d`);
 5. 复查四条不变量并重跑 [verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 复核;GRUB 命令行的现场处置见 [07-rescue.md](07-rescue.md)。
 
-完整命令与判据以 [L2 手册](03-preflight.md)"回滚"第 1 条为准(本节只做指向,避免同一段命令两处维护)。
+完整命令与判据见 [回滚清单](../checklists/rollback.md) 第 4 节(本节只做指向,避免同一段命令两处维护)。
 
 ### 4. 解除 BitLocker 挂起(若步骤 5 之前挂起过保护)
 
-扩展完成后立刻恢复:`manage-bde -protectors -enable C:`,再用 `manage-bde -status` 确认保护已开启。`-rebootcount 0` 的挂起**不会**自动恢复,漏做会让 `C:` 长期停在"卷仍加密、保护已关闭"的状态(闭环口径与 [L2 手册](03-preflight.md)"回滚"第 2 条一致)。这一步做完,退役流程才算全部闭环。
+扩展完成后立刻恢复:`manage-bde -protectors -enable C:`,再用 `manage-bde -status` 确认保护已开启。`-rebootcount 0` 的挂起**不会**自动恢复,漏做会让 `C:` 长期停在"卷仍加密、保护已关闭"的状态(闭环口径与 [回滚清单](../checklists/rollback.md) 第 1 节的 BitLocker 收尾行一致)。这一步做完,退役流程才算全部闭环。
 
 ### 5. I4 复核:退役之后旧基线的状态
 

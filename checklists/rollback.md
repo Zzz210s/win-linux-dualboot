@@ -82,7 +82,7 @@
 
 ## 4. 基线回滚(引导层损坏而系统分区完好时用)
 
-设计 4.8 的"第三选择":**不是重装**,而是用 ESP 备份还原引导文件 + `bcdboot` 重建 + 清理 NVRAM。命令与判据以 [L2 手册](../docs/03-preflight.md)"回滚"第 1 条为准,本节只做勾选。
+设计 4.8 的"第三选择":**不是重装**,而是用 ESP 备份还原引导文件 + `bcdboot` 重建 + 清理 NVRAM。命令与判据即本节(**不再指向 L2 手册**,避免同一段命令两处维护)。
 
 **执行环境**:复原动作在 Windows 管理员会话或 WinRE 命令提示符中执行——需要管理员权限的是 `mountvol /s` 与对 ESP/系统区的写操作(`robocopy`、`bcdboot`);`Get-FileHash` 本身不需要管理员权限。WinRE 里若 `powershell` 起不来,用 `certutil -hashfile <文件> SHA256` 代替 `Get-FileHash`(`certutil` 不带算法参数时会默认 SHA1,必须显式写 `SHA256`;它的输出为大写十六进制,与 `manifest.sha256` 比对时**忽略大小写**),或回到 Windows 管理员会话执行。注意两件事不在同一环境:首行的诊断可以在 live 环境做(从 live U 盘看到 Windows `C:`),而复原动作在 Windows/WinRE 做。
 

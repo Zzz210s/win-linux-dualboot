@@ -26,25 +26,25 @@
 
 **本阶段产物**:`baseline/01-partitions.txt`、`baseline/01-activation.md` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L1-1 从安装介质启动,`Shift + F10` 进命令行后按 [templates/partitions.txt](../templates/partitions.txt) 预建整盘分区表(ESP 2GiB → MSR 16MiB → `C:` 200GiB → `D:` ≈635GiB → 115GiB 未分配 → WinRE 1GiB) | 产物:`baseline/01-partitions.txt` | 见 [02-windows.md](../docs/02-windows.md) 步骤 1
-- `[ ]` L1-2 只在 200GiB 分区上安装 Windows 11 专业版,并记录 WinRE 落点 | 判据:ESP 尺寸未被削减、留给 Linux 的未分配空间不少于 115GiB;偏差据实记入产物 | 步骤 2
-- `[ ]` L1-3 首次进桌面:关闭 Fast Startup 与休眠 | 判据:`powercfg /a` 显示休眠不可用;两项均已关闭 | 步骤 3
-- `[ ]` L1-4 系统盘隔离:六个已知文件夹(桌面/文档/下载/图片/视频/音乐)、游戏库与容器镜像全部重定向到 `D:` | 判据:六个已知文件夹的路径值全部以 `D:\` 开头 | 步骤 4
-- `[ ]` L1-5 完成激活并落盘状态 | 产物:`baseline/01-activation.md`(激活失败不阻塞,但必须记下报错) | 步骤 5
-- `[ ]` L1-6 记录 L1 产物并复核四条不变量 | 判据:见[入口文档](../docs/00-overview.md)的不变量检查点表 | 步骤 6
+- `[ ]` L1-1 从安装介质启动,`Shift + F10` 进命令行后按 [templates/partitions.txt](../templates/partitions.txt) 预建整盘分区表(ESP 2GiB → MSR 16MiB → `C:` 200GiB → `D:` ≈635GiB → 115GiB 未分配 → WinRE 1GiB) | 产物:`baseline/01-partitions.txt` | 见 [02-partitioning.md](../docs/02-partitioning.md) 的 `02-4`(双系统预建)或 `02-2`(只 Windows)
+- `[ ]` L1-2 只在 200GiB 分区上安装 Windows 11 专业版,并记录 WinRE 落点 | 判据:ESP 尺寸未被削减、留给 Linux 的未分配空间不少于 115GiB;偏差据实记入产物 | [03-windows.md](../docs/03-windows.md) 的 `03-1`
+- `[ ]` L1-3 首次进桌面:关闭 Fast Startup 与休眠 | 判据:`powercfg /a` 显示休眠不可用;两项均已关闭 | [03-windows.md](../docs/03-windows.md) 的 `03-2`
+- `[ ]` L1-4 系统盘隔离:六个已知文件夹(桌面/文档/下载/图片/视频/音乐)、游戏库与容器镜像全部重定向到 `D:` | 判据:六个已知文件夹的路径值全部以 `D:\` 开头 | [03-windows.md](../docs/03-windows.md) 的 `03-3`
+- `[ ]` L1-5 完成激活并落盘状态 | 产物:`baseline/01-activation.md`(激活失败不阻塞,但必须记下报错) | [03-windows.md](../docs/03-windows.md) 的 `03-4` 与 `03-5`
+- `[ ]` L1-6 记录 L1 产物并复核四条不变量 | 判据:见[入口文档](../docs/00-overview.md)的不变量检查点表 | [03-windows.md](../docs/03-windows.md) 的 `03-5` 与 `03-6`
 - `[ ]` L1-7 紧接着进入 L2(**同一会话内连续完成**,中途若 Windows 发生更新则基线失效、须重做) | 判据:L1 与 L2 之间没有插入系统更新 | [00-overview.md](../docs/00-overview.md) 交接规则第 4 条
 
 ## 3. L2 预检与基线(硬闸门)
 
 **本阶段产物**:`baseline/02-preflight-report.md`、`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L2-1 在**管理员** Windows PowerShell 里跑 [preflight.ps1](../scripts/windows/preflight.ps1)(只读体检) | 判据:输出逐项有实测值,不出现红项 | 见 [03-preflight.md](../docs/03-preflight.md) 步骤 1
-- `[ ]` L2-2 红项就地修复后重跑(黄项登记后带风险继续) | 判据:报告无红项 | 步骤 2
-- `[ ]` L2-3 跑 [backup-esp.ps1](../scripts/windows/backup-esp.ps1) 生成 ESP 文件树基线与清单 | 产物:`baseline/02-esp-backup/`(含 `EFI/` 子树与 `manifest.sha256`) | 步骤 3
-- `[ ]` L2-4 重跑 [preflight.ps1](../scripts/windows/preflight.ps1) 定稿闸门报告 | 产物:`baseline/02-preflight-report.md` | 步骤 4
-- `[ ]` L2-5 核验 L1 记录(分区表、激活状态、重定向核对)未被后续操作改变 | 判据:与 `baseline/01-partitions.txt` 的定稿值一致 | 步骤 5
-- `[ ]` L2-6 读报告**最后一行**的结论 | 判据:结论为"结论: 允许进入 L3"(不得手工改写判定列) | 步骤 6
-- `[ ]` L2-7 闸门复核:结论为"禁止进入 L3"时**停在这里**;L2 是唯一硬闸门 | 判据:四项基线产物齐备且结论为允许 | [03-preflight.md](../docs/03-preflight.md) 的"闸门规则(硬)"
+- `[ ]` L2-1 在**管理员** Windows PowerShell 里跑 [preflight.ps1](../scripts/windows/preflight.ps1)(只读体检) | 判据:输出逐项有实测值,不出现红项 | 见 [03-windows.md](../docs/03-windows.md) 的 `03-6`
+- `[ ]` L2-2 红项就地修复后重跑(黄项登记后带风险继续) | 判据:报告无红项 | [03-windows.md](../docs/03-windows.md) 的 `03-6`
+- `[ ]` L2-3 跑 [backup-esp.ps1](../scripts/windows/backup-esp.ps1) 生成 ESP 文件树基线与清单 | 产物:`baseline/02-esp-backup/`(含 `EFI/` 子树与 `manifest.sha256`) | [03-windows.md](../docs/03-windows.md) 的 `03-8`
+- `[ ]` L2-4 重跑 [preflight.ps1](../scripts/windows/preflight.ps1) 定稿闸门报告 | 产物:`baseline/02-preflight-report.md` | [03-windows.md](../docs/03-windows.md) 的 `03-6` 与 `03-9`
+- `[ ]` L2-5 核验 L1 记录(分区表、激活状态、重定向核对)未被后续操作改变 | 判据:与 `baseline/01-partitions.txt` 的定稿值一致 | [03-windows.md](../docs/03-windows.md) 的 `03-6`(报告的 L1 产物复核与隔离结论转记行)
+- `[ ]` L2-6 读报告**最后一行**的结论 | 判据:结论为"结论: 允许进入 L3"(不得手工改写判定列) | [03-windows.md](../docs/03-windows.md) 的 `03-7`
+- `[ ]` L2-7 闸门复核:结论为"禁止进入 L3"时**停在这里**;L2 是唯一硬闸门 | 判据:四项基线产物齐备且结论为允许 | [03-windows.md](../docs/03-windows.md) 的 `03-7`(闸门只看报告末行结论)
 
 ## 4. L3 Ubuntu 安装
 

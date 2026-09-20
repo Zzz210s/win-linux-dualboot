@@ -92,4 +92,4 @@
 
 1. 先在 Windows 里预置控制器驱动(厂商驱动包,或 `pnputil /add-driver <inf> /install`),并备份 BitLocker 恢复密钥;再回 `01-1` 把模式改为 AHCI。
 2. 首次启动失败(常见 `INACCESSIBLE_BOOT_DEVICE`)时不要反复长按电源强断(设计第 9 节);用恢复环境或安全模式完成一次启动,让 AHCI 驱动被加载。
-3. 之后回到 `01-3` 核对目标盘;细节在 `02-windows.md` 与 `07-rescue.md` 补齐。
+3. 之后回到 `01-3` 核对目标盘;细节在 `03-windows.md` 与 `07-rescue.md` 补齐。

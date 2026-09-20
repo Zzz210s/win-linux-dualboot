@@ -1,7 +1,8 @@
 ﻿#Requires -Version 5.1
+# 对应卡:03-8
 <#
 .SYNOPSIS
-  L2 基线备份:导出 ESP 全量文件树 + 文件级清单 + 固件启动项/分区快照。
+  L2 基线备份:导出 ESP 全量文件树 + 文件级清单 + 固件启动项/分区快照;-Check 只校验已有备份(不重做备份)。
 
 .DESCRIPTION
   产物(全部落在 -OutDir 下,I4 基线):
@@ -12,14 +13,18 @@
   注意:不要改动控制台输出编码(否则 cp936 控制台下会误解码 bcdedit/diskpart 输出,快照失真);
   本文件与 preflight.ps1 一样必须保存为 UTF-8 with BOM。
   边界:本脚本只写 -OutDir,**绝不修改 ESP 的任何内容**;ESP 只在备份期间临时挂一个盘符,收尾必然卸载。
+  -Check(只读、不动 ESP、不重做备份):读 <OutDir>\02-esp-backup\manifest.sha256,逐文件重算 SHA256 比对,
+    并检查备份树里有没有清单未收录的文件;一致 → 0,有差异/清单缺失 → 1(把差异逐条列出来,不自动重做)。
   用法(在仓库根目录、以管理员身份运行 Windows PowerShell):
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\backup-esp.ps1 -OutDir baseline
-  多设备时 -OutDir 指到 baseline\<设备别名>\ 下。
+    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\backup-esp.ps1 -OutDir baseline -Check
+  多设备时 -OutDir 指到 baseline\<设备别名>\ 下;退出码:0 成功或校验通过 / 1 失败(备份失败或校验不通过)。
 #>
 [CmdletBinding()]
 param(
   [string]$OutDir = 'baseline',
-  [string]$EspLetter = ''
+  [string]$EspLetter = '',
+  [switch]$Check
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,6 +32,45 @@ $ErrorActionPreference = 'Stop'
 function Write-TextFile {
   param([string]$Path, [string]$Text)
   [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+# 0. -Check:只校验已有备份(不挂 ESP、不重做备份、不写任何文件)
+if ($Check) {
+  $espDirC = Join-Path ([System.IO.Path]::GetFullPath($OutDir)) '02-esp-backup'
+  $manC = Join-Path $espDirC 'manifest.sha256'
+  if (-not (Test-Path -LiteralPath $manC)) {
+    Write-Host ('[FAIL] 找不到备份清单:' + $manC + ';先用同一命令去掉 -Check 做一次基线备份')
+    exit 1
+  }
+  $manLines = @([System.IO.File]::ReadAllLines($manC, [System.Text.Encoding]::UTF8) | Where-Object { $_ -and $_.Trim() })
+  if ($manLines.Count -eq 0) { Write-Host ('[FAIL] 备份清单是空文件:' + $manC + ';重做一次备份(去掉 -Check)'); exit 1 }
+  $badList = @(); $listed = @{}; $checked = 0
+  foreach ($ln in $manLines) {
+    $m = [regex]::Match($ln, '^(?<h>[0-9a-fA-F]{64})[ ]{2}(?<p>.+)$')
+    if (-not $m.Success) { $badList += ('清单行格式不合法:' + $ln); continue }
+    $rel = $m.Groups['p'].Value.Trim()
+    $listed[$rel.ToLower()] = $true
+    $abs = Join-Path $espDirC ($rel -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $abs)) { $badList += ('清单里的文件不存在:' + $rel); continue }
+    $h = (Get-FileHash -LiteralPath $abs -Algorithm SHA256).Hash.ToLower()
+    $checked++
+    if ($h -ne $m.Groups['h'].Value.ToLower()) { $badList += ('哈希不一致:' + $rel + '(清单 ' + $m.Groups['h'].Value.ToLower() + ',实测 ' + $h + ')') }
+  }
+  $extra = @()
+  foreach ($f in @(Get-ChildItem -LiteralPath $espDirC -Recurse -File -Force | Where-Object { $_.Name -ne 'manifest.sha256' })) {
+    $rel = $f.FullName.Substring($espDirC.Length + 1).Replace('\', '/')
+    if (-not $listed.ContainsKey($rel.ToLower())) { $extra += $rel }
+  }
+  if ($extra.Count -gt 0) { $badList += ('清单未收录的备份文件 ' + $extra.Count + ' 个,例如:' + $extra[0]) }
+  if ($badList.Count -gt 0) {
+    Write-Host ('[FAIL] 备份校验不通过:' + $badList.Count + ' 项(已比对 ' + $checked + ' 个文件)')
+    foreach ($b in @($badList | Select-Object -First 20)) { Write-Host ('  - ' + $b) }
+    Write-Host '不重做备份:按上面的差异清单人工判断;要重做就去掉 -Check 重跑本脚本。'
+    exit 1
+  }
+  Write-Host ('[PASS] 备份校验通过:清单 ' + $manLines.Count + ' 行,已比对 ' + $checked + ' 个文件,逐文件哈希一致、无清单外文件。')
+  Write-Host ('备份树:' + $espDirC + '(本次未改动任何文件,ESP 未被挂载)')
+  exit 0
 }
 
 # 0. 管理员权限(mountvol /s 与读取 ESP 都要求)
@@ -77,7 +121,7 @@ try {
   $rc = $LASTEXITCODE
   if ($rc -ge 8) { throw ('robocopy 复制 ESP 失败(退出码 ' + $rc + ')') }
 
-  # 4. 文件级清单(先枚举再写清单文件;manifest.sha256 是清单自身,永远不进清单,否则会自引用并破坏 docs/03-preflight.md 验证第 11 行)
+  # 4. 文件级清单(先枚举再写清单文件;manifest.sha256 是清单自身,永远不进清单,否则会自引用并破坏 03-9 的清单可解析判据)
   $files = @(Get-ChildItem -LiteralPath $espDir -Recurse -File -Force | Where-Object { $_.Name -ne 'manifest.sha256' })
   $manifest = @()
   foreach ($f in $files) {

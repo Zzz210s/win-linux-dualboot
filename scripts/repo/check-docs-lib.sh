@@ -10,7 +10,7 @@ set -uo pipefail
 EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xef\xb8\x8f')"
 
 # C9 白名单:库文件(dbk-apt.sh 是被 hardening/storage source 的 legacy 库,将在任务 14 并入 dbk-pkg.sh)与仓库自检脚本。
-WL=" scripts/linux/dbk-log.sh scripts/linux/dbk-cli.sh scripts/linux/dbk-obs.sh scripts/linux/dbk-pkg.sh scripts/linux/dbk.sh scripts/linux/dbk-apt.sh scripts/repo/check-docs.sh scripts/repo/check-docs-lib.sh scripts/repo/check-docs-repo.sh scripts/repo/check-scripts.sh scripts/windows/dbk-cli.ps1 scripts/windows/dbk-obs.ps1 scripts/windows/dbk.ps1 "
+WL=" scripts/linux/dbk-log.sh scripts/linux/dbk-cli.sh scripts/linux/dbk-obs.sh scripts/linux/dbk-pkg.sh scripts/linux/dbk.sh scripts/linux/dbk-apt.sh scripts/repo/check-docs.sh scripts/repo/check-docs-lib.sh scripts/repo/check-docs-repo.sh scripts/repo/check-scripts.sh scripts/windows/dbk-cli.ps1 scripts/windows/dbk-obs.ps1 scripts/windows/dbk-win-probe.ps1 scripts/windows/dbk.ps1 "
 is_wl() { case "$WL" in *" $1 "*) return 0;; *) return 1;; esac; }
 
 # 脚本头「# 对应卡:NN-K[,NN-K…]」:# 前允许 UTF-8 BOM(.ps1 必须带;.sh 允许),支持一脚本服务多张卡的逗号列表。

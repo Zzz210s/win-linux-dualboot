@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-# 对应卡:01-3,03-7
+# 对应卡:01-3,03-6
 <#
 .SYNOPSIS
   L2 只读预检:体检本机状态并生成闸门报告(默认 baseline\02-preflight-report.md)。判定:红 = 禁止进入 L3;黄 = 记录后继续;绿 = 通过。

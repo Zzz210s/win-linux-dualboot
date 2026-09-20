@@ -178,7 +178,7 @@
 
 **依据与细节**:设计文档故障矩阵里"任意"两行与第 9 节的对应风险行;排障纪律写在救援手册里,不只写给救援场景。
 
-**指向更详细的章节**:[07-rescue.md](07-rescue.md) 第 8 节(排障纪律);[05-first-boot.md](05-first-boot.md) 步骤 6 的 R9 行、步骤 1.1 前提 1;[02-windows.md](02-windows.md) 步骤 3;[09-risks.md](09-risks.md) 第 4、15、16 条。
+**指向更详细的章节**:[07-rescue.md](07-rescue.md) 第 8 节(排障纪律);[05-first-boot.md](05-first-boot.md) 步骤 6 的 R9 行、步骤 1.1 前提 1;[03-windows.md](03-windows.md) 的 `03-2`;[09-risks.md](09-risks.md) 第 4、15、16 条。
 
 ### 8. 两个系统运行期会不会互相影响
 
@@ -262,7 +262,7 @@
 
 **依据与细节**:MBR/GPT 的写法差异也会影响救援——现代 GPT 盘写作 `(hdX,gptY)`,`(hdX,msdosY)` 是 MBR 盘的写法,照抄网上旧教程的 `msdosY` 会报 `unknown filesystem`。
 
-**指向更详细的章节**:[01-firmware.md](01-firmware.md) 步骤 3(仅 UEFI、CSM 关闭)与"失败处理"(启动菜单里出现两个条目的情形);[02-windows.md](02-windows.md) 步骤 1(预建 GPT 分区表);[07-rescue.md](07-rescue.md) 步骤 1.1;[design/00-design.md](design/00-design.md) 第 10 节"双盘设备分支"。
+**指向更详细的章节**:[01-firmware.md](01-firmware.md) 步骤 3(仅 UEFI、CSM 关闭)与"失败处理"(启动菜单里出现两个条目的情形);[02-partitioning.md](02-partitioning.md) 的 `02-1`(分区表定稿)与 `02-4`(预建 GPT 分区表);[07-rescue.md](07-rescue.md) 步骤 1.1;[design/00-design.md](design/00-design.md) 第 10 节"双盘设备分支"。
 
 ### 13. 能不能装到移动硬盘 / USB SSD
 

@@ -1,6 +1,6 @@
 # L3:Ubuntu 26.04 LTS 安装(不侵犯 Windows 引导)
 
-本文件是 L3 阶段的手册。目标状态、四条不变量(下称 I1-I4)与参数名在[入口文档](00-overview.md)中定义;前提由 [L2 手册](03-preflight.md)交付;动机与依据见[设计文档](design/00-design.md) 3.3 节(引导栈:官方 GRUB + shim)、3.17 节(显卡模式 MUX 分支)、3.19 节(引导菜单黑屏)、4.4 节(L3 步骤)、5.1 节(分区表)、第 7 节(故障矩阵)与 11.1 节(评论区实战证据)。
+本文件是 L3 阶段的手册。目标状态、四条不变量(下称 I1-I4)与参数名在[入口文档](00-overview.md)中定义;前提由 [L2 手册](03-windows.md)交付;动机与依据见[设计文档](design/00-design.md) 3.3 节(引导栈:官方 GRUB + shim)、3.17 节(显卡模式 MUX 分支)、3.19 节(引导菜单黑屏)、4.4 节(L3 步骤)、5.1 节(分区表)、第 7 节(故障矩阵)与 11.1 节(评论区实战证据)。
 
 **本阶段最危险的动作只有一个:把 ESP 勾成"格式化"。** 它会在几秒内清空 `\EFI\Microsoft\`,让 Windows 与 Ubuntu 一起进不去——而且此时唯一完整的退路是 L2 的 ESP 基线(见"回滚")。L3 的其余步骤都可以慢,这一条不能错。
 
@@ -35,7 +35,7 @@
 
 - **L2 硬闸门已通过**:`baseline/02-preflight-report.md` 最后一行是 `结论: 允许进入 L3`,且报告"结论"一节红项为 `无`。带红项进 L3 属越界,不要"先试试看"。
 - **基线四件齐备**(I4 的最低要求):`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt`、`baseline/01-partitions.txt`。其中两份分区记录是本节"只动预留空间"的比对依据,`02-esp-backup/manifest.sha256` 是验证段第 2 行的比对依据。
-- **BitLocker 处于挂起状态**:报告"BitLocker 保护状态"行为 `未加密` 或 `卷已加密、保护已关闭(挂起或暂停)`。**L3 期间不要重新启用保护**;恢复保护是本阶段的收尾动作(步骤 8),闭环方式见 [L2 手册](03-preflight.md)"回滚"第 2 条。
+- **BitLocker 处于挂起状态**:报告"BitLocker 保护状态"行为 `未加密` 或 `卷已加密、保护已关闭(挂起或暂停)`。**L3 期间不要重新启用保护**;恢复保护是本阶段的收尾动作(步骤 8),闭环方式见 [回滚清单](../checklists/rollback.md) 第 1 节的 BitLocker 收尾行。
 - **参数表已填**(每台设备一份,见[入口文档](00-overview.md)):`DISK`、`DISK_MODEL` / `DISK_SIZE`(防选错盘)、`ROOT_SIZE = 100GiB`、`SNAPSHOT_SIZE = 15GiB`、`ESP_SIZE = 2GiB`、`BOOT_MENU_KEY`、`GPU`。
 - **介质**:Ubuntu 26.04 LTS 官方安装 U 盘,ISO 的 SHA256 已在 L0 按官方 `SHA256SUMS` 校验过。按健壮性设计 R4,这块 U 盘**装机结束后不回收**,保持"已验证可用"。
 - **空间前提**:L1 已在盘尾预留 115GiB 未分配空间(root 100 + 快照 15),目标布局是 `ESP → MSR → C: → D: → [115GiB 未分配] → WinRE`(设计文档 5.1)。Ubuntu 的两块分区必须从这段未分配空间里切出来;**不要指望安装器帮你在别处腾空间**。
@@ -169,7 +169,7 @@ manage-bde -protectors -enable C:
 manage-bde -status
 ```
 
-L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;漏做这一步,C: 会长期停在"卷仍加密、保护已关闭"的状态(闭环说明见 [L2 手册](03-preflight.md)"回滚"第 2 条)。闭环之前不要做任何与分区表有关的事。
+L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;漏做这一步,C: 会长期停在"卷仍加密、保护已关闭"的状态(闭环说明见 [回滚清单](../checklists/rollback.md) 第 1 节的 BitLocker 收尾行)。闭环之前不要做任何与分区表有关的事。
 
 ## 验证
 
@@ -203,7 +203,7 @@ L2 用的是 `-rebootcount 0` 挂起,**不会**随时间或重启自动恢复;�
 | 安装界面或首启黑屏 | 步骤 5(a):引导菜单按 `e`,内核行加 `nomodeset` 临时启动。它关掉 KMS,**与默认的 Wayland 会话冲突**,只是应急手段;能进系统后立即装好显卡驱动并移除该参数(`/etc/default/grub` 去掉 + `sudo update-grub`),不要把它当长期配置 |
 | 混合显卡模式下安装器/首启反复点不亮 | 步骤 5(b):按设计文档 3.17 走 MUX 分支,固件切**独显直连**先拿到可用系统。记录代价:显存被显示输出占用、续航变差、日后本地推理显存不足;切回混合模式的评估放在 L4,不要在这里反复试 |
 | 装完进不了桌面(黑屏、循环登录、卡在图形栈) | 切 TTY(`Ctrl + Alt + F3`)登录,看上一次启动的日志:`journalctl -b -1 -p err`。必要时在 GRUB "Advanced options" 选**旧内核**启动。属于 NVIDIA 驱动问题就按 L4 的预签名包路径处理;**不要因为驱动问题降级发行版**(设计文档 3.17 被否方案、第 9 节) |
-| `\EFI\Microsoft\` 与基线不一致(验证段第 2 行报差异) | **立即停手**:说明 ESP 被改写,I3 已被违反。用 L2 基线复原:把 `baseline/02-esp-backup/EFI/` 复制回 ESP + `bcdboot C:\Windows /s S: /f UEFI`(完整步骤见 [L2 手册](03-preflight.md)"回滚"第 1 条),复原并复查后再继续 |
+| `\EFI\Microsoft\` 与基线不一致(验证段第 2 行报差异) | **立即停手**:说明 ESP 被改写,I3 已被违反。用 L2 基线复原:把 `baseline/02-esp-backup/EFI/` 复制回 ESP + `bcdboot C:\Windows /s S: /f UEFI`(完整步骤见 [回滚清单](../checklists/rollback.md) 第 4 节),复原并复查后再继续 |
 | 发现自己把 ESP 勾成了"格式化" | **在点"安装/下一步"之前退回去取消勾选**,这是无损的。若已经安装完成才发现:`\EFI\Microsoft\` 大概率已被清空,按上一行做基线复原,并把这次记录为 L3 的严重偏差 |
 | 安装器提供了"与 Windows 共存""擦除磁盘"选项 | 不使用。本方案只走手动分区:共存模式会自动缩容 Windows 分区(设计文档 1、3.5 节),擦除磁盘会整盘重写 |
 | 装机中途回了 Windows,且它联网完成了更新 | 基线失效(L2 与 L3 之间 Windows 更新会改动 ESP 与固件状态):回 L2 用管理员会话重跑 `preflight.ps1`,重新核对分区表、ESP 与固件启动项;报告仍为 `结论: 允许进入 L3` 才继续。**不要带着过期基线往下走**(交接规则第 4 条) |
@@ -225,7 +225,7 @@ ESP 被改动、Windows 引导异常、或要放弃这次 Ubuntu 安装时:**用
 3. 重建 Windows 引导:`bcdboot C:\Windows /s S: /f UEFI`;
 4. 卸载 ESP(`mountvol S: /d`),复查四条不变量(`BootOrder` 首位、`\EFI\Microsoft\` 哈希、`{bootmgr}` 的 `path`、Ubuntu 条目是否仍在)。
 
-完整命令与判据见 [L2 手册](03-preflight.md)"回滚"第 1 条。
+完整命令与判据见 [回滚清单](../checklists/rollback.md) 第 4 节。
 
 ### 3. 单步回滚:`\EFI\ubuntu\` 的删除与还原
 
@@ -241,7 +241,7 @@ ESP 被改动、Windows 引导异常、或要放弃这次 Ubuntu 安装时:**用
 
 ### 6. BitLocker 保护的恢复(本阶段收尾,不是可选项)
 
-L3 完成后在 Windows 里执行 `manage-bde -protectors -enable C:`,并用 `manage-bde -status` 确认保护已开启。L2 用的是"挂起到手工启用",**不会**自动恢复;漏做这一步,C: 会停在"卷仍加密、保护已关闭"的状态,且不会随时间自愈(见 [L2 手册](03-preflight.md)"回滚"第 2 条)。
+L3 完成后在 Windows 里执行 `manage-bde -protectors -enable C:`,并用 `manage-bde -status` 确认保护已开启。L2 用的是"挂起到手工启用",**不会**自动恢复;漏做这一步,C: 会停在"卷仍加密、保护已关闭"的状态,且不会随时间自愈(见 [回滚清单](../checklists/rollback.md) 第 1 节的 BitLocker 收尾行)。
 
 ### 7. I4 复核:L3 之后旧基线的状态
 

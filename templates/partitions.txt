@@ -49,6 +49,6 @@ rem    它是 L3 安装 Ubuntu 时的 root 100GiB + Snapshot 15GiB。
 rem    不要用不带 size 的 create partition(会吃满整盘,导致 L3 无空间可用)。
 rem
 rem WinRE 由 Windows 安装程序在安装系统时自行创建(可能在磁盘末尾);
-rem 若它落在上面这段预留空间内,按 docs/02-windows.md 的"WinRE 偏差处理"处置:
+rem 若它落在上面这段预留空间内,按 docs/03-windows.md 的 03-1(WinRE 偏差判据)处置:
 rem 只要 ESP 尺寸未被削减、留给 Linux 的空间仍不少于 115GiB 即接受,并把偏差
 rem 记录进 baseline/01-partitions.txt。

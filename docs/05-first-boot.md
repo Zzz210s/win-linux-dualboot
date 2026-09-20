@@ -36,11 +36,11 @@ L4 完成后,这台设备应当达到:
 ## 前置条件
 
 - **L3 已收尾且 11 项全绿**:`baseline/03-efi-layout.txt` 在位,`BootOrder` 首位仍是 `Windows Boot Manager`,`ubuntu` 条目在末尾(I1、I2 未被破坏)。L4 不修引导,带引导问题进来只会把两件事混在一起。
-- **BitLocker 保护已恢复**:L3 步骤 8 的 `manage-bde -protectors -enable C:` 已完成。L4 不改分区表与固件,但共享盘方案的前提是 `D:` **不加密**,该状态要与 [L2 手册](03-preflight.md)的记录一致。
+- **BitLocker 保护已恢复**:L3 步骤 8 的 `manage-bde -protectors -enable C:` 已完成。L4 不改分区表与固件,但共享盘方案的前提是 `D:` **不加密**,该状态要与 [L2 手册](03-windows.md)的记录一致。
 - **回 Windows 的入口可用**(设计文档交接规则第 6 条):`BOOT_MENU_KEY` 能调出一次性启动菜单(见 [L0 手册](01-firmware.md) 厂商差异表);或 [scripts/linux/reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)、[scripts/windows/set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)| 二者任一可用即可,**不允许**用 `efibootmgr -o` 代替(I2)。
 - **快照能力已就绪**(R1、R2):`/snapshots` 分区可写;Timeshift 由步骤 6 配置(目标为 `/snapshots`、保留 3 份(可调))。在第一次内核/驱动变更之前必须已有至少一个快照点,否则**不得**执行该变更。
 - **参数表已填**(每台设备一份,见[入口文档](00-overview.md)):`SHARED_PART_UUID`(Windows `D:` 分区 UUID)、`SNAPSHOT_PART_UUID`(L3 建的 15GiB ext4 快照分区)、`GPU`(是否混合显卡)、`BOOT_MENU_KEY`、`DISK`。两个 UUID 的取值来源是 `baseline/02-partitions.txt` 与 L3 分区表交叉核对,**不要凭记忆填写**。
-- **Windows 侧重定向清单已固化且不得再改名**(L1 的隐含约定,见 [L1 手册](02-windows.md) 第 4 节):`D:\Desktop`、`D:\Documents`、`D:\Downloads`、`D:\Pictures`、`D:\Videos`、`D:\Music` 与办公约定目录 `D:\Shared\`。Linux 侧逐项对应为 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}` 与 `/mnt/shared/Shared/`。
+- **Windows 侧重定向清单已固化且不得再改名**(L1 的隐含约定,见 [03-windows.md](03-windows.md) 的 `03-3`):`D:\Desktop`、`D:\Documents`、`D:\Downloads`、`D:\Pictures`、`D:\Videos`、`D:\Music` 与办公约定目录 `D:\Shared\`。Linux 侧逐项对应为 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}` 与 `/mnt/shared/Shared/`。
 - **救援介质在位**(R4):L3 用过的 Ubuntu 安装 U 盘保持"已验证可用",不回收。显卡环节是本阶段最容易进不去桌面的地方。
 - **网络与时间**:Ubuntu 能联网(`apt` 可用、`systemd-timesyncd` 正常),蓝牙同步脚本需要下载上游仓库。
 - **口径**:**本阶段不做休眠、不关 Secure Boot、不自签密钥、不降级发行版**;驱动不认时优先换内核(HWE)或换驱动版本(设计 3.17 被否方案、第 9 节)。

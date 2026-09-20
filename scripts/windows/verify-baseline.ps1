@@ -173,5 +173,5 @@ if ($bad.Count -eq 0) {
   exit 0
 }
 Write-Host ('需人工介入:' + $bad.Count + ' 项 —— ' + (($bad | ForEach-Object { $_.Item }) -join '、'))
-Write-Host '处置:按 docs/03-preflight.md 与 baseline/README.md 核对;确认改动属实且必要后,重做 L2 基线(backup-esp.ps1 + preflight.ps1)再继续。'
+Write-Host '处置:按 docs/03-windows.md 的 03-6(preflight.ps1)与 baseline/README.md 核对;确认改动属实且必要后,重做 L2 基线(backup-esp.ps1 + preflight.ps1)再继续。'
 exit 1
