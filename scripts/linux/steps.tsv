@@ -1,0 +1,7 @@
+步骤号	脚本路径	破坏性(0/1)	说明
+05-1	scripts/linux/mount-shared.sh	1	挂载共享盘 D:(写 /etc/fstab,需 --yes)
+05-2	scripts/linux/xdg-redirect.sh	1	家目录重定向(写 user-dirs.dirs,需 --yes)
+05-3	scripts/linux/graphics.sh	1	显卡栈收敛(ublue NVIDIA rebase + MOK,需 --yes)
+05-5	scripts/linux/bt-keys-sync-wrapper.sh	1	蓝牙配对密钥同步(分层装包 + 写 Windows hive,需 --yes)
+05-6	scripts/linux/storage.sh	1	zram 与 swapfile 核对(写系统配置,需 --yes)
+05-11	scripts/linux/reboot-to-windows.sh	0	一次性重启进 Windows(不改 BootOrder)

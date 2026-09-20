@@ -1,0 +1,5 @@
+步骤号	脚本路径	破坏性(0/1)	说明
+02-7	scripts/windows/preflight.ps1	0	只读体检:闸门判据与基线报告
+02-9	scripts/windows/backup-esp.ps1	0	基线备份:ESP 全量文件树 + manifest.sha256
+04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(写固件 NVRAM,不改 BootOrder,需 -Yes)
+07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线
