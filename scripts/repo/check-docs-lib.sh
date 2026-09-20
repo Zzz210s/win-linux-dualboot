@@ -10,8 +10,15 @@ set -uo pipefail
 EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xef\xb8\x8f')"
 
 # C9 白名单:库文件(dbk-apt.sh 是被 hardening/storage source 的 legacy 库,将在任务 14 并入 dbk-pkg.sh)与仓库自检脚本。
-WL=" scripts/linux/dbk-log.sh scripts/linux/dbk-cli.sh scripts/linux/dbk-pkg.sh scripts/linux/dbk.sh scripts/linux/dbk-apt.sh scripts/repo/check-docs.sh scripts/repo/check-docs-lib.sh scripts/repo/check-docs-repo.sh scripts/repo/check-scripts.sh scripts/windows/dbk-cli.ps1 scripts/windows/dbk.ps1 "
+WL=" scripts/linux/dbk-log.sh scripts/linux/dbk-cli.sh scripts/linux/dbk-obs.sh scripts/linux/dbk-pkg.sh scripts/linux/dbk.sh scripts/linux/dbk-apt.sh scripts/repo/check-docs.sh scripts/repo/check-docs-lib.sh scripts/repo/check-docs-repo.sh scripts/repo/check-scripts.sh scripts/windows/dbk-cli.ps1 scripts/windows/dbk-obs.ps1 scripts/windows/dbk.ps1 "
 is_wl() { case "$WL" in *" $1 "*) return 0;; *) return 1;; esac; }
+
+# 脚本头「# 对应卡:NN-K[,NN-K…]」:# 前允许 UTF-8 BOM(.ps1 必须带;.sh 允许),支持一脚本服务多张卡的逗号列表。
+# 本正则与 scripts/linux/dbk-cli.sh 的 DBK_BOM/dbk_header_field、scripts/windows/dbk-cli.ps1 的
+# Get-DbkHeaderField 必须保持一致,否则库与仓库自检(C9b/C9d)对同一脚本头会得出不同结论。
+BOM="$(printf '\xef\xbb\xbf')"
+CARDRE="^(${BOM})?#[[:space:]]*(对应卡|Card):[[:space:]]*[0-9][0-9]-[0-9]+([,，][[:space:]]*[0-9][0-9]-[0-9]+)*"
+# 读脚本头声明的全部卡号(空格分隔;取不到则空)。
 
 # 卡内脚本路径:正斜杠与反斜杠都接受(Windows 侧卡会写 scripts\windows\x.ps1);判存在/比对前先用 norm_path 归一成 /
 PATHRE='scripts[\\/][A-Za-z0-9_./\\-]+\.(sh|ps1)'
@@ -50,6 +57,12 @@ scope_of() {
 # NN -> 文档路径:被检查文件自身命名匹配时用自身(夹具场景),否则取 docs/NN-*.md
 doc_of() { case "$(basename "$2")" in "$1"-*.md) printf '%s' "$2";; *) ls "$ROOT/docs/$1"-*.md 2>/dev/null | head -1;; esac; }
 card_exists() { local d; d="$(doc_of "${1%%-*}" "$2")"; [ -n "$d" ] && grep -qE "^### $1([[:space:]]|\$)" "$d"; }
+card_header_cards() {
+  local line cards
+  line="$(grep -m1 -oE "$CARDRE" "$1" || true)"
+  cards="$(printf '%s' "$line" | grep -oE '[0-9][0-9]-[0-9]+' | tr '\n' ' ')"
+  printf '%s' "${cards% }"
+}
 # 卡标题行:FLOW 只认 ### NN-K 形态(C2 定义的卡);08/09/10 的卡只需 ### 标题
 card_heads() {
   case "$(scope_of "$1")" in FLOW) grep -nE '^### [0-9][0-9]-[0-9]+([[:space:]]|$)' "$1";; *) grep -nE '^### ' "$1";; esac

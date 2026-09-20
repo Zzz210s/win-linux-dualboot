@@ -1,2 +1,2 @@
 # 步骤号	脚本路径	破坏性	说明
-01-9	scripts/linux/ghostcard.sh	0	甲
+01-1	scripts/windows/bomstep.ps1	0	甲

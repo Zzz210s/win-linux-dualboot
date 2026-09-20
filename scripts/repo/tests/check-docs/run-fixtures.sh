@@ -54,6 +54,10 @@ check "C9b 小写 # card: 被拒绝"     c9b-card-lower          C9b 1
 check "C9c 步骤脚本无人引用"        c9c                     C9c 1
 check "C9d 索引与脚本不一致"        c9d                     C9d 3
 check "C9d 缺步骤索引"              c9d-missing             C9d 1
+check "C9b 带 BOM 的 .ps1 卡头被承认" c9b-bom                OK  0
+check "C9d 多卡列表头 + 多步复用(应过)" c9d-cardlist         OK  0
+check "C9d 破坏性列不是 0/1"          c9d-destructive        C9d 1
+check "C9d 索引步骤号重复"            c9d-dup                C9d 1
 
 for extra in extra-checks.sh extra-checks-c9.sh; do
   echo
