@@ -121,11 +121,26 @@ else verdict 0 "F7 dbk-apt.sh 已在白名单(不再报 C9b/C9c)"; fi
 # ==== F12:--repo 在单文件模式下追加仓库级 C9b/C9c/C9d ========================
 out="$(bash "$SCRIPT" "$ROOT/docs/00-overview.md" 2>&1)"; rc=$?
 judge "F12 不带 --repo:单文件模式无仓库级规则" OK 0 "$out" "$rc"
+# F12a:真实仓库 --repo 追加的仓库级条数必须与 check-docs-repo.sh 单独运行的输出逐类一致。
+# 断言"一致"而不是"非零":C9b/C9c 会随文档任务推进而变化甚至清零(如 05 手册改版把 first-boot.sh 收口后 C9c=0),
+# "单文件模式下确实会追加"这一点由 F12b(C9d)与 F12c(C9c)的临时仓库保证,不依赖真实仓库的中间态。
+repo_out="$(bash "$ROOT/scripts/repo/check-docs-repo.sh" 2>&1)"
 out="$(bash "$SCRIPT" --repo "$ROOT/docs/00-overview.md" 2>&1)"; rc=$?
-n_b="$(printf '%s\n' "$out" | grep -c ' C9b ' || true)"; n_c="$(printf '%s\n' "$out" | grep -c ' C9c ' || true)"
-# 真实仓库的 C9d 已清零,所以这里只能断言 C9b/C9c;--repo 也会追加 C9d 由 F12b 的临时仓库证明。
-if [ "$rc" -eq 1 ] && [ "$n_b" -ge 1 ] && [ "$n_c" -ge 1 ]; then verdict 0 "F12 --repo 追加 C9b/C9c 且退出码 1(C9d 见 F12b)"
-else verdict 1 "F12 --repo 追加 C9b/C9c 且退出码 1(rc=$rc C9b=$n_b C9c=$n_c)" "$out"; fi
+f12a_ok=1
+for r in C9b C9c C9d; do
+  a="$(printf '%s\n' "$repo_out" | grep -c " $r " || true)"; b="$(printf '%s\n' "$out" | grep -c " $r " || true)"
+  [ "$a" -eq "$b" ] || f12a_ok=0
+done
+if [ "$f12a_ok" -eq 1 ]; then verdict 0 "F12a 真实仓库 --repo 追加的 C9b/C9c/C9d 条数与 check-docs-repo.sh 一致"
+else verdict 1 "F12a 真实仓库 --repo 追加条数与 check-docs-repo.sh 不一致" "$out"; fi
+# F12c:临时仓库(存在未被任何卡引用的步骤脚本)→ --repo 在单文件模式下追加 C9c
+D12c="$W/repo-f12c"; mkdir -p "$D12c/scripts/repo"
+cp -r "$FIX/tmp-repo/c9c/." "$D12c/"
+cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$D12c/scripts/repo/"
+out="$(cd "$D12c" && bash scripts/repo/check-docs.sh --repo docs/01-firmware.md 2>&1)"; rc=$?
+n_c="$(printf '%s\n' "$out" | grep -c ' C9c ' || true)"
+if [ "$rc" -eq 1 ] && [ "$n_c" -ge 1 ]; then verdict 0 "F12c --repo 在单文件模式下追加 C9c(临时仓库:步骤脚本无人引用)"
+else verdict 1 "F12c --repo 未追加 C9c(rc=$rc C9c=$n_c)" "$out"; fi
 # F12b:临时仓库(同一 (步骤号, 脚本) 对重复)→ --repo 必须把 C9d 一并追加进来
 D12="$W/repo-f12"; mkdir -p "$D12/scripts/repo"
 cp -r "$FIX/tmp-repo/c9d-dup/." "$D12/"
