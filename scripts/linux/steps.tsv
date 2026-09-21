@@ -19,4 +19,8 @@
 05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md
 05-13	scripts/linux/first-boot.sh	1	L4 汇总执行(可选):按顺序跑各模块并聚合结果
 05-13	scripts/linux/hardening.sh	1	L4 汇总执行(可选):R1-R9 六项(被 first-boot.sh 编排,也可单跑)
+07-1	scripts/linux/triage.sh	0	判层:只读采集分区/挂载/固件条目/两块 ESP 内容/部署,给判层结论与建议卡号
+07-2	scripts/linux/gen-grub-rescue-commands.sh	0	从 GRUB 提示符回去:生成两套可复制命令(不执行、不改启动顺序)
+07-5	scripts/linux/check-partition-plan.sh	0	只重装 Silverblue:装前核对 Fedora 三块分区与 Windows 侧不被触碰(安装人工,ESP 绝不格式化)
 07-7	scripts/linux/dbk-rollback.sh	0	周期巡检(Linux 侧):部署列表与固定状态 + nvidia 签名 + 会话类型(--check;Windows 侧见 verify-baseline.ps1)
+07-7	scripts/linux/check-signature.sh	0	周期巡检(Linux 侧):nvidia 模块签名与 MOK 注册状态(未签名/未注册 → 需人工)
