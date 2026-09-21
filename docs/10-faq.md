@@ -23,7 +23,7 @@
 
 1. **`baseline/` 产物可读**:至少 `02-partitions.txt`、`02-firmware-entries.txt`、`02-esp-backup/`(基线回滚与逐项对账都依赖它);`baseline/` 不入库,只在本机;
 2. **救援 U 盘在位**(Ubuntu 安装 U 盘,常备项 R4);
-3. **能回到 Windows 的入口可用**:一次性 `BootNext` 或厂商启动菜单键——L4 之后的任何驱动变更之前都要先确认这一点(设计文档第 6 节交接规则第 6 条);
+3. **能回到 Windows 的入口可用**:一次性 `BootNext` 或厂商启动菜单键——L4 之后的任何驱动变更之前都要先确认这一点(设计文档(设计 6)交接规则第 6 条);
 4. **已读四条不变量**([00-overview.md](00-overview.md) "四条不变量"):任何处置都不得违反它,尤其是"绝不用 `efibootmgr -o` 调整永久启动顺序"。
 
 现象发生在哪个阶段也要先分清:同一句"黑屏",在 L3(安装)与 L4(首启/驱动)原因与处置不同。
@@ -93,7 +93,7 @@
 
 **依据与细节**:这是评论区里"新网卡/键盘不识别"的归纳结论,对应设计文档 11.1 第 10 条与第 10 节的 HWE 内核分支(该分支待评估,v1 不承诺);口径与"不因驱动问题降级发行版"一致。
 
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) "前置条件"(口径行)与步骤 3;[07-rescue.md](07-rescue.md) 第 8 节"第四条";[design/00-design.md](design/00-design.md) 11.1 第 10 条、第 10 节;[09-risks.md](09-risks.md) 第 21 条。
+**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) "前置条件"(口径行)与 `05-3`;`07-8`"第四条";(设计 11.1)第 10 条、(设计 10);[09-risks.md](09-risks.md) 第 21 条。
 
 ### 3. 手动分区界面找不到"引导器位置"选项
 
@@ -176,9 +176,9 @@
 3. **硬件优先 triage**:内存、SMART、温度、电源;`smartd` 与 ext4 周期性 `fsck` 是常备项(R9);
 4. 顺手回 Windows 复核 Fast Startup 与休眠仍是关闭的(L1 做过,但 Windows 大版本更新可能改回来);它既是共享盘前提,也是"混合关机"损坏的源头。
 
-**依据与细节**:设计文档故障矩阵里"任意"两行与第 9 节的对应风险行;排障纪律写在救援手册里,不只写给救援场景。
+**依据与细节**:设计文档故障矩阵里"任意"两行与(设计 9)的对应风险行;排障纪律写在救援手册里,不只写给救援场景。
 
-**指向更详细的章节**:[07-rescue.md](07-rescue.md) 第 8 节(排障纪律);[05-first-boot.md](05-first-boot.md) 步骤 6 的 R9 行、步骤 1.1 前提 1;[03-windows.md](03-windows.md) 的 `03-2`;[09-risks.md](09-risks.md) 第 4、15、16 条。
+**指向更详细的章节**:`07-8`(排障纪律);[05-first-boot.md](05-first-boot.md) `05-6` 的 R9 行、`05-1` 前提 1;[03-windows.md](03-windows.md) 的 `03-2`;[09-risks.md](09-risks.md) 第 4、15、16 条。
 
 ### 8. 两个系统运行期会不会互相影响
 
@@ -194,7 +194,7 @@
 
 **依据与细节**:ESP 与固件 NVRAM 是两系统唯一的共享面;`baseline/` 里的分区表、ESP 镜像、固件条目快照就是这个共享面的对照基准。
 
-**指向更详细的章节**:[00-overview.md](00-overview.md) "四条不变量";[design/00-design.md](design/00-design.md) 第 2 节与第 7 节"任意"行;[09-risks.md](09-risks.md) 第 16 条。
+**指向更详细的章节**:[00-overview.md](00-overview.md) "四条不变量";(设计 2)与(设计 7)"任意"行;[09-risks.md](09-risks.md) 第 16 条。
 
 ### 9. 删掉 Ubuntu 会不会影响 Windows 引导
 
@@ -262,7 +262,7 @@
 
 **依据与细节**:MBR/GPT 的写法差异也会影响救援——现代 GPT 盘写作 `(hdX,gptY)`,`(hdX,msdosY)` 是 MBR 盘的写法,照抄网上旧教程的 `msdosY` 会报 `unknown filesystem`。
 
-**指向更详细的章节**:[01-firmware.md](01-firmware.md) 步骤 3(仅 UEFI、CSM 关闭)与"失败处理"(启动菜单里出现两个条目的情形);[02-partitioning.md](02-partitioning.md) 的 `02-1`(分区表定稿)与 `02-4`(预建 GPT 分区表);[07-rescue.md](07-rescue.md) 步骤 1.1;[design/00-design.md](design/00-design.md) 第 10 节"双盘设备分支"。
+**指向更详细的章节**:[01-firmware.md](01-firmware.md) 步骤 3(仅 UEFI、CSM 关闭)与"失败处理"(启动菜单里出现两个条目的情形);[02-partitioning.md](02-partitioning.md) 的 `02-1`(分区表定稿)与 `02-4`(预建 GPT 分区表);[07-rescue.md](07-rescue.md) 步骤 1.1;(设计 10)"双盘设备分支"。
 
 ### 13. 能不能装到移动硬盘 / USB SSD
 
@@ -280,7 +280,7 @@
 
 **依据与细节**:这条来自评论区同类需求,在设计文档里属"待评估"清单;它**不是** v1 的支持路径,所以不要在部署主流程里混入移动盘变体。
 
-**指向更详细的章节**:[design/00-design.md](design/00-design.md) 第 10 节"外置 USB SSD / 移动硬盘安装分支";[00-overview.md](00-overview.md) 四条不变量与"不做什么";[07-rescue.md](07-rescue.md) 第 6 节(启动顺序偏差复原)。
+**指向更详细的章节**:(设计 10)"外置 USB SSD / 移动硬盘安装分支";[00-overview.md](00-overview.md) 四条不变量与"不做什么";`07-9`(启动顺序偏差复原)。
 
 ### 14. Linux 分区能不能改小
 
@@ -372,7 +372,7 @@
 
 **依据与细节**:两法共用前提是 `baseline/` 产物齐全可用、救援 U 盘在位;重装 Windows 后要复查四条不变量,并重做首启配置(关 Fast Startup、KMS 激活、已知文件夹重定向);C 与 root 的隔离布局正是为"只重装一个系统"准备的。
 
-**指向更详细的章节**:[07-rescue.md](07-rescue.md) 步骤 0、4、5;[checklists/rollback.md](../checklists/rollback.md) 第 3 节;[design/00-design.md](design/00-design.md) 第 4.8 节;[09-risks.md](09-risks.md) 第 26、27 条;[08-verification.md](08-verification.md) D 组。
+**指向更详细的章节**:`07-1`、`07-4`、`07-5`;[checklists/rollback.md](../checklists/rollback.md) 的「原地重装两法」节;[design/00-design.md](design/00-design.md) (设计 4.8);[09-risks.md](09-risks.md) 第 26、27 条;[08-verification.md](08-verification.md) D 组。
 
 ## 验证
 
@@ -386,7 +386,7 @@
 ## 失败处理
 
 1. **速查表里找不到对应现象**:不要猜着动手。先按 [07-rescue.md](07-rescue.md) 步骤 0 判层(引导层 / 系统分区 / 硬件;分区表对账是判据,见步骤 0.2 第 5、6 问),再决定动作;
-2. **处置后现象不消失或更糟**:立刻停止同类动作——尤其停掉"重装"与"删分区",按 [07-rescue.md](07-rescue.md) 第 8 节的四条排障纪律走;
+2. **处置后现象不消失或更糟**:立刻停止同类动作——尤其停掉"重装"与"删分区",按 `07-8`的四条排障纪律走;
 3. **怀疑硬件**:硬件优先(内存、SMART、温度、电源),见 [09-risks.md](09-risks.md) 第 16 条;
 4. **怀疑是文档本身错了**(本附录的判断与阶段手册不一致):以阶段手册与[验收清单](08-verification.md)为准,并把它当作文档缺陷记录下来修文档,**不要按本附录硬做**。
 

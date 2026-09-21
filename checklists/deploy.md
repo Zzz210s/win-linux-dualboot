@@ -14,7 +14,7 @@
 
 **本阶段产物**:`baseline/00-firmware.md` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L0-1 抄下固件原值(存储控制器模式、Secure Boot、Fast Boot、启动顺序)之后**再**动手改 | 判据:改动前的原值已落盘 | 见 [01-firmware.md](../docs/01-firmware.md) 步骤 1
+- `[ ]` L0-1 抄下固件原值(存储控制器模式、Secure Boot、Fast Boot、启动顺序)之后**再**动手改 | 判据:改动前的原值已落盘 | 见 [01-firmware.md](../docs/01-firmware.md) 的 `01-1`
 - `[ ]` L0-2 存储控制器设为 AHCI / NVMe(VMD / RAID On 关闭),**必须在安装 Windows 之前** | 判据:固件界面显示 AHCI 或 NVMe | 步骤 2
 - `[ ]` L0-3 Secure Boot 保持开启、Fast Boot 关闭、仅 UEFI(CSM 关闭) | 判据:三项目标状态已记录 | 步骤 3
 - `[ ]` L0-4 制作安装介质并校验:Ubuntu ISO 按 `releases.ubuntu.com` 的 `SHA256SUMS` 比对;Windows ISO 官方未发布镜像哈希,只做"官方下载域 + 官方安装器校验" | 判据:校验结论写进产物 | 步骤 4
@@ -50,7 +50,7 @@
 
 **本阶段产物**:`baseline/03-efi-layout.txt` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L3-1 以 UEFI 模式从安装 U 盘启动(先确认 `/sys/firmware/efi` 存在),选"手动分区" | 见 [04-silverblue.md](../docs/04-silverblue.md) 步骤 1
+- `[ ]` L3-1 以 UEFI 模式从安装 U 盘启动(先确认 `/sys/firmware/efi` 存在),选"手动分区" | 见 [04-silverblue.md](../docs/04-silverblue.md) 的 `04-1`
 - `[ ]` L3-2 只切两块新分区:root 100GiB ext4 挂 `/`、Snapshot 15GiB ext4 挂 `/snapshots`;ESP 复用挂 `/boot/efi` 且**不勾选格式化**;不建 swap 分区 | 判据:只有 root 那一行带格式化勾选 | 步骤 2
 - `[ ]` L3-3 确认引导写入 `\EFI\ubuntu\`,期间**不改 `BootOrder`** | 判据:装完 `\EFI\` 下 `Microsoft` 与 `ubuntu` 并存,`BootOrder` 首位仍是 Windows Boot Manager | 步骤 3
 - `[ ]` L3-4 Secure Boot 全程保持开启 | 判据:`mokutil --sb-state` 显示已启用 | 步骤 4
@@ -63,7 +63,7 @@
 
 **本阶段产物**:`baseline/04-first-boot.md`、`baseline/04-robustness.md` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L4-1 挂载共享数据盘 `D:`:`ntfs3` 读写 + 固定 `uid`/`gid`/`umask` + `windows_names` + `nofail` + `noatime` | 判据:挂载成功且跨系统双向可见(Windows 写入 → Linux 读到,反向再测一次) | 见 [05-first-boot.md](../docs/05-first-boot.md) 步骤 1
+- `[ ]` L4-1 挂载共享数据盘 `D:`:`ntfs3` 读写 + 固定 `uid`/`gid`/`umask` + `windows_names` + `nofail` + `noatime` | 判据:挂载成功且跨系统双向可见(Windows 写入 → Linux 读到,反向再测一次) | 见 [05-first-boot.md](../docs/05-first-boot.md) 的 `05-1`
 - `[ ]` L4-2 家目录重定向:只重定向文档类目录(文档/下载/图片/桌面);`~/.config`、`~/.ssh`、代码仓库留在本地 root | 判据:`xdg-user-dir` 各值指向共享盘对应目录 | 步骤 2
 - `[ ]` L4-3 显卡驱动走仓库预签名包(不做 DKMS)并保留 nouveau 兜底;混合显卡配 PRIME offload | 判据:会话为 `wayland`,日志里无模块签名拒绝 | 步骤 3
 - `[ ]` L4-4 时间:`RTC in local TZ: no`(Linux 用 UTC,Windows 侧可按需配 `RealTimeIsUniversal=1`) | 判据:`timedatectl` 输出与目标一致 | 步骤 4
