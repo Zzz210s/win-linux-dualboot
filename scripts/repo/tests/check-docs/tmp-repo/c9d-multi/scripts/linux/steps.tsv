@@ -1,0 +1,3 @@
+# 步骤号	脚本路径	破坏性	说明
+01-1	scripts/linux/a.sh	0	甲(同卡第一脚本)
+01-1	scripts/linux/b.sh	0	乙(同卡第二脚本)

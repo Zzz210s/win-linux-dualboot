@@ -4,6 +4,8 @@
 # 只做分发与汇总,不含业务逻辑:校验步骤号与索引脚本存在 → 透传 --check/--apply/--yes/--json/--log → 汇总。
 # 破坏性步骤(索引第 3 列 = 1)在 --apply 且未给 --yes 时**不调用子脚本**,按用法错误退 64;汇总规则:
 #   任一子步骤 1 → 1;无 1 但有 2 → 2;其余(0/9)→ 0;未知步骤或索引脚本缺失 → 64。
+# 一张卡可以对应多个脚本(设计 03 第 5 节):同一步骤号在索引里允许出现多行,总控**按行顺序逐行执行**
+#   并把它们的退出码一起聚合(行顺序 = 索引行顺序);破坏性门槛也逐行判定(任一行是破坏性就需 --yes)。
 # 可观测性(设计 2.1 O1/O2):每个子步骤的 步骤号/退出码/状态/失败原因都要打印;有失败时把完整汇总写
 #   --log(缺省沿用 dbk_log_default 的 /var/log/dbk/dbk.log),失败行同时进 stderr,JSON 汇总含 message。
 # 汇总 JSON:{"steps":[{"step":…,"status":pass|fail|manual|skip,"rc":N,"message":…}],"summary":{pass,fail,manual,skip}}
@@ -15,7 +17,8 @@ DBK_INDEX="${DBK_INDEX:-$DBK_DIR/steps.tsv}"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$DBK_DIR/dbk-cli.sh"
 DBK_MASTER_MODE=check; DBK_MASTER_JSON=0; DBK_MASTER_YES=0; DBK_MASTER_LOG=""
-S_IDS=(); S_PATHS=(); S_KEYS=(); S_RCS=(); S_MSGS=()
+S_IDS=(); S_KEYS=(); S_RCS=(); S_MSGS=()
+P_STEPS=(); P_PATHS=()
 
 # 索引里的全部步骤号(用法信息用)。
 dbk_index_ids() {
@@ -55,34 +58,38 @@ dbk_parse_master_args() {
   if [ "$seen_apply" -eq 1 ]; then DBK_MASTER_MODE=apply; fi
   if [ "${#S_IDS[@]}" -eq 0 ]; then dbk_usage_master; dbk_note "用法错误: 未给步骤号"; exit "$DBK_USAGE"; fi
 }
-# dbk_index_row <步骤号>:从索引打印「<脚本路径>|<破坏性>」;步骤号不在索引里返回非零。
-dbk_index_row() {
-  local want="$1" id path dest desc
+# dbk_index_rows <步骤号>:打印该步骤号在索引里的**全部**「<脚本路径>|<破坏性>」行(按文件顺序,一行一对)。
+# 一张卡可以对应多个脚本,故同一步骤号允许多行;一行也没取到时返回非零。
+dbk_index_rows() {
+  local want="$1" id path dest desc found=1
   while IFS=$'\t' read -r id path dest desc || [ -n "${id:-}" ]; do
     case "$id" in
-      [0-9][0-9]-[0-9]*) if [ "$id" = "$want" ]; then printf '%s|%s' "$path" "$dest"; return 0; fi ;;
+      [0-9][0-9]-[0-9]*) if [ "$id" = "$want" ]; then printf '%s|%s\n' "$path" "$dest"; found=0; fi ;;
     esac
   done <"$DBK_INDEX"
-  return 1
+  return "$found"
 }
-# dbk_prepare:先把全部步骤校验完再跑,任何一条不合格 → 64 且零调用。
+# dbk_prepare:先把全部步骤的全部索引行校验完再跑,任何一条不合格 → 64 且零调用。
 dbk_prepare() {
-  local i step row path dest abs
+  local i step path dest abs n
   for i in "${!S_IDS[@]}"; do
-    step="${S_IDS[$i]}"
-    if ! row="$(dbk_index_row "$step")"; then
+    step="${S_IDS[$i]}"; n=0
+    while IFS='|' read -r path dest; do
+      [ -n "${path:-}" ] || continue
+      n=$((n + 1))
+      case "$path" in /*) abs="$path" ;; *) abs="$DBK_ROOT/$path" ;; esac
+      if [ ! -f "$abs" ]; then
+        dbk_note "用法错误: 索引里声明的脚本不存在: $path(步骤 $step,解析为 $abs)"; exit "$DBK_USAGE"
+      fi
+      if [ "$dest" = 1 ] && [ "$DBK_MASTER_MODE" = apply ] && [ "$DBK_MASTER_YES" -ne 1 ]; then
+        dbk_note "用法错误: 破坏性步骤 $step 的 --apply 必须显式给 --yes;未调用任何子脚本"
+        dbk_note "影响:该步骤会改动系统状态;确认无误后加 --yes 重跑。"; exit "$DBK_USAGE"
+      fi
+      P_STEPS+=("$step"); P_PATHS+=("$abs")
+    done < <(dbk_index_rows "$step")
+    if [ "$n" -eq 0 ]; then
       dbk_usage_master; dbk_note "用法错误: 未知步骤 $step(索引 $DBK_INDEX 里没有这一行)"; exit "$DBK_USAGE"
     fi
-    path="${row%%|*}"; dest="${row##*|}"
-    case "$path" in /*) abs="$path" ;; *) abs="$DBK_ROOT/$path" ;; esac
-    if [ ! -f "$abs" ]; then
-      dbk_note "用法错误: 索引里声明的脚本不存在: $path(步骤 $step,解析为 $abs)"; exit "$DBK_USAGE"
-    fi
-    if [ "$dest" = 1 ] && [ "$DBK_MASTER_MODE" = apply ] && [ "$DBK_MASTER_YES" -ne 1 ]; then
-      dbk_note "用法错误: 破坏性步骤 $step 的 --apply 必须显式给 --yes;未调用任何子脚本"
-      dbk_note "影响:该步骤会改动系统状态;确认无误后加 --yes 重跑。"; exit "$DBK_USAGE"
-    fi
-    S_PATHS[$i]="$abs"
   done
 }
 dbk_step_key() { case "${1:-}" in 0) printf pass ;; 1) printf fail ;; 2) printf manual ;; 9) printf skip ;; *) printf fail ;; esac; }
@@ -114,7 +121,7 @@ dbk_step_line() {
   else printf '[%s] %s rc=%s' "$(dbk_status_tag "$2")" "$1" "$3"; fi
 }
 dbk_run_one() {
-  local i="$1" step="${S_IDS[$1]}" abs="${S_PATHS[$1]}" rc=0 key msg out args=()
+  local i="$1" step="${P_STEPS[$1]}" abs="${P_PATHS[$1]}" rc=0 key msg out args=()
   if [ "$DBK_MASTER_MODE" = apply ]; then args+=(--apply); else args+=(--check); fi
   [ "$DBK_MASTER_YES" -eq 1 ] && args+=(--yes)
   [ "$DBK_MASTER_JSON" -eq 1 ] && args+=(--json)
@@ -146,16 +153,16 @@ dbk_count() {
 dbk_log_summary() {
   local i
   dbk_log_write "汇总: pass=$(dbk_count pass) fail=$(dbk_count fail) manual=$(dbk_count manual) skip=$(dbk_count skip)"
-  for i in "${!S_IDS[@]}"; do
-    dbk_log_write "$(dbk_step_line "${S_IDS[$i]}" "${S_KEYS[$i]}" "${S_RCS[$i]}" "${S_MSGS[$i]}")"
+  for i in "${!P_STEPS[@]}"; do
+    dbk_log_write "$(dbk_step_line "${P_STEPS[$i]}" "${S_KEYS[$i]}" "${S_RCS[$i]}" "${S_MSGS[$i]}")"
   done
 }
 dbk_emit_summary_json() {
   local i sep=""
   printf '{"steps":['
-  for i in "${!S_IDS[@]}"; do
+  for i in "${!P_STEPS[@]}"; do
     printf '%s{"step":"%s","status":"%s","rc":%s,"message":"%s"}' "$sep" \
-      "$(dbk_json_escape "${S_IDS[$i]}")" "${S_KEYS[$i]}" "${S_RCS[$i]}" "$(dbk_json_escape "${S_MSGS[$i]}")"
+      "$(dbk_json_escape "${P_STEPS[$i]}")" "${S_KEYS[$i]}" "${S_RCS[$i]}" "$(dbk_json_escape "${S_MSGS[$i]}")"
     sep=,
   done
   printf '],"summary":{"pass":%s,"fail":%s,"manual":%s,"skip":%s}}\n' \
@@ -167,7 +174,7 @@ if [ ! -r "$DBK_INDEX" ]; then dbk_note "用法错误: 步骤索引不可读: $D
 dbk_prepare
 dbk_log_default dbk   # 缺省日志路径(显式给 --log 时不动);只有失败路径才真的落盘
 i=0
-while [ "$i" -lt "${#S_IDS[@]}" ]; do dbk_run_one "$i"; i=$((i + 1)); done
+while [ "$i" -lt "${#P_STEPS[@]}" ]; do dbk_run_one "$i"; i=$((i + 1)); done
 N_FAIL="$(dbk_count fail)"; N_MANUAL="$(dbk_count manual)"
 if [ "$N_FAIL" -gt 0 ] || [ "$N_MANUAL" -gt 0 ]; then dbk_log_summary; fi
 if [ "$DBK_MASTER_JSON" -eq 1 ]; then

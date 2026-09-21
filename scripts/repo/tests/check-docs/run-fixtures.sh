@@ -57,7 +57,8 @@ check "C9d 缺步骤索引"              c9d-missing             C9d 1
 check "C9b 带 BOM 的 .ps1 卡头被承认" c9b-bom                OK  0
 check "C9d 多卡列表头 + 多步复用(应过)" c9d-cardlist         OK  0
 check "C9d 破坏性列不是 0/1"          c9d-destructive        C9d 1
-check "C9d 索引步骤号重复"            c9d-dup                C9d 2
+check "C9d 同一(步骤号,脚本)对重复"     c9d-dup                C9d 2
+check "C9d 同一卡两脚本(应过)"          c9d-multi              OK  0
 
 for extra in extra-checks.sh extra-checks-c9.sh; do
   echo

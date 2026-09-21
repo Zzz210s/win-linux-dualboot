@@ -3,6 +3,8 @@
 # 只做分发与汇总,不含业务逻辑:校验步骤号与索引脚本存在 → 透传 -Check/-Apply/-Yes/-Json/-Log → 汇总退出码。
 # 破坏性步骤(索引第 3 列 = 1)在 -Apply 且未给 -Yes 时**不调用子脚本**,按用法错误退 64;汇总规则:
 #   任一子步骤 1 → 1;无 1 但有 2 → 2;其余(0/9)→ 0;未知步骤或索引脚本缺失 → 64。
+# 一张卡可以对应多个脚本(设计 03 第 5 节):同一步骤号在索引里允许出现多行,总控**按行顺序逐行执行**
+#   并把它们的退出码一起聚合;破坏性门槛也逐行判定(任一行是破坏性就需 -Yes)。
 # PowerShell 侧兜底:每个步骤脚本都以**子进程**方式运行,并给子进程设 $ErrorActionPreference='Stop'。PS 没有
 #   ERR trap,步骤脚本内部的异常可能不留痕迹,所以子进程退出码非 0、或要求 -Json 时 stdout 不是恰好一行可解析
 #   JSON,都由本脚步**合成一条失败记录**(含步骤号、子进程退出码、捕获到的 stderr 原文与原因),不静默通过。
@@ -56,10 +58,11 @@ function Resolve-DbkStepPath {
   if ([System.IO.Path]::IsPathRooted($Path)) { return $Path }
   return (Join-Path $script:RepoRoot $Path)
 }
-function Select-DbkIndexRow {
+function Select-DbkIndexRows {
   param([string]$Id)
-  foreach ($r in $script:IndexRows) { if ($r.Step -eq $Id) { return $r } }
-  return $null
+  $hit = New-Object System.Collections.ArrayList
+  foreach ($r in $script:IndexRows) { if ($r.Step -eq $Id) { [void]$hit.Add($r) } }
+  return $hit
 }
 # 子进程运行步骤脚本:走 -Command 包装以显式设子进程的 $ErrorActionPreference='Stop';stdout/stderr 落临时文件
 # (字节保真,避免 PS 流重编码),再用 UTF-8 读回。开关必须渲染成裸 token(-Check);带引号的 '-Check'
@@ -120,19 +123,21 @@ if ($Check -and $Apply) { Show-DbkMasterUsage; Write-DbkNote '用法错误: -Che
 if (-not $Step -or $Step.Count -eq 0) { Show-DbkMasterUsage; Write-DbkNote '用法错误: 未给步骤号'; exit $script:DBK_USAGE }
 if (-not (Test-Path -LiteralPath $script:Index)) { Write-DbkNote ("用法错误: 步骤索引不可读: " + $script:Index); exit $script:DBK_USAGE }
 $script:IndexRows = Get-DbkIndexRows
-# 先把全部步骤校验完再跑,任何一条不合格 → 64 且零调用。
+# 先把全部步骤校验完再跑,任何一条不合格 → 64 且零调用(同一步骤号的多行全部进入计划)。
 $plan = New-Object System.Collections.ArrayList
 foreach ($id in $Step) {
-  $row = Select-DbkIndexRow $id
-  if (-not $row) { Show-DbkMasterUsage; Write-DbkNote ("用法错误: 未知步骤 $id(索引 " + $script:Index + " 里没有这一行)"); exit $script:DBK_USAGE }
-  $path = Resolve-DbkStepPath $row.Path
-  if (-not (Test-Path -LiteralPath $path)) { Write-DbkNote ("用法错误: 索引里声明的脚本不存在: " + $row.Path + "(步骤 $id,解析为 $path)"); exit $script:DBK_USAGE }
-  if ($row.Destructive -and $script:MasterMode -eq 'apply' -and -not $script:MasterYes) {
-    Write-DbkNote ("用法错误: 破坏性步骤 $id 的 -Apply 必须显式给 -Yes;未调用任何子脚本")
-    Write-DbkNote '影响:该步骤会改动系统状态;确认无误后加 -Yes 重跑。'
-    exit $script:DBK_USAGE
+  $rows = @(Select-DbkIndexRows $id)
+  if ($rows.Count -eq 0) { Show-DbkMasterUsage; Write-DbkNote ("用法错误: 未知步骤 $id(索引 " + $script:Index + " 里没有这一行)"); exit $script:DBK_USAGE }
+  foreach ($row in $rows) {
+    $path = Resolve-DbkStepPath $row.Path
+    if (-not (Test-Path -LiteralPath $path)) { Write-DbkNote ("用法错误: 索引里声明的脚本不存在: " + $row.Path + "(步骤 $id,解析为 $path)"); exit $script:DBK_USAGE }
+    if ($row.Destructive -and $script:MasterMode -eq 'apply' -and -not $script:MasterYes) {
+      Write-DbkNote ("用法错误: 破坏性步骤 $id 的 -Apply 必须显式给 -Yes;未调用任何子脚本")
+      Write-DbkNote '影响:该步骤会改动系统状态;确认无误后加 -Yes 重跑。'
+      exit $script:DBK_USAGE
+    }
+    [void]$plan.Add([pscustomobject]@{ Step = $id; Path = $path })
   }
-  [void]$plan.Add([pscustomobject]@{ Step = $id; Path = $path })
 }
 # 缺省日志路径沿用库约定(显式给了 -Log 时不动);只有失败路径才会真的落盘。
 if (-not $script:MasterUserLog) { Set-DbkLogDefault -Name 'dbk' }

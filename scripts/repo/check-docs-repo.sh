@@ -45,7 +45,9 @@ for p in $steps; do
 done
 
 # ==== C9d:步骤索引 steps.tsv 与步骤脚本一一对应 ==============================
-# 逐行四验:脚本存在且属本侧、破坏性列 ∈ {0,1}、步骤号与脚本头卡号集合一致(支持列表头)、步骤号不重复。
+# 逐行四验:脚本存在且属本侧、破坏性列 ∈ {0,1}、步骤号与脚本头卡号集合一致(支持列表头)、
+#   (步骤号, 脚本路径) 对不重复。一张卡可以对应多个脚本(设计 03 第 5 节),故同一步骤号允许出现多行;
+#   只有**同一个步骤号指向同一个脚本**才报重复(总控会把它当两条命令跑,属索引笔误)。
 # 脚本还没有卡头时由 C9b 报,这里不重复报错(卡头是 Task 8/10/17 才补的既有脚本)。
 for d in linux windows; do
   idx="scripts/$d/steps.tsv"; dir_steps=""
@@ -67,10 +69,14 @@ for d in linux windows; do
       fi
     fi
   done < <(awk -F'\t' '/^[0-9][0-9]-[0-9]+/ { print FNR "\t" $1 "\t" $2 "\t" $3 }' "$ROOT/$idx")
-  # 重复步骤号:逐行报真实行号(FNR),不再一律报 :1
+  # 重复 (步骤号, 脚本路径) 对:逐行报真实行号(FNR),不再一律报 :1。斜杠写法先归一成 /。
   dup_idx="$ROOT/$idx"
-  for s in $(awk -F'\t' '/^[0-9][0-9]-[0-9]+/ { print $1 }' "$dup_idx" | sort | uniq -d); do
-    awk -F'\t' -v s="$s" -v f="$idx" '/^[0-9][0-9]-[0-9]+/ && $1 == s { printf "%s:%d C9d 索引步骤号重复: %s\n", f, FNR, s }' "$dup_idx"
+  awk -F'\t' '/^[0-9][0-9]-[0-9]+/ { p=$2; gsub(/\\/,"/",p); n[$1 "\t" p]++ }
+    END { for (k in n) if (n[k] > 1) print k }' "$dup_idx" | while IFS=$'\t' read -r s x; do
+    awk -F'\t' -v s="$s" -v x="$x" -v f="$idx" '/^[0-9][0-9]-[0-9]+/ {
+      p=$2; gsub(/\\/,"/",p)
+      if ($1 == s && p == x) printf "%s:%d C9d 索引 (步骤号, 脚本) 对重复: %s -> %s\n", f, FNR, s, x
+    }' "$dup_idx"
   done
   for p in $dir_steps; do
     grep -qE "^[0-9][0-9]-[0-9]+[[:space:]]+$p([[:space:]]|$)" "$ROOT/$idx" \

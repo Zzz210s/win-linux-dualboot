@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 对应卡:05-13
 # L4 首启编排器:依次调用 storage.sh、hardening.sh、mount-shared.sh、graphics.sh、graphics-mok.sh,
 # 每模块单独落日志,末尾生成 /var/log/dbk/first-boot-summary.txt(模块 / 状态 / 关键输出)。
 #

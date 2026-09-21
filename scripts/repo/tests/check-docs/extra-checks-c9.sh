@@ -123,9 +123,17 @@ out="$(bash "$SCRIPT" "$ROOT/docs/00-overview.md" 2>&1)"; rc=$?
 judge "F12 不带 --repo:单文件模式无仓库级规则" OK 0 "$out" "$rc"
 out="$(bash "$SCRIPT" --repo "$ROOT/docs/00-overview.md" 2>&1)"; rc=$?
 n_b="$(printf '%s\n' "$out" | grep -c ' C9b ' || true)"; n_c="$(printf '%s\n' "$out" | grep -c ' C9c ' || true)"
+# 真实仓库的 C9d 已清零,所以这里只能断言 C9b/C9c;--repo 也会追加 C9d 由 F12b 的临时仓库证明。
+if [ "$rc" -eq 1 ] && [ "$n_b" -ge 1 ] && [ "$n_c" -ge 1 ]; then verdict 0 "F12 --repo 追加 C9b/C9c 且退出码 1(C9d 见 F12b)"
+else verdict 1 "F12 --repo 追加 C9b/C9c 且退出码 1(rc=$rc C9b=$n_b C9c=$n_c)" "$out"; fi
+# F12b:临时仓库(同一 (步骤号, 脚本) 对重复)→ --repo 必须把 C9d 一并追加进来
+D12="$W/repo-f12"; mkdir -p "$D12/scripts/repo"
+cp -r "$FIX/tmp-repo/c9d-dup/." "$D12/"
+cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$D12/scripts/repo/"
+out="$(cd "$D12" && bash scripts/repo/check-docs.sh --repo docs/01-firmware.md 2>&1)"; rc=$?
 n_d="$(printf '%s\n' "$out" | grep -c ' C9d ' || true)"
-if [ "$rc" -eq 1 ] && [ "$n_b" -ge 1 ] && [ "$n_c" -ge 1 ] && [ "$n_d" -ge 1 ]; then verdict 0 "F12 --repo 追加 C9b/C9c/C9d 且退出码 1"
-else verdict 1 "F12 --repo 追加 C9b/C9c/C9d 且退出码 1(rc=$rc C9b=$n_b C9c=$n_c C9d=$n_d)" "$out"; fi
+if [ "$rc" -eq 1 ] && [ "$n_d" -ge 1 ]; then verdict 0 "F12b --repo 也会追加 C9d(临时仓库:同一 (步骤号, 脚本) 对重复)"
+else verdict 1 "F12b --repo 未追加 C9d(rc=$rc C9d=$n_d)" "$out"; fi
 
 # ==== 真实仓库样本(原补充 7/8/9) =============================================
 for f in docs/00-overview.md README.md README.zh-CN.md checklists/deploy.md checklists/rollback.md \

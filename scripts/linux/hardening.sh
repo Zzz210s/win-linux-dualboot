@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 对应卡:05-13
 # L4:健壮性配置落地(设计 4.7 的 R1-R9;Fedora 44 Silverblue 原子版)。六项逐项执行,单项失败不中断,末尾汇总。
 #
 # 用法:bash scripts/linux/hardening.sh [--check|--dry-run] [--apply] [--log <path>]
