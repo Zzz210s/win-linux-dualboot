@@ -393,6 +393,6 @@
 ## 回滚
 
 - 本附录不给新动作,因此也不产生新的不可逆项:它推荐的每一条处置,都在对应手册的"回滚"段里有回退方式;
-- 通用回退粒度与前缀约定见 [checklists/rollback.md](../checklists/rollback.md) 与 [design/00-design.md](design/00-design.md) 第 7.2 节(单步 / 阶段 / 基线三种);
+- 通用回退粒度与前缀约定见 [checklists/rollback.md](../checklists/rollback.md) 与 [design/00-design.md](design/00-design.md)(设计 7.2)(单步 / 阶段 / 基线三种);
 - 动手前的最低保险:能进系统就先建快照(R1);进不去系统就先确认 `baseline/` 产物可读、救援 U 盘在位;
 - **改分区表或固件设置之前**(包括第 12、14 条里提到的偏离动作),按 I4 必须先有可用的基线备份;**没有备份时,正确动作是不做**。
