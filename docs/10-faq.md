@@ -1,398 +1,293 @@
-# 附录:高频疑问与排障速查(FAQ)
+# 附录:症状速查与分阶段风险(FAQ)
 
-## 本文档的定位
+**本文档是查询型:出事时按症状查,不顺着读。** 它只给"现象 -> 三步处置 -> 去哪张卡"的索引,不复述命令上下文,也不是规范:与阶段手册冲突时以阶段手册为准,并把冲突记下来修文档。
 
-1. **它是索引与速查,不是规范。** 结论与判据的权威出处是各阶段手册与[验收清单](08-verification.md);本附录与手册冲突时,**以手册为准**,并把冲突记下来修文档,不要按本附录硬做。
-2. **它只回答三件事**:这个现象是不是坑、大概在哪一层、接下来该看哪一节。它**不复述**操作命令的完整上下文——照抄本附录的片段去执行属于误用。
-3. **它的素材来源**:设计文档 11.1 节归纳的评论区实战证据(样本为未登录状态下可抓取的顶层热评及其子回复,不是全量样本、不能当统计结论),以及方案必然会被问到的问题(引导层关系、共享盘、分区容量、介质校验)。
-4. **读法**:先在本节下面的速查表里按现象定位编号 -> 读对应条目 -> 回到条目里指向的手册章节执行 -> 回到对应手册的"验证"段与[验收清单](08-verification.md)复判。
+## 怎么用
 
-不在本附录范围内的:重装操作的点击级流程(在 [07-rescue.md](07-rescue.md))、硬件维修指导、v1 非目标能力的现场扩展(见 [00-overview.md](00-overview.md) "不做什么")。
+1. 先在下面的症状速查表里按现象定位卡号(`10-1` … `10-20`);
+2. 读该卡的 3 行处置;卡尾的 `脚本:` 行给出能一条 `--check` 判定的脚本(全部默认只读,`--apply` / `-Apply` / `-Yes` 才动手);
+3. 按卡尾 `->` 的指向回阶段手册的操作卡执行,再回 [08-verification.md](08-verification.md) 复判。
 
-## 目标
+三条边界:
 
-读完本附录后,遇到问题的部署者应当能在一分钟内完成三件事:
+- **风险总表不在这里。** 34 条风险(风险 / 后果 / 缓解)的唯一真源是 [design/00-design.md](design/00-design.md) 第 9 节;本文档只给按阶段的速查(5 张),不复制第二份真源。
+- **先分清阶段。** 同一句"黑屏"在 L3(安装)、L4(首启)、L5(退役与救援)成因与处置不同;拿不准先跑 `scripts/linux/triage.sh --check`,或回 `07-1` 判层。
+- **本文档不给新动作。** 每条处置都在对应手册的卡里有回退方式;动手前的最低保险是:进得去系统就先按 `05-9` 固定当前部署,进不去就先确认 `baseline/` 可读、救援 U 盘在位。
 
-1. **判断性质**:这是正常行为、是已知坑、还是真故障(例如"手动分区界面没有引导器位置选项"是正常行为,"菜单黑屏但键盘可用"是已知坑且不必重装);
-2. **知道先别做什么**:最需要被拦下的三个动作是"反复长按电源强断"、"顺手重装"、"用 `efibootmgr -o` 调启动顺序";
-3. **找到权威章节**:每条都给出现象对应的手册与验收条目,而不是停留在本附录。
+## 症状速查表
 
-## 前置条件
+| 卡 | 现象 | 快速判定 |
+|---|---|---|
+| `10-1` | 装完黑屏 / 进不去桌面 | `scripts/linux/verify-l3.sh --check` |
+| `10-2` | 装完没网 / 键盘失灵,要不要换发行版 | `scripts/linux/triage.sh --check` |
+| `10-3` | 手动分区界面找不到"引导器位置"选项 | `scripts/linux/check-partition-plan.sh --track D --check` |
+| `10-4` | 是不是必须切独显直连才能进系统 | `scripts/linux/graphics.sh --check` |
+| `10-5` | 引导菜单阶段黑屏,但键盘还能用 | `scripts/windows/set-bootnext.ps1 -Device USB -WhatIf` |
+| `10-6` | 更新后进不了桌面 | `scripts/linux/dbk-rollback.sh --check` |
+| `10-7` | 反复强制重启对系统有什么影响 | `scripts/linux/triage.sh --check` |
+| `10-8` | 两个系统运行期会不会互相影响 | `scripts/windows/verify-baseline.ps1 -BaselineDir baseline` |
+| `10-9` | 删掉 Fedora 会不会影响 Windows 引导 | `scripts/windows/delete-linux-partition.ps1 -Check` |
+| `10-10` | 每次切系统时间都错(差一个时区) | `scripts/linux/set-time.sh --check` |
+| `10-11` | 蓝牙设备每次都要重新配对 | `scripts/linux/bt-keys-sync-wrapper.sh`(默认空跑) |
+| `10-12` | 数据盘 / 第二块硬盘能不能用 MBR | `scripts/windows/check-partition-layout.ps1 -Track W` |
+| `10-13` | 能不能装到移动硬盘 / USB SSD | `scripts/windows/preflight.ps1 -Only target-disk` |
+| `10-14` | Fedora 分区能不能改小 | `scripts/windows/check-partition-layout.ps1 -Track D` |
+| `10-15` | 双硬盘机型只能从第一块盘启动 | `scripts/windows/preflight.ps1 -Only target-disk` |
+| `10-16` | 共享盘会不会被 Linux 写坏 | `scripts/linux/mount-shared.sh --check` |
+| `10-17` | 国内下载慢,能不能用镜像站 | `scripts/windows/verify-install-media.ps1 -Check` |
+| `10-18` | 一个系统崩溃后能不能只重装它 | `scripts/linux/triage.sh --check` |
+| `10-19` | 怎么回滚到上一个部署 | `scripts/linux/dbk-rollback.sh --list` |
+| `10-20` | 发行版 rebase 失败怎么办 | `scripts/linux/upgrade-release.sh --check` |
 
-按本附录动手之前,先确认四件事;缺哪件就先补哪件:
+## 症状卡(20 张)
 
-1. **`baseline/` 产物可读**:至少 `02-partitions.txt`、`02-firmware-entries.txt`、`02-esp-backup/`(基线回滚与逐项对账都依赖它);`baseline/` 不入库,只在本机;
-2. **救援 U 盘在位**(Ubuntu 安装 U 盘,常备项 R4);
-3. **能回到 Windows 的入口可用**:一次性 `BootNext` 或厂商启动菜单键——L4 之后的任何驱动变更之前都要先确认这一点(设计文档(设计 6)交接规则第 6 条);
-4. **已读四条不变量**([00-overview.md](00-overview.md) "四条不变量"):任何处置都不得违反它,尤其是"绝不用 `efibootmgr -o` 调整永久启动顺序"。
+### 10-1 装完黑屏 / 进不去桌面(只有鼠标指针)
 
-现象发生在哪个阶段也要先分清:同一句"黑屏",在 L3(安装)与 L4(首启/驱动)原因与处置不同。
+- 应急只做一件事:在引导菜单高亮该条目按 `e`,内核行尾加 `nomodeset`,按 `F10` 启动(它关掉 KMS,所以能点亮,但会与默认 Wayland 冲突)。
+- 能进系统就立刻收尾:按 `05-3` rebase 到 ublue 的 NVIDIA 变体并做一次性 MOK 注册,再删掉 `nomodeset` 重启。
+- 装完驱动仍点不亮:先在固件里切"独显直连"拿到可用系统,把续航与显存代价记进 `baseline/04-first-boot.md`(见 `10-4`)。
+-> `04-1`、`04-3`、`05-3`
+脚本:`scripts/linux/verify-l3.sh --check`;`scripts/linux/check-signature.sh --check`
 
-## 步骤
+### 10-2 装完没网 / 键盘失灵,要不要换个发行版
 
-### 速查表(先按现象定位编号)
+- 先在 live 里分清:`lspci -nn` / `lsusb` / `ip link` 有设备就是"识别了但缺固件/驱动",一个都看不到才是内核层面不认;两种都不是换发行版的理由。
+- 用有线或手机 USB 网络共享先拿到网络,再按 `07-8` 第 4 条的口径处理:换内核 -> 换驱动版本,发行版不动。
+- 原子版上驱动与内核是镜像的一部分:先按 `05-9` 固定当前部署,再按 `05-3` rebase 换镜像分支,不要就地装内核模块。
+-> `07-8`、`05-3`、`05-9`;设计 3.17 被否方案
+脚本:`scripts/linux/triage.sh --check`
 
-| # | 疑问(按一句话现象找) | 一句话结论 | 展开 |
+### 10-3 手动分区界面找不到"引导器位置"选项
+
+- 原子版走 Anaconda 手动分区:按 `04-2` 只指定挂载点,不新建、不删除、不改尺寸。
+- 先跑核对脚本,按它输出的"下一步该建什么"建 Fedora 三块(`ESP-Fedora` / `/boot` / root),三块都落在 115GiB 预留区内。
+- 绝不把 Windows 的 ESP 勾成"格式化"——那一勾当场清空 `\EFI\Microsoft\`;Fedora 三块也一律不由安装器重建。
+-> `02-3`、`02-4`、`04-2`
+脚本:`scripts/linux/check-partition-plan.sh --track D --check`;`scripts/windows/check-partition-layout.ps1 -Track D`
+
+### 10-4 是不是必须切独显直连才能进系统
+
+- 不必:目标形态是混合显卡 + PRIME offload,只有 rebase 后反复点不亮时才走"独显直连"分支。
+- 切了就把代价记进 `baseline/04-first-boot.md`(所有进程占用独显显存、续航明显变差),这是最容易被漏记的一行。
+- 驱动正常后按 `05-3` 复检签名与会话,再评估是否切回混合模式。
+-> `04-3`、`05-3`;设计 3.3、3.17
+脚本:`scripts/linux/graphics.sh --check`
+
+### 10-5 引导菜单阶段黑屏,但键盘还能用
+
+- 这不等于系统坏了:方向键有反应、能盲选进系统,就不是重装的场景。
+- 从 Windows 侧用一次性入口进 Silverblue(按 `04-1` 的 `-Device USB`,或厂商 `BOOT_MENU_KEY`),不改永久顺序。
+- 进系统后按 [templates/grub-defaults.snippet](../templates/grub-defaults.snippet) 的注释行开 `GRUB_TERMINAL=console` 再 `update-grub`,让菜单可见;撤销就去掉该行重跑。
+-> `04-1`、`05-11`、`05-13`;设计 3.19
+脚本:`scripts/windows/set-bootnext.ps1 -Device USB -WhatIf`;`scripts/linux/reboot-to-windows.sh`
+
+### 10-6 更新后进不了桌面
+
+- 先明确:本方案的更新策略只 check / download,不自动应用、不自动重启(`05-7`),所以症状多半来自一次手动 rebase 或分层。
+- 立刻走部署级回滚(`05-9`):开机菜单选旧部署,或 `dbk-rollback.sh --rollback --yes` 后手工重启。
+- 回滚后看来源与签名:`rpm-ostree status` 与 `check-signature.sh --check`,把当时的来源记进备注再评估下一步。
+-> `05-3`、`05-7`、`05-9`;设计 3.18、4.7 的 R1/R2/R8
+脚本:`scripts/linux/dbk-rollback.sh --check`;`scripts/linux/set-updates.sh --check`
+
+### 10-7 反复强制重启对系统有什么影响
+
+- 先停掉长按电源:内核无响应时用 SysRq 的 `S` -> `U` -> `B`(Fedora 默认 `kernel.sysrq=176` 只开放这三位)。
+- 已经强断过:下次启动前先做一次文件系统检查,设备名与命令按 `07-8` 第 1 条取值。
+- "两个系统都不对劲"先按硬件排查:内存、`smartctl`、温度与电源(见 `10-8`)。
+-> `07-1`、`07-8`;设计 9 第 15 条
+脚本:`scripts/linux/triage.sh --check`
+
+### 10-8 两个系统运行期会不会互相影响
+
+- 不会:同一时刻只有一个系统在运行;唯一共享面是引导层(固件启动条目 + 两块 ESP 的内容)。
+- 两边一起异常时先查硬件:`smartctl -H <DISK>`、`memtest86+`、温度与电源;先不要格式化任何分区。
+- 引导层问题按 I1-I4 逐项对账:对照 `baseline/02-firmware-entries.txt` 与 `baseline/02-esp-backup/`。
+-> `07-1`、`07-8`、`07-7`;设计 2、设计 9 第 16 条
+脚本:`scripts/linux/triage.sh --check`;`scripts/windows/verify-baseline.ps1 -BaselineDir baseline`
+
+### 10-9 删掉 Fedora 会不会影响 Windows 引导
+
+- 做好就不会,前提是 I1 成立(`BootOrder` 首位始终是 Windows Boot Manager)——固件会在失效条目之后回落。
+- 顺序不可更换:先 `07-9` 归位 -> 再 `07-10` 备份到仓库外 -> 再 `07-11` 删三块 Fedora 分区 -> `07-12` 清 NVRAM(扩容可选)。
+- 只想停用不想删:做到 `07-9` 停下,或走 `07-13` 只停用条目,可逆。
+-> `00-overview.md`、`07-9`、`07-10`、`07-11`、`07-12`、`07-13`
+脚本:`scripts/windows/restore-boot-order.ps1 -Check`;`scripts/windows/delete-linux-partition.ps1 -Check`;`scripts/windows/cleanup-nvram.ps1 -Check`
+
+### 10-10 每次切系统时间都错(差一个时区)
+
+- 口径只在 Linux 侧定:`05-4` 让 RTC 走 UTC,判据是 `timedatectl` 输出 `RTC in local TZ: no`。
+- Windows 侧可选配 `RealTimeIsUniversal=1`,但只在 Windows 里改,不要从 Linux 挂载并写 Windows 注册表。
+- 两种口径只选一种并保持一致,不要两边各改一半。
+-> `05-4`;设计 4.5
+脚本:`scripts/linux/set-time.sh --check`
+
+### 10-11 蓝牙设备每次都要重新配对
+
+- 顺序固定:先在 Silverblue 里正常配对一次,再进 Windows 对同一设备重新配对(以 Windows 侧为权威来源)。
+- 回 Silverblue 按 `05-5` 用包装脚本从 Windows hive 导入密钥(只读挂载 Windows 分区,不做反向写入)。
+- 复测:同一设备两边都能直接连接,不需要重新进配对模式。
+-> `05-5`、`07-7`;设计 5.3、设计 9 第 9 条
+脚本:`scripts/linux/bt-keys-sync-wrapper.sh`(默认空跑)
+
+### 10-12 数据盘 / 第二块硬盘能不能用 MBR
+
+- 引导盘必须 GPT + UEFI,没有分支;纯数据盘用 MBR 不在 v1 验证范围,按偏离项登记。
+- 双盘机型:两块 ESP 都必须在第一块盘(见 `10-15`);Linux 数据分区可放第二块盘,但引导文件不能。
+- 任何偏离都按 [00-overview.md](00-overview.md) 的偏离项处置表定口径,并回写该设备的 `baseline/`。
+-> `00-overview.md`、`02-1`;设计 1.2 偏离项
+脚本:无(偏离项靠人工登记)
+
+### 10-13 能不能装到移动硬盘 / USB SSD
+
+- 可以,但属偏离分支(v1 未验证):供电、性能、引导条目、两块 ESP 落盘四件事必须自己补齐。
+- 引导条目一旦指向移动盘,拔盘即失效,所以 I1/I2 更重要:进 Linux 一律走一次性入口(`04-1`、`05-11`)。
+- 动手前先按 `01-3` 核对目标盘,把偏离登记进 `baseline/` 与 [00-overview.md](00-overview.md) 的偏离项处置表。
+-> `01-3`、`02-1`、`05-11`;设计 10 的移动盘变体
+脚本:`scripts/windows/preflight.ps1 -Only target-disk`
+
+### 10-14 Fedora 分区能不能改小
+
+- 不能事后缩容:分区表只在装机阶段一次定稿(见 `02-1` 的铁律),两侧都不提供缩容分支。
+- 要改尺寸只能整盘重排,且动手前按 I4 先有可用基线:ESP 镜像 + 固件启动项快照 + BitLocker 已挂起。
+- Fedora 侧三块(`ESP-Fedora` 1GiB + `/boot` 1GiB + root 约 113GiB)合计 115GiB 是不可削减量;预留区被 Windows 安装器占走即记偏差并重排。
+-> `02-1`、`02-4`、`03-8`;设计 3.5、5.1
+脚本:`scripts/windows/check-partition-layout.ps1 -Track D`
+
+### 10-15 双硬盘机型只能从第一块盘启动
+
+- 厂商硬约束:两块 ESP 都必须留在第一块盘;Linux 数据分区可以放第二块盘。
+- 装机前用 `01-3` 核对目标盘型号与容量,不要先按第二块盘规划。
+- 已装完才发现:记偏离并评估"共用 ESP 分支"(设计 10),该分支需实测。
+-> `01-3`、`02-1`;设计 1.2、设计 9 第 19 条
+脚本:`scripts/windows/preflight.ps1 -Only target-disk`;`scripts/windows/check-partition-layout.ps1 -Track D`
+
+### 10-16 共享盘会不会被 Linux 写坏
+
+- 可控,前提四条都在位:Windows 已关 Fast Startup 与休眠、`D:` 未加密、挂载带 `uid`/`gid`/`umask`/`windows_names`/`nofail`、不在共享盘上做依赖 POSIX 语义的工作。
+- 关键目录留第二份备份;别在 Linux 侧批量重命名或移动大目录。
+- 怀疑写坏:立刻停写(必要时改只读挂载或卸载),回 Windows 先确认 Fast Startup 与休眠仍是关闭状态。
+-> `03-2`、`05-1`、`05-2`;设计 5.3、设计 9 第 11/12/13 条
+脚本:`scripts/linux/mount-shared.sh --check`;`scripts/linux/xdg-redirect.sh --check`;`scripts/windows/disable-faststartup.ps1 -Check`
+
+### 10-17 国内下载慢,能不能用镜像站
+
+- 可以:镜像站只当下载加速器,不当信任源。Fedora ISO 必须按官方 `CHECKSUM` 文件比对。
+- Windows ISO 官方未发布镜像哈希,只做"来自微软官方下载域 + 官方安装器校验"(见 `01-2`)。
+- 校验结论写进 `baseline/00-firmware.md` 的介质段;校验不过就重下,不要"先装装看"。
+-> `01-2`、`01-4`;设计 9 第 20 条
+脚本:`scripts/windows/verify-install-media.ps1 -Check`
+
+### 10-18 一个系统崩溃后能不能只重装它
+
+- 先判层(`07-1`):只是引导层坏了就不要重装,按 `07-2` 从 GRUB 提示符回去、`07-3` 在 Windows 侧修、`07-6` 回基线。
+- 只重装 Windows:按 `07-4` 只格式化 `C:`,其余分区一律不动。
+- 只重装 Silverblue:按 `07-5` 只格式化 root;两块 ESP 与 `/boot` 都绝不勾"格式化"。
+-> `07-1`、`07-2`、`07-3`、`07-4`、`07-5`、`07-6`;设计 4.8
+脚本:`scripts/linux/triage.sh --check`;`scripts/linux/check-partition-plan.sh --track D --check`
+
+### 10-19 怎么回滚到上一个部署
+
+- 先看现状:`05-9` 的 `dbk-rollback.sh --list` 列出部署数、下一次启动与 pin 标记,`--check` 复检签名与会话。
+- 变更前先固定:`--pin --yes`;要回退时 `--rollback --yes`,再手工重启(也可在开机菜单直接选旧部署)。
+- 回滚只换系统部署:用户数据在 `/var/home`,不随部署回退;不再需要该回滚点时 `--unpin --yes`。
+-> `05-9`、`05-10`;设计 3.7、7.2
+脚本:`scripts/linux/dbk-rollback.sh --list`;`scripts/linux/dbk-rollback.sh --check`
+
+### 10-20 发行版 rebase 失败怎么办
+
+- 失败时系统通常仍可用:开机菜单选被 pin 的旧部署,或 `dbk-rollback.sh --rollback --yes` 后重启。
+- 先 pin 再 rebase 是硬纪律(`05-10`):脚本读不到固定状态就会拒绝执行 rebase,不要绕过。
+- 分支名与镜像名上游会改:未按官方文档核实前不要执行;每次操作后记录 `rpm-ostree status` 的来源与版本;可随时 rebase 回 stock。
+-> `05-3`、`05-9`、`05-10`;设计 3.21、设计 9 第 33/34 条
+脚本:`scripts/linux/upgrade-release.sh --check`;`scripts/linux/dbk-rollback.sh --check`
+
+## 分阶段风险速查(5 张)
+
+**总表在 [design/00-design.md](design/00-design.md) 第 9 节(34 条)。** 下面每张卡只给"本阶段最可能踩的坑 + 一句话缓解",首列条目号与总表逐条对应,不复制后果列。
+
+### 阶段风险 1:共用底座与分盘(L0 + 02)
+
+| 设计 9 | 本阶段的坑 | 一句话缓解 | 相关卡 |
 |---|---|---|---|
-| **安装与首启** | | | |
-| 1 | 装完 Ubuntu 黑屏 / 进不去桌面 | 先 `nomodeset` 应急,再装预签名驱动并**立即移除**该参数;混合模式点不亮才走 MUX 分支 | 第 1 条 |
-| 2 | 装完没网 / 键盘失灵,要不要换个发行版 | 先换内核(HWE)或换驱动版本(**待评估分支,v1 无步骤**),**不降发行版** | 第 2 条 |
-| 3 | 手动分区界面没有"引导器位置"选项 | 正常行为:ESP 由安装器自动复用;确认它未被勾选格式化即可继续 | 第 3 条 |
-| 4 | 是不是必须切独显直连才能进系统 | 不是默认;只在混合模式点不亮时走分支,且必须记录显存与续航代价 | 第 4 条 |
-| 5 | 引导菜单阶段黑屏,但键盘还能用 | 菜单黑屏不等于系统坏:`GRUB_TERMINAL=console` + 用一次性 BootNext,**不要重装** | 第 5 条 |
-| **更新与稳定性** | | | |
-| 6 | 自动更新内核后进不了桌面 | 内核/驱动已列入自动更新黑名单;已经发生就选旧内核启动或从快照回滚 | 第 6 条 |
-| 7 | 反复强制重启有什么影响 | 会把一次引导故障升级成文件系统损坏;改用 REISUB(`S`/`U`/`B`),事后 `fsck` | 第 7 条 |
-| 8 | 两个系统运行期会不会互相影响 | 不会;唯一互相干扰的是引导层,两边同时异常先按硬件排查 | 第 8 条 |
-| **两系统关系** | | | |
-| 9 | 删掉 Ubuntu 会不会影响 Windows 引导 | 不会,前提是 I1 成立(`BootOrder` 首位仍是 Windows);按 L5 五步:先改顺序、先备份、后删分区 | 第 9 条 |
-| 10 | 每次切系统时间都错(差一个时区) | 口径统一即可:Linux `RTC in local TZ: no`(本方案),Windows 可选 `RealTimeIsUniversal=1` | 第 10 条 |
-| 11 | 蓝牙设备每次都要重新配对 | 用上游 `bt-keys-sync` 同步密钥,**以 Windows 侧为准**,不做反向写入 | 第 11 条 |
-| **磁盘与分区** | | | |
-| 12 | 数据盘 / 第二块硬盘能不能用 MBR | 引导盘必须 GPT + UEFI;纯数据盘用 MBR 不在 v1 验证范围,须按偏离项登记 | 第 12 条 |
-| 13 | 能不能装到移动硬盘 / USB SSD | 可以,但属偏离分支(v1 未验证):供电、性能、引导条目、ESP 落盘等**至少四件事**必须自己补齐 | 第 13 条 |
-| 14 | Linux 分区能不能改小 | 下限是 100GiB(另有 15GiB 快照分区);改分区属分区表变更,先要有可用基线(I4) | 第 14 条 |
-| 15 | 双硬盘机型只能从第一块盘启动 | 厂商硬约束(社区报告):**ESP 必须放第一块盘**,实测确认前不按第二块盘规划 | 第 15 条 |
-| 16 | 共享盘会不会被 Linux 写坏 | 可控:四条前提都在位 + 关键目录第二份备份 + 不做权限敏感工作 | 第 16 条 |
-| 17 | 国内下载慢,能不能用镜像站 | 可以,但镜像站只当加速器:Ubuntu 强制核对官方 SHA256,Windows 只做"官方域 + 安装器校验" | 第 17 条 |
-| **崩溃处置** | | | |
-| 18 | 一个系统崩溃后能不能只重装它 | 先判层;引导层完好就别重装,系统层只格一块分区(`C:` 或 root),禁止"删除所有分区" | 第 18 条 |
-
-### 1. 装完 Ubuntu 黑屏 / 进不去桌面
-
-**问题**:安装器界面黑屏,或装完第一次进 Ubuntu 黑屏、卡在无图形界面、只有鼠标指针。
-
-**快速判断**:先分清三件事。
-
-- 是"U 盘启动 / 安装器阶段黑屏"还是"装完首启黑屏";
-- 系统到底起没起:能 `Ctrl + Alt + F3` 切到 TTY 登录,就说明系统没坏,坏的是显示栈(驱动与 KMS);
-- 是不是混合显卡的笔记本:若固件切到"独显直连"后能进,那是 MUX 分支(见第 4 条)。
-
-**处置**(按顺序,不要跳步):
-
-1. **只做应急**:在引导菜单里高亮该条目,按 `e` 编辑内核行,行尾加 `nomodeset`,再按 `F10`(部分版本 `Ctrl + X`)启动。它关掉 KMS、改用软件渲染,所以能点亮;
-2. **能进系统就立刻收尾**:先装好显卡驱动(走 Ubuntu 仓库的**预签名** NVIDIA 模块包,不用 DKMS、不自签),然后编辑 `/etc/default/grub` 删掉 `nomodeset` 并 `sudo update-grub`,重启;
-3. **装完驱动仍点不亮**:走 MUX 分支(第 4 条);
-4. **系统能起但桌面起不来**:切 TTY 登录 -> 卸载专有驱动回 `nouveau` -> 重装预签名驱动;必要时在 GRUB "Advanced options" 里选旧内核启动。
-
-**依据与细节**:`nomodeset` 是评论区被反复点名的"伪万能修复"——它让 live 环境跑起来,却与 Wayland 直接冲突(Wayland 需要 KMS);把它当长期配置,后续会以"会话异常 / 进不去桌面"的形式回来。判据:`cat /proc/cmdline` 不再包含 `nomodeset`,且 `echo $XDG_SESSION_TYPE` 输出 `wayland`。
-
-**指向更详细的章节**:[L3 手册](04-silverblue.md) 步骤 5;L4 [05-first-boot.md](05-first-boot.md) 步骤 3 与"失败处理";[design/00-design.md](design/00-design.md) 决策 3.17 与 11.1 第 1、2 条;[09-risks.md](09-risks.md) 第 7、21 条;[08-verification.md](08-verification.md) B10。
-
-### 2. 装完没网 / 键盘失灵,要不要换个发行版
-
-**问题**:装完发现无线网卡不认、USB 键盘或较新的内置键盘在 live 环境或系统里不响应,担心"Ubuntu 不适合这台机器"。
-
-**快速判断**:先在 live 环境确认硬件是否被内核识别——`lspci -nn | grep -i net`、`lsusb`、`ip link` 有对应设备就是"识别了但缺固件/驱动";一个都看不到才是内核层面不认。**无论哪种,都不是换发行版的理由。**
-
-**处置**:
-
-1. 先用有线网络或手机 USB 网络共享拿到网络(不要为了上网现场手改网络栈);
-2. **口径(待评估分支,v1 无步骤)**:用固定优先级处理——**换更新的内核(HWE 内核栈)-> 换驱动版本 -> 才谈发行版问题**。HWE 分支在设计文档第 10 节列为待评估,v1 不给可执行步骤,因此本条只定口径、不排序操作(见下"依据与细节");
-3. **不降发行版、不换发行版**:换来的是更短的支持期与更差的新硬件兼容性,问题往往在半年后以更难看的形式回来;而 Ubuntu 26.04 LTS 的门槛(支持期、预签名 NVIDIA 包)正是本方案的选型理由。
-
-**依据与细节**:这是评论区里"新网卡/键盘不识别"的归纳结论,对应设计文档 11.1 第 10 条与第 10 节的 HWE 内核分支(该分支待评估,v1 不承诺);口径与"不因驱动问题降级发行版"一致。
-
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) "前置条件"(口径行)与 `05-3`;`07-8`"第四条";(设计 11.1)第 10 条、(设计 10);[09-risks.md](09-risks.md) 第 21 条。
-
-### 3. 手动分区界面找不到"引导器位置"选项
-
-**问题**:进入手动分区屏,发现没有"引导器位置 / Device for boot loader installation"下拉框,不敢点下一步。
-
-**快速判断**:**这是正常行为,不是安装器出错、也不是 ISO 有问题**——Ubuntu 24.04 及以后的新安装器在手动分区界面里没有独立的该选项,ESP 由安装器自动复用。评论区多条同题报告都卡在这里。
-
-**处置**:
-
-1. 确认分区列表里存在 2GiB 的 EFI System 分区(对照 `baseline/02-partitions.txt`);
-2. 确认它**未被勾选格式化**,并挂到 `/boot/efi`;
-3. 直接继续,**不必到处找一个不存在的下拉框**;
-4. 不要为了"找得到那个框"而退回旧安装器或换发行版。
-
-**依据与细节**:ESP 复用挂载且不格式化是 I3 在安装器里的唯一落地点;一旦勾上格式化,`\EFI\Microsoft\` 随之消失,Windows 引导当场失效。
-
-**指向更详细的章节**:[04-silverblue.md](04-silverblue.md) 步骤 2(含该卡点的专门说明);[design/00-design.md](design/00-design.md) 3.20 与 11.1 第 7 条;[08-verification.md](08-verification.md) A3(直接判据:`\EFI\Microsoft\` 与 L2 基线逐文件一致);A7 是"可撤除性演练"口径补充,证明条目指向的引导文件缺失时固件会回落到 Windows。
-
-### 4. 是不是必须切独显直连才能进系统
-
-**问题**:听说装 Ubuntu 必须先把 BIOS 显示模式改成"独显直连",否则装完进不去。
-
-**快速判断**:**不是必须。** 目标形态是**混合模式 + PRIME offload**;只有"混合模式下安装器或首启反复点不亮"时才走 MUX 分支。评论区那条 542 赞热评描述的是现象与一条排障路径,不是默认配置。
-
-**处置**:
-
-1. 先在混合模式下按第 1 条处理(应急 `nomodeset` -> 装预签名驱动 -> 移除参数);
-2. 仍点不亮,再进固件把显示模式切到**独显直连**,先拿到一个可用系统;
-3. 记录代价(必须写进 `baseline/04-first-boot.md`):**所有进程都占用独显显存、续航明显变差**,日后要在这台机器上做本地推理时,显存会被显示输出吃掉一部分;
-4. 驱动装好后再评估是否切回混合模式;切回失败可按 L3 手册"回滚"第 5 条回到原状。
-
-**依据与细节**:把独显直连当默认是"续航与显存双输",所以方案把它定位为排障分支;因驱动问题降级发行版同样属被否方案。
-
-**指向更详细的章节**:[04-silverblue.md](04-silverblue.md) 步骤 5(b)与"回滚"第 5 条;[05-first-boot.md](05-first-boot.md) 步骤 3 的 MUX 段;[design/00-design.md](design/00-design.md) 决策 3.17、11.1 第 1 条。
-
-### 5. 引导菜单阶段黑屏,但键盘还能用
-
-**问题**:装完独显驱动后,每次开关机在引导菜单阶段黑屏,键盘上下键还有反应,盲选能进 Windows。
-
-**快速判断**:**菜单黑屏不等于系统损坏。** 判据是"键盘有反应、能盲选进系统、另一个系统照常启动";如果连系统也进不去,那是第 1 条或第 18 条的问题,不是本条。
-
-**处置**:
-
-1. **不要重装**。先按一次性入口进 Ubuntu:从 Windows 侧用 [set-bootnext.ps1](../scripts/windows/set-bootnext.ps1)(一次性 `BootNext`,不改 `BootOrder`)或厂商启动菜单键;
-2. 在 Ubuntu 里给 GRUB 加 `GRUB_TERMINAL=console`(模板 [templates/grub-defaults.snippet](../templates/grub-defaults.snippet)),`sudo update-grub` 后重启验证菜单是否可见;
-3. 日常切换**不依赖"看得见菜单"**:Windows -> Ubuntu 用 `BootNext`/菜单键,Linux -> Windows 用 [reboot-to-windows.sh](../scripts/linux/reboot-to-windows.sh)(`--apply` 才生效,默认空跑);
-4. 想撤销:移除该行并 `update-grub`。
-
-**依据与细节**:`GRUB_TERMINAL=console` 只在"引导菜单阶段黑屏真实发生"时才允许打开(否则保持注释);`BootNext` 是一次性语义,用过即消失,与四条不变量不冲突。
-
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) 步骤 3 的"引导菜单阶段黑屏"段与步骤 7;[08-verification.md](08-verification.md) B10、C1、C2;[design/00-design.md](design/00-design.md) 决策 3.19;[09-risks.md](09-risks.md) 第 17 条。
-
-### 6. 自动更新内核后进不了桌面
-
-**问题**:开机进不去桌面,回想起来最近自动装过内核或显卡驱动更新。
-
-**快速判断**:本方案**已经把这条路堵住**:`unattended-upgrades` 只自动安装安全更新,`linux-*`、`nvidia-*` 等列入黑名单,内核与驱动不会被无人值守升级。若症状出现,通常是黑名单生效之前的更新、或一次手动升级没有先快照。
-
-**处置**:
-
-1. GRUB "Advanced options" 里**选旧内核**启动(保留多内核就是为了这条回滚点);
-2. 从 `/snapshots` 快照整体回滚(R1);
-3. 之后立规矩:**内核/驱动升级一律先建快照,再手动执行**;快照创建失败即视为"不得执行本次变更";
-4. 排查用常开 SSH 通道(R7):桌面挂死时从另一台机器登进来处理。
-
-**依据与细节**:配置真源见 [templates/unattended-upgrades.snippet](../templates/unattended-upgrades.snippet) 与 [scripts/linux/hardening.sh](../scripts/linux/hardening.sh);自动重启是关闭的;快照默认保留 3 份,`/snapshots` 是独立 15GiB 分区。
-
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) 步骤 6(R1、R2、R3、R8 行);[design/00-design.md](design/00-design.md) 决策 3.18 与第 4.7 节;[09-risks.md](09-risks.md) 第 14、24 条;[08-verification.md](08-verification.md) F 组。
-
-### 7. 反复强制重启对系统有什么影响
-
-**问题**:长时间使用后莫名崩溃,于是反复长按电源强制关机,最后感觉两个系统都不对劲。
-
-**快速判断**:**反复强断会把"一次引导故障"升级成"文件系统损坏"**——这是这条因果链里最该先停掉的动作。而"两个系统一起出问题"更应优先怀疑硬件,不要归因于"双系统互为因果"(见第 8 条)。
-
-**处置**:
-
-1. **停止长按电源**:内核层面无响应时用 REISUB(SysRq)安全重启。注意 Ubuntu 默认 `kernel.sysrq=176`,只开放 `S` / `U` / `B` 三位,`R` / `E` / `I` 多为空操作(不报错也没反应),此时按 `S -> U -> B` 同样达成"落盘 -> 只读重挂 -> 重启";
-2. **已经反复强断过**:下次启动前先跑一次文件系统检查(可在 live 环境 `sudo fsck -f <Ubuntu root 分区>`,设备名以 `baseline/02-partitions.txt` 为准),把损坏先修掉再谈别的;
-3. **硬件优先 triage**:内存、SMART、温度、电源;`smartd` 与 ext4 周期性 `fsck` 是常备项(R9);
-4. 顺手回 Windows 复核 Fast Startup 与休眠仍是关闭的(L1 做过,但 Windows 大版本更新可能改回来);它既是共享盘前提,也是"混合关机"损坏的源头。
-
-**依据与细节**:设计文档故障矩阵里"任意"两行与(设计 9)的对应风险行;排障纪律写在救援手册里,不只写给救援场景。
-
-**指向更详细的章节**:`07-8`(排障纪律);[05-first-boot.md](05-first-boot.md) `05-6` 的 R9 行、`05-1` 前提 1;[03-windows.md](03-windows.md) 的 `03-2`;[09-risks.md](09-risks.md) 第 4、15、16 条。
-
-### 8. 两个系统运行期会不会互相影响
-
-**问题**:是不是装了双系统之后,两边都更容易崩?
-
-**快速判断**:**运行期不互相影响。** 同一时刻只有一个系统在运行,两边不共享运行状态;唯一会互相干扰的层面是**引导层**(固件启动条目 + ESP 上的 `\EFI\` 内容)。两系统同时异常、频繁死机/蓝屏时,正确动作是**先按硬件问题排查**,而不是删掉其中一个系统。
-
-**处置**:
-
-1. 硬件优先 triage:内存测试、SMART、温度、电源;
-2. 引导层的问题以四条不变量为判据,对照 `baseline/` 逐项核对;
-3. 记住"两系统互不影响"这条结论本身的价值:它是防止"误判为双系统问题 -> 误删系统 -> 掩盖真实故障"的那道闸。
-
-**依据与细节**:ESP 与固件 NVRAM 是两系统唯一的共享面;`baseline/` 里的分区表、ESP 镜像、固件条目快照就是这个共享面的对照基准。
-
-**指向更详细的章节**:[00-overview.md](00-overview.md) "四条不变量";(设计 2)与(设计 7)"任意"行;[09-risks.md](09-risks.md) 第 16 条。
-
-### 9. 删掉 Ubuntu 会不会影响 Windows 引导
-
-**问题**:以后不想用 Linux 了,直接删掉它的分区,会不会把 Windows 一起搞坏?
-
-**快速判断**:**做好了就不会**,前提是 I1 成立:`BootOrder` 首位始终是 Windows Boot Manager。网上"删完卡在 `grub rescue>`"的根因不是 GRUB 坏了,而是固件 NVRAM 里的 `ubuntu` 条目仍指向已被删除的 `\EFI\ubuntu\grubx64.efi`,而且它排在启动顺序前面。
-
-**处置**:走 L5 退役流程(**步骤 0 只读取证 + 五步**),**顺序不可更换**——先改顺序、先备份,最后才删分区。步骤 0(只读取证,**不属于五步**)记录 `efibootmgr -v`、`lsblk`,不写任何东西;之后五步为:
-
-1. 在 Ubuntu 里把 `BootOrder` 首项改回 Windows Boot Manager:**只用固件设置界面**(可从 Ubuntu 执行 `sudo systemctl reboot --firmware-setup` 直达),**不得用 `efibootmgr -o`**;
-2. 重启进 Windows,备份当前 NVRAM 与 ESP 现状到 `D:\dbk-l5-backup`(**不要覆盖 `baseline\`**);
-3. 在 Windows「磁盘管理」里**只删 Linux 的分区**;
-4. 清理 NVRAM 中残留的 `ubuntu` 条目;
-5. 可选:把腾出的空间扩展进相邻分区。
-
-**依据与细节**:删掉 Linux 分区后,固件在失效条目之后会继续回落到下一个条目即 Windows——这正是 I1 的价值所在,它比"记得先修引导再删分区"可靠,后者依赖人的记忆。退役是**可逆的**:做到步骤 1 停下,就是"暂时停用 Linux、不删分区"的变体。
-
-**指向更详细的章节**:[07-rescue.md](07-rescue.md)(退役五步与只停用变体、救援两卡);[00-overview.md](00-overview.md) 四条不变量;[09-risks.md](09-risks.md) 第 6 条;[08-verification.md](08-verification.md) A 组。
-
-### 10. 每次切系统时间都错(差一个时区)
-
-**问题**:每次从 Windows 切到 Ubuntu(或反过来),时间就偏几个小时。
-
-**快速判断**:典型的"固件 RTC 记的是本地时间还是 UTC"分歧:Windows 默认把 RTC 当本地时间,Linux 默认当 UTC,两边各按自己的口径解释同一个硬件时钟。
-
-**处置**:
-
-1. **Linux 侧**:`sudo timedatectl set-local-rtc 0` 与 `sudo timedatectl set-ntp true`;判据是 `timedatectl` 输出 `RTC in local TZ: no`、`System clock synchronized: yes`、`NTP service: active`;
-2. **Windows 侧(可选,与 Linux 成对)**:管理员执行 `reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeIsUniversal /t REG_DWORD /d 1 /f`;
-3. **两种口径只选一种并保持一致**:要么"Windows 认 UTC + Linux `RTC in local TZ: no`"(本方案取这一种),要么"Linux 迁就本地时间";不要两边各改一半;
-4. 该注册表项**只在 Windows 里改**,不要在 Ubuntu 里挂载并写 Windows 注册表。
-
-**依据与细节**:完全可逆——删掉该值即回到默认;`systemd-timesyncd` 负责网络校时,被禁用时先启用。
-
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) 步骤 4 与"回滚"第 4 条;[design/00-design.md](design/00-design.md) 第 4.5 节;[09-risks.md](09-risks.md) 第 9 条;[08-verification.md](08-verification.md) B7。
-
-### 11. 蓝牙设备每次都要重新配对
-
-**问题**:鼠标或耳机在 Windows 里配过,切到 Ubuntu 仍要重新配对。
-
-**快速判断**:这是"配对密钥分别落在两套系统里"的结构性问题,不是设备坏了;同步密钥即可。
-
-**处置**(顺序错了就得重来):
-
-1. 先在 **Ubuntu** 里正常配对一次(生成 Linux 侧记录);
-2. 重启进 **Windows**,对同一设备**重新配对一次**,让 Windows 侧成为权威来源;
-3. 再回 Ubuntu,用包装脚本以 `--windows-keys` 从 Windows 注册表导入密钥;
-4. 复测:同一设备在两个系统里都能直接连接,不需要再次配对。
-
-**依据与细节**:方向固定为**以 Windows 侧密钥为准**,**不做反向写入 Windows 注册表**(上游项目自己的建议即此方向,反向写风险更高);读取 Windows 注册表只需**只读**挂载 Windows 分区,不要用可写方式挂载系统分区;脚本默认空跑,`--apply` 才动手。
-
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) 步骤 5 与"回滚"第 4 条;[scripts/linux/bt-keys-sync-wrapper.sh](../scripts/linux/bt-keys-sync-wrapper.sh)(先看 `--help`,支持 `--apply` / `--win-mnt` / `--script`);[design/00-design.md](design/00-design.md) 第 11 节 `bt-keys-sync` 行;[08-verification.md](08-verification.md) B8。
-
-### 12. 数据盘 / 第二块硬盘能不能用 MBR
-
-**问题**:手上有块老 MBR 盘,能不能拿来做数据盘?能不能拿它装 Ubuntu?
-
-**快速判断**:要看这块盘当什么用——**做引导盘**与**做纯数据盘**是两回事,答案不同;拿它装 Ubuntu 系统则属尚未编写的分支。
-
-**处置**:
-
-- **引导盘(ESP 所在的盘)必须是 GPT + UEFI**:本方案全程只保留 UEFI、关闭 CSM 与 legacy 条目;启动模式一含糊(在菜单里选错成 legacy),就会装成 MBR 引导,与既定的分区表计划冲突;
-- **纯数据盘用 MBR** 不触碰本方案的引导不变量,但它**不在 v1 的验证范围内**:`baseline/` 分区表基线、挂载与 `fsck` 约定都按本方案的分区表写。要这么做,须按偏离项登记并自测(挂载、权限、跨系统访问);
-- **想拿第二块盘装 Ubuntu 系统**:那属于双盘设备分支(设计文档第 10 节列为待编写),不在 v1 路径内——先停下。
-
-**依据与细节**:MBR/GPT 的写法差异也会影响救援——现代 GPT 盘写作 `(hdX,gptY)`,`(hdX,msdosY)` 是 MBR 盘的写法,照抄网上旧教程的 `msdosY` 会报 `unknown filesystem`。
-
-**指向更详细的章节**:[01-firmware.md](01-firmware.md) 步骤 3(仅 UEFI、CSM 关闭)与"失败处理"(启动菜单里出现两个条目的情形);[02-partitioning.md](02-partitioning.md) 的 `02-1`(分区表定稿)与 `02-4`(预建 GPT 分区表);[07-rescue.md](07-rescue.md) 步骤 1.1;(设计 10)"双盘设备分支"。
-
-### 13. 能不能装到移动硬盘 / USB SSD
-
-**问题**:没有第二个盘位,想把 Ubuntu 装在移动硬盘或 USB SSD 上。
-
-**快速判断**:**技术上可以,但这是偏离分支,v1 未验证**——设计文档第 10 节把它列为待评估,尚未给出步骤。
-
-**处置**:走这条路的话,下面几件事必须自己补齐并登记为偏离:
-
-1. **供电与稳定性**:USB 供电不稳会表现为随机的 I/O 错误与掉盘,极易被误判成"Ubuntu 不稳定";
-2. **性能**:接口带宽与内置 NVMe 不在一个量级,快照与 zram 的收益会被 I/O 拖累;
-3. **引导条目保持**:移动盘拔掉后,固件里指向它的 `ubuntu` 条目就失效。**I1 在这里更重要**——`BootOrder` 首位必须始终是 Windows Boot Manager,否则拔盘后可能停在引导失败界面;进 Linux 一律走一次性 `BootNext`(I2);
-4. **ESP 落哪块盘必须实测确认**:v1 未验证这一支,可参照双盘分支的"Linux 独占一块盘 + 独立 ESP"做法,但不得预设"移动盘一定自带独立 ESP、一定不复用内置盘 ESP";无论落哪块盘,仍受"引导盘必须 GPT + UEFI"约束(第 12 条);
-5. **验收照跑**:[08-verification.md](08-verification.md) 各组的判据不变,把"与移动盘共存"相关的部分记为已知例外。
-
-**依据与细节**:这条来自评论区同类需求,在设计文档里属"待评估"清单;它**不是** v1 的支持路径,所以不要在部署主流程里混入移动盘变体。
-
-**指向更详细的章节**:(设计 10)"外置 USB SSD / 移动硬盘安装分支";[00-overview.md](00-overview.md) 四条不变量与"不做什么";`07-9`(启动顺序偏差复原)。
-
-### 14. Linux 分区能不能改小
-
-**问题**:想把 Ubuntu 的 root 从 100GiB 改小,好把空间让给共享盘。
-
-**快速判断**:不建议。100GiB root + 15GiB 快照分区是容量方案 P1 的定稿:文档类数据全部落在共享盘,root 只放系统、桌面、编辑器与工具链;再往下压,升级与快照都会吃紧。
-
-**处置**:
-
-1. 先看真实占用(`df -h`、`du -sh /var /usr /snapshots`),确认瓶颈在哪;
-2. 需要更多空间,优先清理容器镜像、缓存与旧快照(默认保留 3 份);
-3. 真要动分区:**那是一次分区表变更**,按 I4 必须先有可用基线(ESP 镜像 + 固件启动项快照),并按偏离项登记;
-4. **不要因此省掉 15GiB 快照分区**:它是 R1/R2 的落点,省掉它等于把"变更前一键回滚"换成"只能选旧内核或原地重装"。
-
-**依据与细节**:ESP 尺寸不允许被削减,其它容量偏离可接受但必须记录;改分区还会连带影响 `baseline/02-partitions.txt` 的对照基准与验收 D 组。
-
-**指向更详细的章节**:[design/00-design.md](design/00-design.md) 决策 3.6、第 4.7 节、第 5.1/5.2 节;[05-first-boot.md](05-first-boot.md) 步骤 6;[00-overview.md](00-overview.md) 分区表与偏离说明;[09-risks.md](09-risks.md) 第 24 条。
-
-### 15. 双硬盘机型只能从第一块盘启动
-
-**问题**:机器有两块盘,但固件似乎只从第一块盘引导。
-
-**快速判断**:**这是部分厂商的硬约束**(用户报告:惠普官方口径不支持从第二块盘启动),不是配置错误。判定方法:进一次性启动菜单,看它是否**分别列出两块盘的** `Windows Boot Manager` / ESP 条目;不列出,就按"只能从第一块盘引导"处理。
-
-**处置**:
-
-1. **ESP 必须放在第一块盘**——这条直接决定分区的落盘位置;
-2. 上台实测确认前,不得按"能用第二块盘引导"做规划;
-3. 该结论按**最坏情况**处理,写入设备参数表,并把厂商差异表"能否从第二块盘引导"列填上实测结果;
-4. 第一块盘确实没空间时的替代路径是移动硬盘分支(第 13 条),同样属偏离分支。
-
-**依据与细节**:该结论是**社区报告,没有厂商一手文档支撑**,所以只按最坏情况采用,不当作普适事实;第一块盘上的 ESP 同时服务两个系统,这也是"单个 2GiB 共享 ESP"布局的前提。
-
-**指向更详细的章节**:[01-firmware.md](01-firmware.md) 厂商差异表;[design/00-design.md](design/00-design.md) 第 3.20 节与 11.1 第 8 条;[00-overview.md](00-overview.md) 分区表与偏离说明;[09-risks.md](09-risks.md) 第 19 条。
-
-### 16. 共享盘会不会被 Linux 写坏
-
-**问题**:Linux 写 NTFS 不是有风险吗?会不会把 `D:` 上的办公文件搞坏?
-
-**快速判断**:风险真实存在但可控,**前提是四条约束都在位**:
-
-1. Windows 关闭 Fast Startup 与休眠;
-2. `D:` 未启用 BitLocker / 设备加密;
-3. 挂载选项固定 `uid/gid/umask` 并使用 `windows_names`;
-4. 不把依赖 POSIX 语义的工作流放在共享盘。
-
-**最危险的组合是"Windows 处于休眠/混合关机状态时让 Linux 挂载"**——那会直接损坏数据。
-
-**处置**:
-
-1. 逐条核对四条前提(Windows 侧 `powercfg /a`、`HiberbootEnabled = 0`、`manage-bde -status D:`);
-2. 关键目录在云端或外置盘保留**第二份备份**;
-3. 不在 Linux 侧对共享盘做批量重命名或大目录移动;
-4. 代码仓库、`~/.ssh`、`~/.config` 等一律留在 Linux 本地 root,只重定向文档类目录;
-5. 遇到"设备忙 / 目录非空":先在 Windows 侧关掉资源管理器预览、搜索索引、同步客户端(如 OneDrive),再回 Linux 操作。
-
-**依据与细节**:双向可见性测试是验收判据(两边各写标记文件互相读取,内容逐字一致);共享盘是本方案唯一"两系统都能写"的区域,也是最需要冗余的区域;挂载行带 `nofail`,分区缺失时不会卡住启动。
-
-**指向更详细的章节**:[05-first-boot.md](05-first-boot.md) 步骤 1(1.1 四条前提、1.3 双向可见性、1.4 清单);[design/00-design.md](design/00-design.md) 第 5.3 节;[09-risks.md](09-risks.md) 第 11、12、13 条;[templates/fstab.snippet](../templates/fstab.snippet);[08-verification.md](08-verification.md) B4、B5。
-
-### 17. 国内下载慢,能不能用镜像站
-
-**问题**:从官方站点下载 ISO 太慢,能不能用国内镜像站加速?
-
-**快速判断**:**可以,但镜像站只当下载加速器,不当信任源。** 这一条没有例外。
-
-**处置**:
-
-1. **Ubuntu ISO**:下载后核对**官方发布页**的 `SHA256SUMS`(及签名 `SHA256SUMS.gpg`),哈希逐字符一致才使用;不一致就重新下载或换一个镜像站重下,**不要"先用用看"**;
-2. **Windows ISO**:**微软不发布 Windows 11 ISO 的官方 SHA256 值**,所以 Windows 侧只做"来自微软官方下载域 + 官方安装器校验",**不做 SHA256 比对**;不要把 Ubuntu 的口径套到 Windows 上;
-3. 校验不可省:镜像损坏或被替换的后果是"装到一半失败",或更糟——把不可信介质引入到一台将要承载双系统的机器上。
-
-**依据与细节**:信任模型只有一条:"镜像站加速 + 官方发布值比对"。
-
-**指向更详细的章节**:[01-firmware.md](01-firmware.md) 步骤 4 与"失败处理";[09-risks.md](09-risks.md) 第 20 条。
-
-### 18. 一个系统崩溃后能不能只重装它
-
-**问题**:一个系统崩了,必须两个都重装吗?数据会不会一起没?
-
-**快速判断**:**不一定,而且第一步不是重装,而是判层**:引导层 / 系统分区 / 硬件。分区表是**判据**不是层——用 `baseline/02-partitions.txt` 与现场对账(分区数、大小、偏移),对不上就按本条最后一问处理。
-
-- **引导层损坏而系统分区完好** -> **不要重装**,走引导复原或基线回滚(第三选择);
-- **只有 Windows 系统分区坏** -> 只格式化 `C:` 重装(办法一):`D:`、Linux 各分区与 ESP 一律不动;
-- **只有 Ubuntu root 坏** -> 只格式化 root 重装(办法二):ESP 复用挂 `/boot/efi` 且**绝不勾选格式化**,`/snapshots` 挂上但不格式化;
-- **分区表与 `baseline/02-partitions.txt` 对不上** -> **停手只读取证**,按 [07-rescue.md](07-rescue.md) 步骤 0.2 第 5、6 问确认是硬件/分区表故障,再决定是否走重装路径。
-
-**处置**:按层选路径,并把"误格分区"当第一号风险来防——重装时逐分区核对,**禁止"删除所有分区"**;**重装 Ubuntu 时误格 ESP 是全流程最危险的单步**,它会连带破坏 Windows 引导。
-
-**依据与细节**:两法共用前提是 `baseline/` 产物齐全可用、救援 U 盘在位;重装 Windows 后要复查四条不变量,并重做首启配置(关 Fast Startup、KMS 激活、已知文件夹重定向);C 与 root 的隔离布局正是为"只重装一个系统"准备的。
-
-**指向更详细的章节**:`07-1`、`07-4`、`07-5`;[checklists/rollback.md](../checklists/rollback.md) 的「原地重装两法」节;[design/00-design.md](design/00-design.md) (设计 4.8);[09-risks.md](09-risks.md) 第 26、27 条;[08-verification.md](08-verification.md) D 组。
+| 1 / 18 / 19 | VMD 未关、装错盘、ESP 放错盘 | 装 Windows 之前先关 VMD;用 `DISK_MODEL`/`DISK_SIZE` 逐盘核对;两块 ESP 都必须在第一块盘 | `01-1`、`01-3`、`02-1` |
+| 20 | 国内镜像未校验 | 镜像站只当加速器:Fedora 按官方 `CHECKSUM`,Windows 只认官方域 + 安装器校验 | `01-2` |
+| 30 | 固件只认第一个 ESP | 两块 ESP 互不干扰是 A 组实测项;机型不支持就记偏离并评估共用 ESP 分支 | `02-1`、`08-verification.md` |
+| 34 | ublue 镜像名 / 分支漂移 | `UBLUE_IMAGE` 标"待核实";动手前按官方文档核实镜像名与分支 | `05-3` |
+
+脚本:`scripts/windows/check-firmware.ps1 -Check`;`scripts/windows/verify-install-media.ps1 -Check`;`scripts/windows/check-partition-layout.ps1 -Track D`
+
+### 阶段风险 2:轨道 W(L1 安装 + L2 闸门)
+
+| 设计 9 | 本阶段的坑 | 一句话缓解 | 相关卡 |
+|---|---|---|---|
+| 2 | BitLocker 索要恢复密钥 | 动手前备份 48 位恢复密钥并挂起保护,操作完恢复保护 | `03-8`、`03-9` |
+| 3 | Windows 更新重写第一块 ESP / SBAT 事件 | 两块 ESP 分离让 Windows 侧只能碰自己那块;ESP 镜像备份 + 常备安装 U 盘 | `03-8`、`07-6`、`07-7` |
+| 4 | Fast Startup + 双写 NTFS | L1 强制关闭 Fast Startup 与休眠;共享盘禁止在 Windows 休眠时被挂载 | `03-2`、`05-1` |
+| 5 | ESP 尺寸与部署数量不匹配 | `ESP-Fedora` 1GiB + 独立 `/boot` 1GiB;两块 ESP 尺寸不允许被削减 | `02-1`、`03-8` |
+| 8 | WinRE 摆放占走预留区 | L2 逐项核对分区表;只有两块 ESP 与 Fedora root 尺寸不可削减,其余记偏差据实调整 | `03-8`、`03-9` |
+| 10 | KMS 续期失败 | 保留续期任务并定期核对激活状态;失效时重跑一次在线激活 | `03-4`、`03-5` |
+| 23 | 激活方案的合规风险 | 仓库只做外链与流程说明,不分发任何激活脚本本体 | `03-4` |
+| 26 / 28 | 重装误格分区 / 重定向遗漏 | 只格 `C:`;L1 完成后逐项核对六个已知文件夹 | `03-3`、`07-4` |
+
+脚本:`scripts/windows/check-gate.ps1`;`scripts/windows/backup-esp.ps1 -OutDir baseline -Check`;`scripts/windows/check-activation.ps1 -Check`
+
+### 阶段风险 3:轨道 L 与 L3 安装(02 分盘 + 04)
+
+| 设计 9 | 本阶段的坑 | 一句话缓解 | 相关卡 |
+|---|---|---|---|
+| 27 | 误格两块 ESP 或 `/boot` | 装前跑核对脚本;Anaconda 里只指定挂载点,每个"格式化"勾选都要显式检查 | `04-2`、`07-5` |
+| 29 | Anaconda 在已有系统/ESP 的盘上装 Silverblue 失败(上游已知失败) | 手工预建 Fedora 三块分区 + 只指定挂载点;失败按 `07-1` 后走救援,最坏退回轨道 W | `02-4`、`04-2`、`07-1` |
+| 17 | 引导菜单阶段黑屏 | 先确认键盘仍有效;用一次性入口进系统,必要时开 `GRUB_TERMINAL=console`;不要重装 | `10-5`、`05-13` |
+| 7 / 31 / 32 | 模块签名未就绪 / 自签 akmods 易碎 / akmod 卡内核升级 | 只走 ublue 预签名镜像 + 一次性 MOK;不在原子版直装 akmod | `05-3` |
+| 33 | rebase 后驱动与内核不配套 | rebase 前 pin;rebase 后立刻复检会话 / Wayland / 模块签名 / 桌面,不满足判据就回滚 | `05-3`、`05-9` |
+| 21 | 在 ublue 镜像 / 分支之间乱切 | 记录 `rpm-ostree status` 的来源与版本;切换前先 pin;不在非官方镜像间漂流 | `05-3`、`05-10` |
+
+脚本:`scripts/linux/check-partition-plan.sh --track D --check`;`scripts/linux/verify-l3.sh --check`;`scripts/linux/graphics.sh --check`
+
+### 阶段风险 4:首启收敛(L4)
+
+| 设计 9 | 本阶段的坑 | 一句话缓解 | 相关卡 |
+|---|---|---|---|
+| 9 | 时间 / 蓝牙状态分裂 | RTC 走 UTC;蓝牙以上游 `bt-keys-sync`,以 Windows 侧密钥为准 | `05-4`、`05-5` |
+| 11 / 13 | `ntfs3` 写入损坏 / POSIX 语义差异 | 关键目录留第二份备份;共享盘只放文档类数据,代码与密钥留本地 root | `05-1`、`05-2` |
+| 12 | 共享盘被 BitLocker / 设备加密 | `D:` 保持不加密;被自动启用了就先解密再继续 | `05-1`、`05-2` |
+| 14 / 24 / 25 | 更新被自动应用 / 回滚点缺失 / 固定状态被误改 | 只 check / download,不自动应用与重启;变更前 pin;巡检核对部署列表与固定状态 | `05-7`、`05-9`、`07-7` |
+| 22 | 家目录重定向后应用不兼容 | 只重定向文档类目录;出问题还原 `user-dirs.dirs` 的 `.dbk.bak` 备份 | `05-2` |
+| 15 / 16 | 反复强断电源 / 把硬件故障误判为双系统问题 | 用 SysRq `S` -> `U` -> `B`;两个系统一起异常先查硬件,先不要格式化分区 | `07-8`、`10-7`、`10-8` |
+
+脚本:`scripts/linux/mount-shared.sh --check`;`scripts/linux/set-updates.sh --check`;`scripts/linux/dbk-rollback.sh --check`;`scripts/linux/set-remote-health.sh --check`
+
+### 阶段风险 5:退役与救援 + 任意时刻(L5 + 长期项)
+
+| 设计 9 | 本阶段的坑 | 一句话缓解 | 相关卡 |
+|---|---|---|---|
+| 3 | Windows 更新后 Linux 引导消失 | 按 `07-7` 周期巡检;必要时清理 SBAT 策略;按 `07-6` 回基线 | `07-6`、`07-7` |
+| 6 | 引导顺序被改 / 卡 `grub rescue>` | 不要先删分区;按 `07-2` 的两条路处置;进系统后按 `07-9` 归位 | `07-2`、`07-9` |
+| 27 | 重装 Silverblue 时误格 ESP 或 `/boot` | 显式检查两块 ESP 与 `/boot` 的格式化勾选;动手前先备份 `/var/home` | `07-5` |
+| 26 | 原地重装时误格分区 | 逐分区核对,明确禁止"删除所有分区";动手前先做基线备份 | `07-4`、`07-5`、`07-10` |
+| 15 / 16 | 强断与硬件误判 | 按 `07-8` 的四条排障纪律;两个系统一起异常先查硬件 | `07-8` |
+| 23 | 合规 | 仓库内不得出现激活脚本本体或密钥材料,只留外链与流程说明 | `03-4` |
+
+脚本:`scripts/linux/triage.sh --check`;`scripts/windows/verify-baseline.ps1 -BaselineDir baseline`;`scripts/windows/restore-esp.ps1 -Check`
 
 ## 验证
 
-本附录不引入新判据;它的"验证"是确认你已经回到可判定的路径上:
+- **现象能对上**:速查表里能找到条目,且该条的判据可观测(如 `timedatectl` 的 `RTC in local TZ: no`、`efibootmgr -v` 的 `BootOrder` 首位、`rpm-ostree status` 的来源)。
+- **处置后回手册复判**:做完动作重跑对应卡的 `看到:` 判据与 [08-verification.md](08-verification.md) 的对应组;本文档不替代验收。
+- **引导类处置后**:重跑 A 组四项(`BootOrder` 首位、`\EFI\Microsoft\` 逐文件比对、`{bootmgr}` 的 `path`、BitLocker 状态),与本机 `baseline/` 逐字对账。
+- **做了偏离动作就登记**:移动硬盘、MBR 数据盘、改分区容量等,写进该设备的 `baseline/08-verification.md` 填写版(只有填写版含勾选与证据,不入库)。
+- **文档自检**:改动本文件后运行 `bash scripts/repo/check-docs.sh docs/10-faq.md`,期望 `check-docs: OK`。
 
-1. **现象能被对上**:能在速查表里找到条目,且该条给出的判据是可观测的(例如 `cat /proc/cmdline` 不含 `nomodeset`、`timedatectl` 的 `RTC in local TZ: no`、[verify-baseline.ps1](../scripts/windows/verify-baseline.ps1) 的四项判据通过——其中三项为引导判据,第四项是 BitLocker);
-2. **处置后回到手册复判**:做完动作后重跑对应手册的"验证"段与[验收清单](08-verification.md)的对应组;FAQ 不替代验收;
-3. **引导相关处置的复判**:重跑 A 组判据(`BootOrder` 首位、`\EFI\Microsoft\` 逐文件比对、`{bootmgr}` 的 `path`),与 `baseline/` 基线逐字对账;
-4. **做了偏离动作就登记**:移动硬盘、MBR 数据盘、改分区容量等,写进该设备的 `baseline/08-verification.md` 填写版(只有该填写版含勾选与证据,不入库)。
+## 处置失败怎么办
 
-## 失败处理
-
-1. **速查表里找不到对应现象**:不要猜着动手。先按 [07-rescue.md](07-rescue.md) 步骤 0 判层(引导层 / 系统分区 / 硬件;分区表对账是判据,见步骤 0.2 第 5、6 问),再决定动作;
-2. **处置后现象不消失或更糟**:立刻停止同类动作——尤其停掉"重装"与"删分区",按 `07-8`的四条排障纪律走;
-3. **怀疑硬件**:硬件优先(内存、SMART、温度、电源),见 [09-risks.md](09-risks.md) 第 16 条;
-4. **怀疑是文档本身错了**(本附录的判断与阶段手册不一致):以阶段手册与[验收清单](08-verification.md)为准,并把它当作文档缺陷记录下来修文档,**不要按本附录硬做**。
+1. **速查表里找不到对应现象**:不要猜着动手。先跑 `scripts/linux/triage.sh --check` 判层(引导层 / 系统分区 / 硬件),再决定动作。
+2. **处置后现象不消失或更糟**:立刻停掉同类动作——尤其停掉"重装"与"删分区",按 `07-8` 的四条排障纪律走。
+3. **怀疑硬件**:硬件优先(内存、SMART、温度、电源)(见 `10-8`)。
+4. **怀疑是文档本身错了**(本文档与阶段手册不一致):以阶段手册与 [08-verification.md](08-verification.md) 为准,并把它当文档缺陷记录下来修文档,不要按本文档硬做。
 
 ## 回滚
 
-- 本附录不给新动作,因此也不产生新的不可逆项:它推荐的每一条处置,都在对应手册的"回滚"段里有回退方式;
-- 通用回退粒度与前缀约定见 [checklists/rollback.md](../checklists/rollback.md) 与 [design/00-design.md](design/00-design.md)(设计 7.2)(单步 / 阶段 / 基线三种);
-- 动手前的最低保险:能进系统就先建快照(R1);进不去系统就先确认 `baseline/` 产物可读、救援 U 盘在位;
-- **改分区表或固件设置之前**(包括第 12、14 条里提到的偏离动作),按 I4 必须先有可用的基线备份;**没有备份时,正确动作是不做**。
+- 本文档不给新动作,因此不产生新的不可逆项:它推荐的每一条处置,都在对应手册的卡里有回退方式。
+- 回退粒度与落点见 [checklists/rollback.md](../checklists/rollback.md):单步撤销 / 部署级(开机菜单选旧部署或 `rpm-ostree rollback`)/ 基线级(ESP 与 NVRAM)/ 阶段级(退役)。
+- 动手前的最低保险:能进系统就先按 `05-9` 固定当前部署;进不去系统就先确认 `baseline/` 可读、救援 U 盘在位。
+- **改分区表或固件设置之前**(含 `10-12`、`10-14`、`10-15` 里的偏离动作),按 I4 必须先有可用的基线备份;没有备份时,正确动作是不做。

@@ -169,7 +169,7 @@ baseline/              每台设备的部署产物,永不入库(仅 README.md �
 
 ## 风险
 
-已知故障类型连同缓解手段登记在 [docs/09-risks.md](docs/09-risks.md)(28 条):Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写 ESP 与 SBAT/DBX 事件、Secure Boot 下 NVIDIA 模块签名、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、把硬件故障误判成双系统问题。
+已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(34 条),按阶段的速查在 [docs/10-faq.md](docs/10-faq.md):Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写 ESP 与 SBAT/DBX 事件、Secure Boot 下 NVIDIA 模块签名、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、把硬件故障误判成双系统问题。
 
 Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。Windows ISO 的校验止于"官方下载域 + 官方安装器校验"——微软不发布 Windows 11 ISO 的 SHA256 值;只有 Ubuntu ISO 才按官方 `SHA256SUMS` 比对([docs/01-firmware.md](docs/01-firmware.md))。
 
