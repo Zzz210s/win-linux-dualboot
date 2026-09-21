@@ -92,12 +92,12 @@
 
 | 编号 | 不变量 | 防住的事故 |
 |---|---|---|
-| **I1** | `BootOrder` 第一位**永远是 Windows Boot Manager** | 删除 Linux 分区后,固件仍指向失效的 `\EFI\ubuntu\grubx64.efi`,重启停在 `grub rescue>` |
+| **I1** | `BootOrder` 第一位**永远是 Windows Boot Manager** | 删除 Linux 分区后,固件仍指向失效的 `\EFI\fedora\grubx64.efi`,重启停在 `grub rescue>` |
 | **I2** | 进 Linux 只用**一次性 `BootNext`**(或厂商启动菜单键),绝不用 `efibootmgr -o` 调整顺序 | 留下一个"没人记得撤销"的永久启动顺序 |
 | **I3** | 绝不覆盖 `\EFI\Microsoft\`,绝不修改 `{bootmgr}` 的 `path` | Windows 引导路径被第三方接管,系统更新后翻车 |
 | **I4** | 改分区表或固件设置之前,先完成基线备份(BitLocker 挂起 + ESP 镜像 + 固件启动项快照)——**首次装机时**,分区表在 L1 一次定稿、基线在 L2 生成;**此后的任何分区表或固件变更,都必须先有可用的基线备份** | 除重装外无路可退 |
 
-**I1–I4 的落地方式(本次修订更新)**:Linux 侧条目(`\EFI\fedora\`)现在写在自己独立的 1GiB ESP 上(I3 由**结构**保证,不再只靠纪律),启动项名称的匹配串以实施时实测为准。另注:I1 举例中的 `\EFI\ubuntu\`(该举例按"逐字不改"要求保留)在本方案对应 `\EFI\fedora\`。
+**I1–I4 的落地方式(本次修订更新)**:Linux 侧条目(`\EFI\fedora\`)现在写在自己独立的 1GiB ESP 上(I3 由**结构**保证,不再只靠纪律),启动项名称的匹配串以实施时实测为准。另注:**I1 举例已随发行版更新为 `\EFI\fedora\`**(仅替换举例路径,不变量语义未变)。
 
 **为什么是这四条**:网络上"卡 grub 命令行"的根因不是 GRUB 坏了,而是固件 NVRAM 里的启动条目仍指向已被删除的引导文件,且它排在启动顺序前面。只要 I1 与 I2 成立,即使 Linux 侧被彻底清除,固件也会在失效条目后继续回落到 Windows。这比"记得先修引导再删分区"可靠——后者依赖人的记忆。
 
@@ -634,3 +634,4 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 2026-09-17 | 修订四:容量方案定型为 **P1**——Windows 系统 200 / Ubuntu root **100** / 快照 **15** / 共享数据盘 **≈635GiB**;新增家目录数据重定向到共享盘(与 100GiB root 的前提绑定),更新 L3 分区、L4 重定向项、参数表、5.3 用法约定、验收 B 组与风险表 |
 | 2026-09-17 | 修订五:依据 B 站实战评论区证据(新增 11.1 节)补齐坑位——新增决策 3.17 **显卡模式(MUX)排障分支**、3.18 **内核/驱动更新收紧**、3.19 **引导菜单黑屏处置**;故障矩阵新增 8 行、风险表新增 9 条、参数表新增 `DISK_MODEL`/`DISK_SIZE`、偏离项新增"固件只认第一块盘"、未决项新增 HWE 内核与外置盘分支 |
 | 2026-09-19 | **修订七:改用 Fedora 44 Silverblue 原子版**。基础系统由 Ubuntu 26.04 LTS(原方案)改为 Fedora 44 Silverblue;回滚由快照级改为**部署级**(`rpm-ostree rollback` + GRUB 选旧部署,**不做 `snapper`/`grub-btrfs`/btrfs 快照**);NVIDIA 路径改为 `rpm-ostree rebase` 到 ublue 预签名 NVIDIA 变体 + 一次性 MOK 注册;分区改为"Windows 独占 2GiB ESP + Fedora 独立 1GiB ESP + 独立 `/boot` 1GiB + root ≈113GiB btrfs";新增 **1.4 轨道结构(W/L/D 与共用底座)**、**决策 3.21 生命周期与升级**、**3.22 原子版语义**、**3.23 三轨道**;改写 3.1/3.2/3.3/3.4/3.6/3.7/3.8/3.14/3.16/3.20;4.4 改"L3 Silverblue 安装"(手工预建 Fedora 分区、Anaconda 只指定挂载点、不让它动 Windows ESP)、4.5 改原子版语义、4.7 的 R1/R2 改为"部署固定 + 回滚演练"、4.8 办法二改为 Silverblue 重装;5.1 分区表改 8 项、5.2 参数表新增 `FEDORA_ESP_SIZE`/`BOOT_SIZE`/`ROOT_SIZE`/`UBLUE_IMAGE`;7.1 巡检在四项之外新增"`nvidia` 模块签名"与"部署列表与固定状态"、7.2 改为四种粒度(单步/部署级/基线回滚/阶段回滚);8 组新增"两个 ESP 互不干扰"、F 组改为"部署回滚演练 + 用户数据仍在";9 节原 28 条风险逐条保留并替换其中 Ubuntu 专属项,追加 6 条新风险(Anaconda 双系统安装失败 `#284`、双 ESP 固件支持、`rpm-ostree` 下 akmods 不签名 `#499`、akmods 卡内核升级 `#632`、`rebase` 后驱动与内核配套、ublue 镜像命名/分支漂移与信任);10 节新增"共用 ESP 分支"与"stock Silverblue + 手工自签 akmods 回退分支"、标记"btrfs 快照回滚变体已作废";11 节新增 ublue 与上游 issue 库两条参考。本行取代原计划的"修订六:换 Fedora 44 Workstation(传统可变系统)"——该变体仅存在于 `02-fedora-variant-design.md`,已作废 |
+| 2026-09-21 | 消除最后一处不和谐:I1 举例由 `FIuntu\grubx64.efi` 改为 `FIedora\grubx64.efi`(仅举例路径,不变量语义未变),并同步 `docs/00-overview.md` 的同一处与说明句;全仓陈旧语义扫描(除未入库的 AI 计划文件)自此为空。 |
