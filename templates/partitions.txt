@@ -1,13 +1,23 @@
 rem =====================================================================
-rem L1 目标分区表:标称 1TB(实际可用约 953GiB)的 NVMe,整盘一次定稿
+rem L1 目标分区表(轨道 D 双系统):标称 1TB(实际可用约 953GiB)的 NVMe,整盘一次定稿
 rem diskpart 的 size 参数以 MB 为单位:1GiB = 1024MB
 rem
+rem 本脚本只建 Windows 侧四块,并在 D: 之后留下 115GiB 未分配区;
+rem Fedora Silverblue 侧三块分区由 L3 在那个预留区内创建(见 docs/02-partitioning.md 的 02-1、02-4)。
+rem
 rem   序号  分区             size      GUI 显示    文件系统  用途
-rem   1     ESP              2048      2GiB        FAT32     Windows 与 Ubuntu 共用
+rem   1     ESP-Windows      2048      2GiB        FAT32     只给 Windows;只放 \EFI\Microsoft\ 与 \EFI\BOOT\
 rem   2     MSR              16        16MiB       (无)      Microsoft Reserved
 rem   3     Windows(系统)    204800    200GiB      NTFS      C: 系统与程序
-rem   4     Data(数据)       650240    ≈635GiB     NTFS      D: 数据盘 / 双系统共享盘
-rem   5     Ubuntu            -         约 115GiB   未分配    留给 L3:root 100 + Snapshot 15
+rem   4     Data(数据)       650240    ≈635GiB     NTFS      D: 数据盘 / 双系统共享盘(Silverblue 侧 ntfs3 读写)
+rem   5     ESP-Fedora       1024      1GiB        FAT32     留给 L3:Silverblue 独立 ESP,只放 \EFI\fedora\
+rem   6     /boot            1024      1GiB        ext4      留给 L3:原子版必须独立,每个部署的内核与 initrd 在此
+rem   7     Fedora root      -         约 113GiB   btrfs     留给 L3:/ 与 ostree 部署(/home 是到 /var/home 的符号链接)
+rem   --    WinRE            约 1024   约 1GiB     Recovery  Windows 恢复环境(由安装程序创建,盘尾或预留段内)
+rem
+rem 两块 ESP:Windows 2GiB 归 Windows,Fedora 1GiB 归 Silverblue,各自只放自己的分支目录。
+rem Fedora 侧三块分区(ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB)合计 115GiB,
+rem 在预留的未分配区内创建,尺寸不允许被削减。
 rem
 rem 用法:Windows 11 专业版安装界面 -> Shift + F10 打开命令行 -> 输入 diskpart
 rem       -> select disk 0 -> 把本文件 Select 之后的命令逐条执行
@@ -25,8 +35,9 @@ select disk 0
 clean
 convert gpt
 
-rem 1. ESP 2GiB。Windows 与 Ubuntu 共用一个 ESP(设计文档 3.4);
-rem    尺寸不允许被削减——这是 L3 的 shim/GRUB 与后续内核能否放下的前提。
+rem 1. ESP-Windows 2GiB,只给 Windows(设计文档 3.4)。
+rem    尺寸不允许被削减——Windows 侧后续引导文件(含更新)能不能放下取决于它。
+rem    Silverblue 用自己的 1GiB ESP(在预留区内由 L3 创建),两块 ESP 绝不共用(不变量 I3)。
 create partition efi size=2048
 format quick fs=fat32 label="ESP"
 
@@ -40,15 +51,16 @@ format quick fs=ntfs label="Windows"
 
 rem 4. Windows 数据 D: 650240MB(≈635GiB)。数据、游戏库、下载与容器镜像都在这里,
 rem    同时是两个系统共享的 NTFS 分区(设计文档 3.16 与 5.3):Windows 侧原生访问,
-rem    Ubuntu 侧由 L4 以 ntfs3 读写挂载。该分区不启用 BitLocker / 设备加密。
+rem    Silverblue 侧由 L4 以 ntfs3 读写挂载。该分区不启用 BitLocker / 设备加密。
 create partition primary size=650240
 format quick fs=ntfs label="Data"
 
 rem 5. 剩余约 115GiB 必须保持未分配,不许在此处再建分区:
-rem    它是 L3 安装 Ubuntu 时的 root 100GiB + Snapshot 15GiB。
+rem    它是 L3 安装 Fedora Silverblue 时三块分区的位置
+rem    (ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB)。
 rem    不要用不带 size 的 create partition(会吃满整盘,导致 L3 无空间可用)。
 rem
 rem WinRE 由 Windows 安装程序在安装系统时自行创建(可能在磁盘末尾);
 rem 若它落在上面这段预留空间内,按 docs/03-windows.md 的 03-1(WinRE 偏差判据)处置:
-rem 只要 ESP 尺寸未被削减、留给 Linux 的空间仍不少于 115GiB 即接受,并把偏差
+rem 只要两块 ESP 尺寸未被削减、Fedora root 与预留空间仍不少于 115GiB 即接受,并把偏差
 rem 记录进 baseline/01-partitions.txt。

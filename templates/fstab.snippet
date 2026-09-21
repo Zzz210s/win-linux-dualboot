@@ -1,8 +1,9 @@
 # templates/fstab.snippet -> /etc/fstab(L4 首启收敛)
-# 用法:把下面两行按 <...> 说明替换后追加到 /etc/fstab;或直接运行
+# 用法:把下面两行按 <...> 说明替换后追加到 /etc/fstab;共享盘那一行也可直接运行
 #       scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --apply(它会做备份 + 校验 + 写测试)。
 # 两行都带"分区缺失也不阻断启动"的挂载选项:万一分区缺失或写坏,启动过程不会被卡住(设计文档第 7 节 L4 fstab 行)。
-# 第三条(swapfile 行)由 `scripts/linux/storage.sh` 追加,判据同为带 `nofail`。
+# 交换空间的 swapfile 行由 `scripts/linux/storage.sh` 追加(判据同为带 `nofail`,设计 3.8);
+# zram 由发行版自带的 systemd-zram-generator 承担,本文件不涉及。
 #
 # 前置条件(缺一不可,设计文档 5.3):
 #   1) Windows 已关闭 Fast Startup 与休眠(HiberbootEnabled=0,powercfg /a 里"休眠/快速启动"不可用),
@@ -15,5 +16,5 @@
 #
 # 共享数据盘(D: 数据分区,NTFS):两个系统读写同一批文件;uid/gid 取首个用户(1000)
 UUID=<SHARED_PART_UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,windows_names,nofail,noatime  0 0
-# Ubuntu 快照分区(L3 已建的 15GiB ext4,变更前快照的存放位置;健壮性 R1/R2)
-UUID=<SNAPSHOT_PART_UUID>  /snapshots  ext4  defaults,nofail,noatime  0 2
+# 交换空间(4GiB swapfile;zram 在前、swapfile 兜底,不做休眠;由 storage.sh 追加,行式如下)
+/swapfile  none  swap  sw,nofail  0 0

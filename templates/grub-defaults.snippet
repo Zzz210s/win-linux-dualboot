@@ -1,14 +1,15 @@
 # GRUB 片段 —— 由 scripts/linux/hardening.sh 合并进 /etc/default/grub
 #   (合并前先备份为 /etc/default/grub.dbk.bak),合并后执行 update-grub。
 # 合并规则:只取下面未注释的 KEY=VALUE 行;已存在的同名键就地替换,不存在则追加。
-# 设计依据:措施 R3(多内核保留 + 一次性启动)与决策 3.19(引导菜单阶段黑屏的处置)。
-# 说明:不启用 Remove-Unused-Kernel-Packages 即可保留旧内核(见 unattended-upgrades 片段);
+# 设计依据:措施 R3(部署级回滚 + 多部署保留)与决策 3.19(引导菜单阶段黑屏的处置)。
+# 说明:原子版下每个 deployment 自带内核与 initrd(`/boot` 独立),旧部署本身就是回滚点,
+#      不需要额外保留内核包,也不用任何文件系统快照工具;
 #      默认条目取"上次选中的条目"(saved),与固件层 BootNext 互补(不改 BootOrder,I2)。
 GRUB_DEFAULT=saved
 GRUB_SAVEDEFAULT=true
 GRUB_TIMEOUT=5
 GRUB_DISABLE_OS_PROBER=false
-# 条件项(默认注释,不要顺手打开):仅当装完独显驱动后,每次开机在"引导菜单阶段黑屏、
-# 但键盘仍可用"(数上下键能进 Windows)时,去掉下一行行首的 # 再 update-grub(决策 3.19)。
+# 条件项(默认注释,不要顺手打开):仅当装完驱动后,每次开机在"引导菜单阶段黑屏、
+# 但键盘仍可用"(按上下键能进 Windows)时,去掉下一行行首的 # 再 update-grub(决策 3.19)。
 # 此时菜单黑屏不等于系统损坏,不要重装;日常切换系统优先用一次性 BootNext / 厂商菜单键。
 # GRUB_TERMINAL=console
