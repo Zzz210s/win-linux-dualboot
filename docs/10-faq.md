@@ -212,7 +212,7 @@
 
 **依据与细节**:删掉 Linux 分区后,固件在失效条目之后会继续回落到下一个条目即 Windows——这正是 I1 的价值所在,它比"记得先修引导再删分区"可靠,后者依赖人的记忆。退役是**可逆的**:做到步骤 1 停下,就是"暂时停用 Linux、不删分区"的变体。
 
-**指向更详细的章节**:[06-decommission.md](06-decommission.md)(五步与变体);[07-rescue.md](07-rescue.md) 第 1、3 节;[00-overview.md](00-overview.md) 四条不变量;[09-risks.md](09-risks.md) 第 6 条;[08-verification.md](08-verification.md) A 组。
+**指向更详细的章节**:[07-rescue.md](07-rescue.md)(退役五步与只停用变体、救援两卡);[00-overview.md](00-overview.md) 四条不变量;[09-risks.md](09-risks.md) 第 6 条;[08-verification.md](08-verification.md) A 组。
 
 ### 10. 每次切系统时间都错(差一个时区)
 

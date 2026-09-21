@@ -156,7 +156,7 @@ for f in docs/00-overview.md README.md README.zh-CN.md checklists/deploy.md chec
          docs/design/03-step-automation-design.md; do
   runcheck "真实样本 $f(应过)" OK 0 "$ROOT/$f"
 done
-runcheck "设计文档 01(既有中间态:2 条 C5;04-2/04-3 已随 04-silverblue 落地而解析)" C5 2 "$ROOT/docs/design/01-playbook-reshape-design.md"
+runcheck "设计文档 01(既有中间态:1 条 C5 —— 卡本体示例里的 01-3 因 doc_of 取自身而解析不到;04-2/04-3/07-6 均已随手册落地而解析)" C5 1 "$ROOT/docs/design/01-playbook-reshape-design.md"
 
 printf '\nPASS=%s FAIL=%s\n' "$pass" "$bad"
 [ "$bad" -eq 0 ] || exit 1
