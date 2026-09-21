@@ -434,3 +434,102 @@ xdg-user-dir DOCUMENTS
 ### 6. 整段 L4 回滚
 
 要把 Ubuntu 回到"L3 刚装完"的状态:**从 `/snapshots` 快照整体还原**(R1);没有快照点时,手工按上面 1-5 逐项回退,并保留一份"回退前状态"记录(便于判断是否还有残留)。L4 全程未改分区表与固件设置,因此**不需要**动 ESP 基线,也不需要 `bcdboot`——那是引导层(L3/L5)的手段;一旦发现 `\EFI\Microsoft\` 或 `BootOrder` 有异常,立刻停下按 [L3 手册](04-silverblue.md) 的引导复原流程处理(基线回滚),不要在 L4 里顺手改引导。
+
+<!-- L4 卡骨架:由脚本批次(B2)随脚本同批写入,使「卡 ↔ 脚本」双向绑定可解析;
+     卡片正文与本节在文档中的位置由本手册改版批次统一整理,本节只作为脚本落地的锚点。 -->
+
+### 05-1 挂载共享数据盘(D: 整块挂到 /mnt/shared,ntfs3 读写)
+
+做:把共享数据盘按固定选项挂载,并核对四条前提;先 `--check` 看结论,确认后 `--apply` 写入 fstab。
+看到:脚本报 PASS;`findmnt /mnt/shared` 的目标是 /mnt/shared、文件系统 ntfs3、选项含 rw 与 windows_names 与 nofail,写测试可创建并删除。
+坑:写错 fstab 会挡住启动 —— 本卡写入的行必须带 nofail;D: 仍被 BitLocker 保护或 Windows 未关快速启动与休眠时,写测试会失败。
+出错时:读不到 UUID -> 回 Windows 侧取分区 UUID 再来;写测试失败 -> 先查 BitLocker 与 Fast Startup,不要反复重挂。
+脚本:scripts/linux/mount-shared.sh --check / --apply --yes
+
+### 05-2 家目录数据重定向到共享盘(只重定向文档类目录)
+
+做:把桌面/文档/下载/图片/视频/音乐六类目录指向共享盘,`~/.config` 与 `~/.ssh` 与代码仓库留在本地。
+看到:脚本报 PASS;`~/.config/user-dirs.dirs` 六条都指向共享盘,六个目标目录存在且可读。
+坑:NTFS 没有 POSIX 权限语义 —— 不要把 `.ssh`、代码仓库或整个家目录搬过去;共享盘未挂载时目录会缺失(靠 nofail 不阻塞启动)。
+出错时:目标目录不存在 -> 先确认 `05-1` 已通过;重定向后桌面图标消失 -> 在设置里重建目录或重跑本卡。
+脚本:scripts/linux/xdg-redirect.sh --check / --apply --yes
+
+### 05-3 显卡驱动与 MOK(rebase 到 ublue 的 NVIDIA 变体 + 一次性注册)
+
+做:执行一次 `rpm-ostree rebase` 换到 ublue 的 NVIDIA 变体(镜像内模块已预签名),重启后注册 MOK 并复检签名。
+看到:脚本报 PASS;`rpm-ostree status` 的镜像来源是 NVIDIA 变体,`lsmod` 有 nvidia,`mokutil --list-enrolled` 有上游密钥,`modinfo -F signer nvidia` 非空,会话是 Wayland。
+坑:镜像名/分支/ujust 任务名上游会改,脚本里都标了待核实 —— 真机前必须按官方文档核对;**不要在原子版上用 akmods 自签**,也不要为了驱动关掉 Secure Boot。
+出错时:rebase 后桌面起不来 -> 开机菜单选上一个部署或 `scripts/linux/dbk-rollback.sh --rollback`;未注册 MOK -> 重启进 MOK 界面选 Enroll MOK 后输入上游密码。
+脚本:scripts/linux/graphics.sh --check / --apply --yes;scripts/linux/graphics-mok.sh --check / --apply
+
+### 05-4 时间(RTC 走 UTC)
+
+做:核对硬件时钟按 UTC 走(NTP 已启用);Windows 侧如需配合可置 RealTimeIsUniversal=1。
+看到:脚本报 PASS;`timedatectl` 显示 `RTC in local TZ: no`,且系统时钟已同步或 NTP 服务 active。
+坑:让 Linux 按本地时间写 RTC,会使 Windows 侧时间漂移(反过来也一样);只改 RTC 基准与 NTP 开关,不动时区设置。
+出错时:读不到 `RTC in local TZ` 行 -> 人工跑一次 timedatectl 核对输出格式;NTP 起不来 -> 查网络与 time-sync 服务,不要手改系统时间。
+脚本:scripts/linux/set-time.sh --check / --apply
+
+### 05-5 蓝牙配对密钥同步(以 Windows 侧密钥为准)
+
+做:分层安装 chntpw 读取 Windows 注册表 hive,再用上游脚本把配对密钥同步到 Linux(不做反向写入)。
+看到:脚本报 PASS;`bluetoothctl devices` 能看到同步过来的设备,两个系统都能连同一副耳机或键鼠。
+坑:装包是**分层安装,需重启**才生效;Windows hive 必须可读(先关快速启动与休眠);反向写入会把 Windows 侧密钥改坏。
+出错时:本次才装上 chntpw -> 重启后重跑本卡;读不到 hive -> 核对 Windows 分区挂载与路径,不要强写注册表。
+脚本:scripts/linux/bt-keys-sync-wrapper.sh --check / --apply --yes
+
+### 05-6 zram 与 swapfile(zram 由安装改核对)
+
+做:核对 zram 已启用(桌面默认带 zram),并按需补 4GiB swapfile 与 fstab 行;不做休眠、不建 swap 分区。
+看到:脚本报 PASS;`zramctl` 列出 zram0,`swapon --show` 列出 swapfile,fstab 有对应行且带 nofail。
+坑:swapfile 的 fstab 行必须带 nofail;zram 缺失时补装是分层安装,需重启后才有 zram0。
+出错时:zramctl 无 zram0 -> 先确认分层包已生效(重启)再重跑;fallocate 失败 -> 查 root 分区可用空间。
+脚本:scripts/linux/storage.sh --check / --apply --yes
+
+### 05-7 journald 持久化与更新策略
+
+做:写入 journald 持久化片段并重启服务;把自动更新策略限制成"只检查/只下载",不自动应用、不自动重启。
+看到:脚本报 PASS;`/var/log/journal` 存在,`journalctl --disk-usage` 有输出;`/etc/rpm-ostreed.conf` 的策略是 check 或 download,`rpm-ostreed-automatic.timer` 为 enabled。
+坑:策略若写成 stage,就等于自动应用加自动重启 —— 与"变更前先固定当前部署"冲突,脚本会直接判失败;`/var` 不属于部署,日志不随回滚丢失。
+出错时:服务重启失败 -> 看 journalctl 输出定位;定时器未 enabled -> 手工 enable 后重跑,不要改成 stage。
+脚本:scripts/linux/set-journald.sh --check / --apply;scripts/linux/set-updates.sh --check / --apply
+
+### 05-8 SSH 与 SMART(救援通道与磁盘健康)
+
+做:启用 sshd 作为常开救援通道,并分层安装 smartmontools 启用 smartd,记录每块盘的健康结论。
+看到:脚本报 PASS;`systemctl is-active sshd` 为 active(22 端口在听),`smartctl -H` 输出 PASSED 或 OK。
+坑:smartmontools 是分层安装,需重启才生效;刚装完 smartd 时健康行可能还读不到,重启后复跑,不要就此判盘坏。
+出错时:无 smartctl -> 先确认分层包已生效(重启);健康行不是 PASSED/OK -> 立刻备份数据并按磁盘告警处置。
+脚本:scripts/linux/set-remote-health.sh --check / --apply
+
+### 05-9 部署回滚(列出与固定部署,必要时切回上一个)
+
+做:列出当前部署与固定状态;需要回退时 pin 当前部署(变更前)或执行一次 rollback;回滚后复检会话与模块。
+看到:脚本报 PASS;`rpm-ostree status` 列出至少两个部署,rollback 后提示下次默认启动已切换,复检时 nvidia 与 Wayland 正常。
+坑:**用户数据不随部署回滚** —— /var 与 /var/home 不在部署内,回滚系统不会丢家目录数据;回滚需重启才生效;缺 `--yes` 时脚本必须停在 64 且零写。
+出错时:只有一个部署 -> 变更前忘了 pin,先按本卡 pin 再改系统;回滚后桌面仍起不来 -> 在开机菜单里直接选旧部署。
+脚本:scripts/linux/dbk-rollback.sh --list / --check / --pin / --unpin / --rollback --yes
+
+### 05-10 发行版升级(rebase 到新分支,前置 pin)
+
+做:先把当前部署固定下来,再 `rpm-ostree rebase` 到目标分支,重启后复检版本/会话/模块;不满意就回滚到被固定部署。
+看到:脚本报 PASS 或明确报"需重启后复检";rebase 前 `rpm-ostree status` 的固定状态已置位,重启后版本与会话类型、nvidia 加载符合计划。
+坑:分支名上游会改(脚本里标了待核实);**没有 pin 就不要 rebase**,否则翻车后没有确定可回的部署;rebase 不动 Windows 分区与引导顺序。
+出错时:pin 复读确认不了 -> 脚本会拒绝 rebase,先修 pin;重启后桌面起不来 -> 开机菜单选被固定的旧部署再查原因。
+脚本:scripts/linux/upgrade-release.sh --check / --apply --yes --branch <目标分支>
+
+### 05-11 回 Windows 的入口(一次性,不改启动顺序)
+
+做:用一次性 BootNext 让下一次启动进 Windows;不改永久启动顺序、不改 {bootmgr} 的 path。
+看到:脚本报 PASS 或报"跳过(非 UEFI)";执行后复读 BootOrder 首位仍是 Windows Boot Manager,且固件条目里有 Windows 项。
+坑:任何"改永久首位"的做法(efibootmgr -o、displayorder)都破坏既有不变量;进 Linux 后要重启回 Windows 时,不要忘了一次性设置只生效一次。
+出错时:读不到 BootOrder -> 在 Windows 侧用 bcdedit 核对;找不到 Windows 条目 -> 按救援手册处置,不要手工改永久顺序。
+脚本:scripts/linux/reboot-to-windows.sh --check / --apply
+
+### 05-12 落 L4 产物(两份基线文档)
+
+做:采集首启收敛的实测证据,落成 baseline/04-first-boot.md 与 baseline/04-robustness.md;先 `--check` 预览,确认后再 `--apply`。
+看到:脚本报"已落盘";第一份含会话类型/部署来源/模块/共享盘与交换空间证据,第二份含 R1-R9 逐项现状与证据,取不到的写"未取到"。
+坑:两份产物都不入库(baseline 只留 README);只写六节而漏掉 rpm-ostree 或 findmnt 会让后续复检缺证据。
+出错时:读不到共享盘证据 -> 先让 `05-1` 通过再重跑;写不进 baseline/ -> 核对目录权限,不要改产物路径。
+脚本:scripts/linux/collect-l4.sh --check / --apply

@@ -1,66 +1,52 @@
 #!/usr/bin/env bash
-# L4:蓝牙配对密钥同步包装脚本(上游项目 KeyofBlueS/bt-keys-sync;本仓库**不内置**其代码)。
-#
-# 方向与顺序(上游建议,见 docs/05-first-boot.md 步骤 5):**以 Windows 侧密钥为权威来源**。
-#   1) 先在 Ubuntu 里对目标设备完成一次正常配对;
-#   2) 重启进 Windows,对同一设备重新配对一次(让 Windows 侧成为权威来源);
-#   3) 回 Ubuntu 运行本脚本(以 --windows-keys 从 Windows 注册表导入密钥);
-#   4) 复测:同一设备在两个系统里都能直接连接,不需再次配对。
-# **反向写入 Windows 注册表有风险**(系统盘被独占、写坏可能无法启动),本脚本默认不做;上游建议也是这个方向。
-#
-# 用法:bt-keys-sync-wrapper.sh [--apply] [--win-mnt <挂载点>] [--script <上游脚本路径>]
-#                              [--repo-url <仓库地址|raw 文件地址>] [--log <path>] [-- <上游脚本额外参数>]
-#   默认 dry-run:只打印计划(不装包、不下载、不运行上游脚本);加 --apply(需 root)才真正执行。
-#   上游仓库地址取自设计文档第 11 节记录的 `KeyofBlueS/bt-keys-sync`;**下载文件名与命令行参数以该仓库 README 为准**——
-#   本脚本按候选文件名(bt-keys-sync.sh / bt-keys-sync)在 master/main 分支逐个尝试,全部失败时提示你按 README
-#   手工下载或用 --script 指定已有副本;读取注册表只需**只读**挂载 Windows 分区(如 sudo mount -o ro <分区> /mnt/win)。
-# 日志追加到 /var/log/dbk/bt-keys-sync-wrapper.log。
+# 对应卡:05-5
+# 破坏性:1
+# L4 卡 05-5:蓝牙配对密钥同步包装(上游 KeyofBlueS/bt-keys-sync;本仓库不内置其代码)。
+# 方向(上游建议,以 Windows 侧密钥为权威):1) Ubuntu 配对目标设备 -> 2) 回 Windows 对同一设备再配对
+#   -> 3) 回 Ubuntu 用 --windows-keys 导入 -> 4) 复测两系统都能直连。**反向写 Windows 注册表有风险,本脚本不做**。
+# 判据(--check,零写):① chntpw 已分层安装(rpm-ostree status 查询;DBK_SKIP_OSTREE=1 时记需人工);
+#   ② Windows 注册表 hive 可读(<win-mnt>/Windows/System32/config/SYSTEM,只读挂载即可);
+#   ③ 上游脚本已就位(--script 指定,或已下载到 DEST)。三项齐 → PASS(上游运行与两系统直连复测属卡内人工步骤)。
+# --apply(需要 root,且必须 --yes):pkg_ensure chntpw 走 rpm-ostree 分层安装(chntpw 不在 Fedora 基础仓库,通常来自 RPM Fusion
+#   free 源:分层安装前需先启用该源,rpm-ostree install 的具体源参数 # 待核实(以官方文档为准):
+#   刚装完需重启,故本脚本在"本次才装上"时停下并要求重启后重跑)-> 下载上游脚本到 DEST(文件名/参数以仓库 README 为准)
+#   -> bash <脚本> --windows-keys --path <hive> [-- 透传]。
+# 环境开关:DBK_SKIP_OSTREE=1 跳过分层安装。注入:DBK_WIN_MNT / DBK_BT_SCRIPT / DBK_BT_DIR / DBK_BT_REPO。
+# 夹具级验证,真机未跑。用法:bt-keys-sync-wrapper.sh [--win-mnt <挂载点>] [--script <上游脚本>] [--repo-url <地址>]
+#   [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-- <上游额外参数>] [-h]
 set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
+. "$HERE/dbk-cli.sh"
+# shellcheck source=scripts/linux/dbk-ostree.sh disable=SC1091
+. "$HERE/dbk-ostree.sh"
+log() { dbk_obs "$*"; }   # dbk-log.sh 的 log() 打 stdout(会破坏 --json 单行输出),统一改走 stderr + 日志
 
-HERE="$(cd "$(dirname "$0")" && pwd)"
-LOG="${DBK_LOG:-/var/log/dbk/bt-keys-sync-wrapper.log}"
-APPLY=0
-WIN_MNT="${DBK_WIN_MNT:-}"
-SCRIPT_PATH="${DBK_BT_SCRIPT:-}"
+WIN_MNT="${DBK_WIN_MNT:-}"; SCRIPT_PATH="${DBK_BT_SCRIPT:-}"
 REPO_URL="${DBK_BT_REPO:-https://github.com/KeyofBlueS/bt-keys-sync}"
 DEST="${DBK_BT_DIR:-/opt/bt-keys-sync}"
-SKIP_APT="${DBK_SKIP_APT:-0}"
 HIVE_REL="Windows/System32/config/SYSTEM"
-PASSTHRU=()
-
-# 日志/参数守卫与 apt 工具与其它 L4 脚本共用(见 dbk-log.sh、dbk-apt.sh);缺失时立刻停下
-[ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
-source "$HERE/dbk-log.sh"
-[ -r "$HERE/dbk-apt.sh" ] || die "缺少 $HERE/dbk-apt.sh,无法安装 chntpw"
-source "$HERE/dbk-apt.sh"
-
-usage() { sed -n '2,17p' "$0"; }
-
+PASSTHRU=(); ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --apply) APPLY=1; shift ;;
-    --dry-run) APPLY=0; shift ;;
-    --win-mnt) need_val "$#" "--win-mnt" "<Windows 分区挂载点,如 /mnt/win>"; WIN_MNT="$2"; shift 2 ;;
+    --win-mnt) dbk_cli_val "--win-mnt" "${2:-}"; WIN_MNT="$2"; shift 2 ;;
     --win-mnt=*) WIN_MNT="${1#*=}"; shift ;;
-    --script) need_val "$#" "--script" "<上游 bt-keys-sync 脚本路径>"; SCRIPT_PATH="$2"; shift 2 ;;
+    --script) dbk_cli_val "--script" "${2:-}"; SCRIPT_PATH="$2"; shift 2 ;;
     --script=*) SCRIPT_PATH="${1#*=}"; shift ;;
-    --repo-url) need_val "$#" "--repo-url" "<上游仓库地址或 raw 文件地址>"; REPO_URL="$2"; shift 2 ;;
+    --repo-url) dbk_cli_val "--repo-url" "${2:-}"; REPO_URL="$2"; shift 2 ;;
     --repo-url=*) REPO_URL="${1#*=}"; shift ;;
-    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
-    --log=*) LOG="${1#*=}"; shift ;;
+    --dry-run) shift ;;
     --) shift; PASSTHRU=("$@"); break ;;
-    -h|--help) usage; exit 0 ;;
-    *) usage; die "未知参数: $1" ;;
+    *) ARGS+=("$1"); shift ;;
   esac
 done
-case "$SKIP_APT" in 1|0) ;; *) die "DBK_SKIP_APT 只接受 0/1: $SKIP_APT" ;; esac
+dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
+dbk_assert_step
+dbk_log_default "bt-keys-sync-wrapper"
+dbk_enable_errtrap
+SKIP="${DBK_SKIP_OSTREE:-0}"
+case "$SKIP" in 0|1) ;; *) dbk_usage; dbk_note "用法错误: DBK_SKIP_OSTREE 只接受 0/1: $SKIP"; exit "$DBK_USAGE" ;; esac
 
-if [ "$APPLY" -eq 1 ]; then log "模式: apply(将装包、下载上游脚本并运行)"; else log "模式: dry-run(只打印计划,不装包、不下载、不运行)"; fi
-log "上游项目: KeyofBlueS/bt-keys-sync(设计文档第 11 节记录;仓库 $REPO_URL;下载文件名与参数以该仓库 README 为准)"
-log "推荐顺序(顺序错了就得重来): 1) 先在 Ubuntu 配对目标设备 -> 2) 回 Windows 对同一设备重新配对 -> 3) 回 Ubuntu 用 --windows-keys 导入 Windows 侧密钥 -> 4) 复测两系统都能直连"
-log "方向: 以 Windows 侧密钥为准(上游建议);反向写入 Windows 注册表有风险(系统盘独占、写坏可能无法启动),本脚本默认不做。"
-
-# 找 Windows 分区:显式 --win-mnt 优先,否则扫描 ntfs/ntfs3 挂载点里含注册表 hive 的那个
 find_win_mnt() {
   local t
   while IFS= read -r t; do
@@ -68,42 +54,19 @@ find_win_mnt() {
   done < <(findmnt -rn -o TARGET -t ntfs,ntfs3 2>/dev/null || true)
   return 1
 }
-if [ -z "$WIN_MNT" ] && command -v findmnt >/dev/null 2>&1; then
-  WIN_MNT="$(find_win_mnt || true)"
-fi
-HIVE_OK=0
-if [ -n "$WIN_MNT" ] && [ -r "$WIN_MNT/$HIVE_REL" ]; then HIVE_OK=1; fi
-if [ "$HIVE_OK" -eq 1 ]; then
-  log "Windows 分区挂载点: $WIN_MNT(注册表 hive 可读:$HIVE_REL)"
-elif [ -n "$WIN_MNT" ]; then
-  log "警告: $WIN_MNT/$HIVE_REL 读不到;请确认该挂载点就是 Windows 系统分区(只读挂载即可)"
-  log "做法: sudo mount -o ro <Windows 系统分区,如 /dev/nvme0n1p2> $WIN_MNT 后再带 --win-mnt $WIN_MNT 重跑"
-else
-  log "提示: 未找到已挂载的 Windows 分区(自动扫描 ntfs/ntfs3 挂载点没找到含注册表 hive 的那个)"
-  log "做法(只读挂载即可,不要用可写方式挂载系统分区): sudo mkdir -p /mnt/win && sudo mount -o ro <Windows 系统分区> /mnt/win,再带 --win-mnt /mnt/win 重跑"
-fi
-
-if apt_installed chntpw; then log "依赖 chntpw: 已安装"; else log "依赖 chntpw: 未安装,计划用 apt-get install -y chntpw(DBK_SKIP_APT=1 时跳过)"; fi
-
-# 上游 README(KeyofBlueS/bt-keys-sync,"Windows registry hive file"一节)的选项为 `-p, --path <system_hive_path>`:
-# hive 已定位时显式传入,这样 --win-mnt 挂在 /media、/mnt 以外(或已挂载但不被上游搜索到的)路径时上游也能找到
-DRY_ARGS=" --windows-keys"
-if [ "$HIVE_OK" -eq 1 ]; then DRY_ARGS="$DRY_ARGS --path $WIN_MNT/$HIVE_REL"; fi
-if [ "${#PASSTHRU[@]}" -gt 0 ]; then DRY_ARGS="$DRY_ARGS ${PASSTHRU[*]}"; fi
-
-if [ "$APPLY" -ne 1 ]; then
-  log "计划执行: 1) apt_ensure chntpw  2) 把上游脚本下载到 $DEST/  3) bash <上游脚本>$DRY_ARGS"
-  log "计划结束: 提示你不做反向写入(不改 Windows 注册表),并按上面四步复测。"
-  log "dry-run 结束:未装包、未下载、未运行上游脚本;真正执行请用 sudo bash scripts/linux/bt-keys-sync-wrapper.sh --apply${WIN_MNT:+ --win-mnt $WIN_MNT}"
-  exit 0
-fi
-
-[ "$(id -u)" -eq 0 ] || die "--apply 需要 root:请用 sudo 重跑"
-[ "$HIVE_OK" -eq 1 ] || die "读不到 Windows 注册表 hive($WIN_MNT/$HIVE_REL):先只读挂载 Windows 系统分区并带 --win-mnt 重跑"
-pkg_st=0; apt_ensure chntpw "sudo apt install -y chntpw" || pkg_st=$?
-[ "$pkg_st" -eq 0 ] || die "chntpw 不可用(见上面的失败原因),无法继续"
-
-# 上游脚本获取:fetch 只往 stdout 写,--script 指定的本地副本优先
+resolve_win_mnt() {
+  [ -n "$WIN_MNT" ] || WIN_MNT="$(find_win_mnt || true)"
+  if [ -n "$WIN_MNT" ] && [ -r "$WIN_MNT/$HIVE_REL" ]; then HIVE_OK=1; else HIVE_OK=0; fi
+  return 0
+}
+resolve_script() {
+  local c
+  [ -n "$SCRIPT_PATH" ] && return 0
+  for c in bt-keys-sync.sh bt-keys-sync; do
+    if [ -s "$DEST/$c" ]; then SCRIPT_PATH="$DEST/$c"; return 0; fi
+  done
+  return 0
+}
 fetch() {
   if command -v curl >/dev/null 2>&1; then curl -fsSL "$1"
   elif command -v wget >/dev/null 2>&1; then wget -qO- "$1"
@@ -119,8 +82,7 @@ download_upstream() {
   base="${repo%/}"; base="${base%.git}"; base="${base#https://github.com/}"
   for cand in bt-keys-sync.sh bt-keys-sync; do
     for br in master main; do
-      url="https://raw.githubusercontent.com/$base/$br/$cand"
-      tmp="$dest/$cand"
+      url="https://raw.githubusercontent.com/$base/$br/$cand"; tmp="$dest/$cand"
       if fetch "$url" >"$tmp" 2>/dev/null && [ -s "$tmp" ]; then printf '%s\n' "$tmp"; return 0; fi
       rm -f "$tmp"
     done
@@ -128,27 +90,85 @@ download_upstream() {
   return 1
 }
 
-mkdir -p "$DEST" || die "无法创建 $DEST"
-if [ -n "$SCRIPT_PATH" ]; then
-  [ -s "$SCRIPT_PATH" ] || die "--script 指定的文件不存在或为空: $SCRIPT_PATH"
-  log "使用指定的上游脚本副本: $SCRIPT_PATH(用户自备文件:不改权限位、不做下载校验,由你自行保证来源可信)"
-else
-  SCRIPT_PATH="$(download_upstream "$REPO_URL" "$DEST" || true)"
-  if [ -z "$SCRIPT_PATH" ]; then
-    log "下载失败: 无法从 $REPO_URL 取到上游脚本(候选 bt-keys-sync.sh / bt-keys-sync,master/main 都试过)。"
-    log "请按 $REPO_URL 的 README 手工下载脚本到 $DEST/(或用 --script <路径> 指定已有副本)后重跑;本仓库不内置上游代码。"
-    exit 1
-  fi
-  chmod +x "$SCRIPT_PATH" 2>/dev/null || true
-  log "已下载上游脚本到: $SCRIPT_PATH(取自 master/main 的**分支尖端**快照:无签名、无版本校验,上游随时可能变)"
-  sha="$(sha256sum "$SCRIPT_PATH" 2>/dev/null | cut -d' ' -f1 || true)"
-  log "该文件 SHA256: ${sha:-无法计算(缺 sha256sum)};建议先人工过目该文件再运行(less $SCRIPT_PATH),并把 SHA256 记入 baseline/04-first-boot.md"
-fi
+ISSUES=(); MANUAL=(); EXTRA_MANUAL=(); REBOOT_NEEDED=0
 
-UP_ARGS=("--windows-keys")
-if [ "$HIVE_OK" -eq 1 ]; then UP_ARGS+=("--path" "$WIN_MNT/$HIVE_REL"); fi
-if [ "${#PASSTHRU[@]}" -gt 0 ]; then UP_ARGS+=("${PASSTHRU[@]}"); fi
-log "运行: bash $SCRIPT_PATH ${UP_ARGS[*]}"
-bash "$SCRIPT_PATH" "${UP_ARGS[@]}" || die "上游脚本以非 0 退出;把它的输出与 docs/05-first-boot.md 步骤 5 对照排障"
-log "完成: 已按 --windows-keys 从 Windows 侧导入密钥;未做反向写入(Windows 注册表未被修改)。"
-log "复测: 同一设备在 Ubuntu 与 Windows 里都应能直接连接(不需再次配对);结果按 docs/05-first-boot.md 步骤 5 记入 baseline/04-first-boot.md。"
+judge() {
+  ISSUES=(); MANUAL=()
+  resolve_win_mnt; resolve_script
+  if [ "$SKIP" = 1 ]; then MANUAL+=("DBK_SKIP_OSTREE=1:跳过分层安装,chntpw 是否已装需人工确认")
+  elif pkg_installed chntpw; then dbk_add_check "依赖 chntpw:已分层安装"
+  else ISSUES+=("依赖 chntpw 未安装(--apply 会用 rpm-ostree install 分层安装,装完需重启)"); fi
+  if [ "$HIVE_OK" = 1 ]; then dbk_add_check "Windows hive 可读:$WIN_MNT/$HIVE_REL"
+  elif [ -n "$WIN_MNT" ]; then ISSUES+=("$WIN_MNT/$HIVE_REL 读不到:确认该挂载点就是 Windows 系统分区,并以**只读**方式挂载")
+  else ISSUES+=("未找到已挂载的 Windows 分区:先 sudo mkdir -p /mnt/win && sudo mount -o ro <Windows 系统分区> /mnt/win,再带 --win-mnt /mnt/win 重跑"); fi
+  if [ -n "$SCRIPT_PATH" ] && [ -s "$SCRIPT_PATH" ]; then dbk_add_check "上游脚本已就位:$SCRIPT_PATH"
+  else ISSUES+=("上游脚本未就位(--script 指定,或 --apply 下载到 $DEST;文件名/参数以 $REPO_URL 的 README 为准,# 待核实)"); fi
+  return 0
+}
+
+finish() {
+  local msg="${1:-}" m
+  if [ "${#EXTRA_MANUAL[@]}" -gt 0 ]; then MANUAL+=(${EXTRA_MANUAL[@]+"${EXTRA_MANUAL[@]}"}); fi
+  if [ "${#ISSUES[@]}" -gt 0 ]; then
+    for m in "${ISSUES[@]}"; do dbk_add_check "失败项: $m"; done
+    dbk_exit FAIL "$msg:有 ${#ISSUES[@]} 项前置未就绪;逐条见 checks,修好后重跑本脚本"
+  fi
+  if [ "${#MANUAL[@]}" -gt 0 ]; then
+    for m in "${MANUAL[@]}"; do dbk_add_check "需人工: $m"; done
+    dbk_exit 需人工 "$msg:有 ${#MANUAL[@]} 项脚本判不了或需重启后复核;逐条见 checks"
+  fi
+  dbk_exit PASS "$msg:前置三项就绪(chntpw 已装 + Windows hive 可读 + 上游脚本已就位);上游运行与两系统直连复测见卡 05-5"
+}
+
+apply_run() {
+  local pkg_st=0 was=1 sha
+  [ "$(id -u)" -eq 0 ] || { dbk_add_check "--apply 需要 root(当前 uid=$(id -u))"; dbk_exit FAIL "--apply 需要 root:sudo bash $0 --apply --yes"; }
+  resolve_win_mnt
+  if [ "$HIVE_OK" != 1 ]; then
+    ISSUES+=("读不到 Windows 注册表 hive($WIN_MNT/$HIVE_REL)")
+    dbk_exit FAIL "读不到 Windows 注册表 hive:先只读挂载 Windows 系统分区并带 --win-mnt <挂载点> 重跑"
+  fi
+  if ! pkg_installed chntpw; then was=0; fi
+  pkg_ensure chntpw "sudo rpm-ostree install chntpw && sudo systemctl reboot" || pkg_st=$?
+  if [ "$pkg_st" -eq 9 ]; then
+    ISSUES+=("DBK_SKIP_OSTREE=1:无法安装 chntpw")
+    dbk_exit FAIL "DBK_SKIP_OSTREE=1:跳过分层安装,但 --apply 需要 chntpw 读取 hive;去掉该开关后重跑"
+  elif [ "$pkg_st" -eq 1 ]; then
+    ISSUES+=("chntpw 分层安装失败")
+    dbk_exit FAIL "chntpw 分层安装失败(见上面日志);硬前置:sudo rpm-ostree install chntpw && sudo systemctl reboot 后重跑"
+  fi
+  dbk_add_action "chntpw 已就位"
+  if [ "$was" = 0 ]; then
+    pkg_reboot_hint
+    EXTRA_MANUAL+=("chntpw 本次才分层安装:必须重启后重跑本脚本,才能运行上游脚本(--windows-keys)")
+    REBOOT_NEEDED=1
+    return 0
+  fi
+  mkdir -p "$DEST" || { ISSUES+=("无法创建 $DEST"); dbk_exit FAIL "无法创建 $DEST"; }
+  if [ -z "$SCRIPT_PATH" ]; then
+    SCRIPT_PATH="$(download_upstream "$REPO_URL" "$DEST" || true)"
+    if [ -z "$SCRIPT_PATH" ]; then
+      ISSUES+=("下载上游脚本失败($REPO_URL)")
+      dbk_exit FAIL "下载失败:候选 bt-keys-sync.sh / bt-keys-sync 的 master/main 都没取到;请按 $REPO_URL 的 README 手工下载到 $DEST 或用 --script 指定"
+    fi
+    chmod +x "$SCRIPT_PATH" 2>/dev/null || true
+    dbk_add_action "已下载上游脚本:$SCRIPT_PATH(分支尖端快照:无签名、无版本校验)"
+    sha="$(sha256sum "$SCRIPT_PATH" 2>/dev/null | cut -d' ' -f1 || true)"
+    dbk_obs "上游脚本 SHA256: ${sha:-无法计算(缺 sha256sum)};建议先人工过目(less $SCRIPT_PATH)并记入 baseline/04-first-boot.md"
+  else
+    dbk_add_action "使用 --script 指定的副本:$SCRIPT_PATH(来源由你保证,本脚本不做下载校验)"
+  fi
+  UP_ARGS=(--windows-keys --path "$WIN_MNT/$HIVE_REL")
+  if [ "${#PASSTHRU[@]}" -gt 0 ]; then UP_ARGS+=("${PASSTHRU[@]}"); fi
+  dbk_add_action "运行: bash $SCRIPT_PATH ${UP_ARGS[*]}"; dbk_mark_changed
+  if bash "$SCRIPT_PATH" "${UP_ARGS[@]}"; then
+    dbk_add_action "上游脚本已按 --windows-keys 导入;未反向写 Windows 注册表"
+  else
+    dbk_exit FAIL "上游脚本以非 0 退出:把它的输出与 docs/05-first-boot.md 的 05-5 卡对照排障"
+  fi
+  return 0
+}
+
+if [ "$DBK_MODE" = apply ]; then apply_run; fi
+if [ "$REBOOT_NEEDED" -ne 1 ]; then judge; fi
+if [ "$DBK_MODE" = apply ]; then finish "蓝牙密钥同步已执行(--apply;复读前置判据)"; else finish "蓝牙密钥同步前置核对完成(--check 零写)"; fi

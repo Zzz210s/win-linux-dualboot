@@ -1,5 +1,6 @@
 ﻿#Requires -Version 5.1
 # 对应卡:03-3
+# 破坏性:1
 <#
 .SYNOPSIS
   轨道 W:系统盘隔离——六个已知文件夹重定向到 D:,并建 D:\Shared\。缺省 -Check 只读比对;-Apply(需 -Yes)才写。

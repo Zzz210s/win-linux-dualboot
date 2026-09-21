@@ -7,8 +7,8 @@
 02-2	scripts/windows/check-partition-layout.ps1	0	轨道 W 的分盘核对:只 Windows(ESP-Win/MSR/C:/WinRE)
 02-4	scripts/windows/create-partitions.ps1	1	轨道 D 的分盘:diskpart 预建四区 + 预留 115GiB(破坏性,需 -Yes)
 03-1	scripts/windows/verify-windows-baseline.ps1	0	装 Windows 后核对版本/内部版本与分区布局(含 WinRE 偏差判据)
-03-2	scripts/windows/disable-faststartup.ps1	0	关快速启动与休眠:powercfg /h off + HiberbootEnabled=0(需 -Yes)
-03-3	scripts/windows/redirect-known-folders.ps1	0	已知文件夹重定向到 D:六个目录 + D:\Shared\(需 -Yes)
+03-2	scripts/windows/disable-faststartup.ps1	1	关快速启动与休眠:powercfg /h off + HiberbootEnabled=0(需 -Yes)
+03-3	scripts/windows/redirect-known-folders.ps1	1	已知文件夹重定向到 D:六个目录 + D:\Shared\(需 -Yes)
 03-4	scripts/windows/check-activation.ps1	0	KMS 激活状态只读核对(激活动作人工,不阻塞 L1)
 03-5	scripts/windows/collect-l1.ps1	0	落 L1 产物:01-partitions.txt 与 01-activation.md
 03-6	scripts/windows/preflight.ps1	0	只读体检:闸门判据与基线报告(写 baseline/02-preflight-report.md)

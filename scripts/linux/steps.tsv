@@ -5,7 +5,14 @@
 04-4	scripts/linux/collect-l3.sh	0	落 L3 产物:baseline/03-efi-layout.txt
 05-1	scripts/linux/mount-shared.sh	1	挂载共享盘 D:(写 /etc/fstab,需 --yes)
 05-2	scripts/linux/xdg-redirect.sh	1	家目录重定向(写 user-dirs.dirs,需 --yes)
-05-3	scripts/linux/graphics.sh	1	显卡栈收敛(ublue NVIDIA rebase + MOK,需 --yes)
-05-5	scripts/linux/bt-keys-sync-wrapper.sh	1	蓝牙配对密钥同步(分层装包 + 写 Windows hive,需 --yes)
-05-6	scripts/linux/storage.sh	1	zram 与 swapfile 核对(写系统配置,需 --yes)
+05-3	scripts/linux/graphics.sh	1	显卡栈收敛(ublue NVIDIA rebase,需 --yes);同卡第二脚本 graphics-mok.sh(MOK 注册与签名复检)因「索引步骤号不得重复」未单列
+05-4	scripts/linux/set-time.sh	0	时间收敛:RTC 走 UTC(RTC in local TZ: no)+ NTP 启用
+05-5	scripts/linux/bt-keys-sync-wrapper.sh	1	蓝牙配对密钥同步(分层装 chntpw + 写 Windows hive,需 --yes)
+05-6	scripts/linux/storage.sh	1	zram 与 swapfile 核对(zram 由安装改核对;写 fstab 与 zram 配置,需 --yes)
+05-7	scripts/linux/set-journald.sh	0	journald 持久化(卡 05-7 的两个脚本之一;另一为 set-updates.sh,因「索引步骤号不得重复」未单列)
+05-8	scripts/linux/set-remote-health.sh	0	SSH 与 SMART:sshd 启用 + 分层装 smartmontools + smartd
+05-9	scripts/linux/dbk-rollback.sh	1	部署回滚:--list/--pin/--unpin/rpm-ostree rollback(需 --yes);被 07-7 巡检复用
+05-10	scripts/linux/upgrade-release.sh	1	发行版升级:前置 pin 当前部署 -> rpm-ostree rebase 新分支(需 --yes)
 05-11	scripts/linux/reboot-to-windows.sh	0	一次性重启进 Windows(不改 BootOrder)
+05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md
+07-7	scripts/linux/dbk-rollback.sh	0	周期巡检(Linux 侧):部署列表与固定状态 + nvidia 签名 + 会话类型(--check;Windows 侧见 verify-baseline.ps1)

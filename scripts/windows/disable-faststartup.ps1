@@ -1,5 +1,6 @@
 ﻿#Requires -Version 5.1
 # 对应卡:03-2
+# 破坏性:1
 <#
 .SYNOPSIS
   轨道 W:关闭 Fast Startup(快速启动)与休眠。缺省 -Check 只读判定;-Apply(需 -Yes)执行 powercfg /h off 并把 HiberbootEnabled 显式置 0。

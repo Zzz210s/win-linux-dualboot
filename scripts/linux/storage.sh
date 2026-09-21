@@ -1,199 +1,166 @@
 #!/usr/bin/env bash
-# L4:交换空间落地 —— swapfile 4GiB(不建 swap 分区、不做休眠)+ zram(约 min(RAM/2, 8GiB))。
-#
-# 用法:bash scripts/linux/storage.sh [--apply] [--size 4G] [--swapfile /swapfile] [--log <path>]
-#   默认 dry-run:只打印将执行的动作与判据,不改动系统。
-#   --apply(需要 root)按序执行:fallocate -l <size> <file> -> chmod 600 -> mkswap -> swapon
-#   -> 校验 /etc/fstab 的 swapfile 行,缺则先备份为 /etc/fstab.dbk.bak 再追加
-#   -> 确保 systemd-zram-generator 已安装(缺则 apt-get install,DBK_SKIP_APT=1 跳过)-> 安装 templates/zram-generator.conf 到 /etc/systemd/zram-generator.conf(内容不同则先备份)
-#   -> systemctl daemon-reload 并启动 systemd-zram-setup@zram0.service
-#   -> 打印 swapon --show 与 zramctl 作为实测验证,并顺带报告 systemd-oomd(R6)。
-# 重跑幂等:swapfile 已存在则跳过创建、已在交换列表则跳过 swapon;fstab/zram 配置只补不覆盖。
-# 日志追加到 /var/log/dbk/storage.log(目录不可写时只输出到终端)。
-# 退出码:0 = swapfile 与 zram 都验证通过;1 = 有项未通过(见日志里的 DBK-RESULT 行)。
-# 回退:swapoff <swapfile> && rm -f <swapfile>;删掉 fstab 的 swapfile 行与 zram-generator.conf;
-#      两者都不动分区表(决策 3.8 的可调整性)。
-# 设计依据:决策 3.8(无 swap 分区)、设计 4.7 的 R6(OOM 与内存压力防护)。
+# 对应卡:05-6
+# 破坏性:1
+# L4 卡 05-6:交换空间落地与核对 —— swapfile 4GiB(不建 swap 分区、不做休眠)+ zram 核对(约 min(RAM/2, 8GiB))。
+# 原子版语义(设计 02 第 8 节 / 设计 4.7 的 R6):zram 由发行版自带,本卡**只核对**(zramctl 列出 zram0 即通过);
+#   仅当 zram0 缺失时,--apply 才分层安装 systemd-zram-generator(rpm-ostree install,# 待核实(以官方文档为准))+ 安装
+#   templates/zram-generator.conf,并标明**需重启**(分层安装只写进下一部署)。
+# 判据(--check,零写):① swapon 列出 <swapfile>;② /etc/fstab 有该 swapfile 行(缺 nofail 记需人工);
+#   ③ zramctl 列出 zram0(无 zramctl 时退看 /sys/block/zram0,仍取不到 → 需人工)。
+# --apply(需要 root,且必须 --yes):fallocate -l -> chmod 600 -> mkswap -> swapon -> 缺则备份 fstab 后追加
+#   -> zram0 缺失时安装配置并分层装包 -> systemctl daemon-reload + start systemd-zram-setup@zram0.service -> 复读判据。
+# 本脚本逐项汇总、整体返回 0/1/2:单项失败不中断(不 set -e、不启用 errtrap,与 hardening.sh 同口径)。
+# 环境开关:DBK_SKIP_OSTREE=1 只跳过分层安装。注入:DBK_SWAPFILE / DBK_SWAP_SIZE / DBK_FSTAB / DBK_ZRAM_CONF /
+#   DBK_ZRAM_TPL / DBK_SWAPON / DBK_ZRAMCTL / DBK_SYSTEMCTL(离线夹具用)。
+# 回退:swapoff <swapfile> && rm -f <swapfile>;删 fstab 的 swapfile 行与 zram-generator.conf;都不动分区表(决策 3.8)。
+# 夹具级验证,真机未跑。用法:storage.sh [--size 4G] [--swapfile /swapfile] [--check|--apply] [--json]
+#   [--log <路径>] [--yes] [--step NN-K] [-h]
 set -uo pipefail
-
-HERE="$(cd "$(dirname "$0")" && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-[ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
-[ -r "$HERE/dbk-apt.sh" ] || { echo "错误: 缺少 $HERE/dbk-apt.sh" >&2; exit 1; }
-LOG="${DBK_LOG:-/var/log/dbk/storage.log}"
-source "$HERE/dbk-log.sh"
-source "$HERE/dbk-apt.sh"
+# shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
+. "$HERE/dbk-cli.sh"
+# shellcheck source=scripts/linux/dbk-ostree.sh disable=SC1091
+. "$HERE/dbk-ostree.sh"
+# dbk-log.sh 的 log() 打 stdout(会破坏 --json 的单行输出);这里统一改走 dbk_obs(stderr + --log 日志)
+log() { dbk_obs "$*"; }
 
-FSTAB="${DBK_FSTAB:-/etc/fstab}"
-FSTAB_BAK="$FSTAB.dbk.bak"
-SWAPFILE="${DBK_SWAPFILE:-/swapfile}"
-SWAP_SIZE="${DBK_SWAP_SIZE:-4G}"
+FSTAB="${DBK_FSTAB:-/etc/fstab}"; FSTAB_BAK="$FSTAB.dbk.bak"
+SWAPFILE="${DBK_SWAPFILE:-/swapfile}"; SWAP_SIZE="${DBK_SWAP_SIZE:-4G}"
 ZRAM_CONF="${DBK_ZRAM_CONF:-/etc/systemd/zram-generator.conf}"
 ZRAM_TPL="${DBK_ZRAM_TPL:-$ROOT/templates/zram-generator.conf}"
 ZRAM_PKG="${DBK_ZRAM_PKG:-systemd-zram-generator}"
-SKIP_APT="${DBK_SKIP_APT:-0}"
-APPLY=0
-RC=0
-
-usage() { sed -n '2,13p' "$0"; }
-
-# 活动交换设备名列表(兼容不支持 --show=NAME 的旧 util-linux)
-swap_names() {
-  swapon --show=NAME --noheadings 2>/dev/null || swapon --show 2>/dev/null | awk 'NR>1{print $1}'
-}
-
+SWAPON="${DBK_SWAPON:-swapon}"; ZRAMCTL="${DBK_ZRAMCTL:-zramctl}"; SYSTEMCTL="${DBK_SYSTEMCTL:-systemctl}"
+ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --apply) APPLY=1; shift ;;
-    --dry-run) APPLY=0; shift ;;
-    --size) need_val "$#" "--size" "<字节数,如 4G>"; SWAP_SIZE="$2"; shift 2 ;;
+    --size) dbk_cli_val "--size" "${2:-}"; SWAP_SIZE="$2"; shift 2 ;;
     --size=*) SWAP_SIZE="${1#*=}"; shift ;;
-    --swapfile) need_val "$#" "--swapfile" "<绝对路径,如 /swapfile>"; SWAPFILE="$2"; shift 2 ;;
+    --swapfile) dbk_cli_val "--swapfile" "${2:-}"; SWAPFILE="$2"; shift 2 ;;
     --swapfile=*) SWAPFILE="${1#*=}"; shift ;;
-    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
-    --log=*) LOG="${1#*=}"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) usage; die "未知参数: $1" ;;
+    --dry-run) shift ;;
+    *) ARGS+=("$1"); shift ;;
   esac
 done
+dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
+dbk_assert_step
+dbk_log_default "storage"
+case "$SWAPFILE" in /*) ;; *) dbk_usage; dbk_note "用法错误: --swapfile 需要绝对路径: $SWAPFILE"; exit "$DBK_USAGE" ;; esac
+case "$SWAP_SIZE" in ""|*[!0-9GgMmKk]*) dbk_usage; dbk_note "用法错误: --size 只允许数字与单位 G/M/K: $SWAP_SIZE"; exit "$DBK_USAGE" ;; esac
 
-case "$SWAPFILE" in /*) ;; *) die "--swapfile 需要绝对路径: $SWAPFILE" ;; esac
-case "$SWAP_SIZE" in *[!0-9GgMmKk]*|"") die "--size 只允许数字与单位 G/M/K: $SWAP_SIZE" ;; esac
-case "$SKIP_APT" in 1|0) ;; *) die "DBK_SKIP_APT 只接受 0/1: $SKIP_APT" ;; esac
-[ -r "$ZRAM_TPL" ] || die "缺少 zram 模板 $ZRAM_TPL"
-for key in 'zram-size' 'compression-algorithm' 'swap-priority'; do
-  grep -qE "^[[:space:]]*$key[[:space:]]*=" "$ZRAM_TPL" || die "模板 $ZRAM_TPL 缺少 $key(决策 3.8)"
-done
-grep -qF 'min(ram / 2, 8192)' "$ZRAM_TPL" || log "警告: 模板 zram-size 不是 min(ram / 2, 8192),按模板原样安装"
-
-log "=== 交换空间计划(决策 3.8:不做休眠、不建 swap 分区)==="
-log "1) $SWAPFILE($SWAP_SIZE):fallocate -l -> chmod 600 -> mkswap -> swapon"
-log "2) $FSTAB:缺 swapfile 行时先备份为 $FSTAB_BAK 再追加 '$SWAPFILE none swap sw,nofail 0 0'"
-log "3) 确保 $ZRAM_PKG 已安装(缺则 apt-get install -y;DBK_SKIP_APT=1 跳过),再安装 $ZRAM_TPL -> $ZRAM_CONF(内容不同时先备份为 $ZRAM_CONF.dbk.bak)"
-log "4) systemctl daemon-reload && systemctl start systemd-zram-setup@zram0.service(zram 约 min(RAM/2, 8GiB))"
-log "5) 验证:swapon --show 列出 $SWAPFILE、zramctl 列出 zram0;并报告 systemd-oomd 状态"
-log "6) 回退:swapoff $SWAPFILE && rm -f $SWAPFILE;删该 fstab 行与 $ZRAM_CONF(都不动分区表)"
-
-if [ "$APPLY" -ne 1 ]; then
-  log "dry-run 结束:未修改任何文件。确认无误后加 --apply 重跑:sudo bash scripts/linux/storage.sh --apply"
-  exit 0
-fi
-[ "$(id -u)" -eq 0 ] || die "--apply 需要 root:sudo bash $0 --apply"
-
-# 0) zram 依赖包:zram 单元由该包提供;缺包则 systemd-zram-setup@zram0.service 起不来(R6 半项失效)
-#    先查后装(重跑不重复下载);DBK_SKIP_APT=1 时只跳过安装,便于无 apt 环境做静态校验
-pkg_st=0; apt_ensure "$ZRAM_PKG" "sudo apt install -y $ZRAM_PKG" || pkg_st=$?
-if [ "$pkg_st" -eq 1 ]; then RC=1; fi
-if [ "$pkg_st" -eq 9 ]; then log "DBK_SKIP_APT=1:未安装 $ZRAM_PKG,按静态校验继续(下面 zram 判据会因缺包记 fail)"; fi
-
-# 1) swapfile:不存在则创建;存在则跳过创建(重跑幂等),未启用时补 swapon
-if [ ! -e "$SWAPFILE" ]; then
-  if fallocate -l "$SWAP_SIZE" "$SWAPFILE"; then
-    log "已创建 $SWAPFILE($SWAP_SIZE)"
-    chmod 600 "$SWAPFILE" || log "警告: chmod 600 $SWAPFILE 失败"
-    out="$(mkswap "$SWAPFILE" 2>&1)"; st=$?
-    if [ "$st" -eq 0 ]; then
-      log "mkswap: $(printf '%s' "$out" | tail -n 1)"
-    else
-      log "错误: mkswap $SWAPFILE 失败: $(printf '%s' "$out" | tail -n 2 | tr '\n' ' ')"; RC=1
-    fi
-  else
-    log "错误: fallocate -l $SWAP_SIZE $SWAPFILE 失败(root 分区空间不足?决策 3.6 给 root 100GiB)"; RC=1
+swap_names() { "$SWAPON" --show=NAME --noheadings 2>/dev/null | awk '{print $1}'; }
+swap_active() { local n
+  while IFS= read -r n; do [ "$n" = "$SWAPFILE" ] && return 0; done < <(swap_names)
+  return 1
+}
+zram_present() {
+  if command -v "$ZRAMCTL" >/dev/null 2>&1; then
+    "$ZRAMCTL" 2>/dev/null | grep -q '^zram0' && return 0
+    return 1
   fi
-else
-  log "$SWAPFILE 已存在,跳过创建(fallocate 不覆盖已有文件)"
-  chmod 600 "$SWAPFILE" 2>/dev/null || log "警告: chmod 600 $SWAPFILE 失败"
-fi
-if [ -e "$SWAPFILE" ]; then
-  if swap_names | grep -qxF "$SWAPFILE"; then
-    log "$SWAPFILE 已是活动交换空间(重跑跳过 swapon)"
-  elif swapon "$SWAPFILE" 2>/dev/null; then
-    log "已启用 $SWAPFILE"
-  else
-    log "错误: swapon $SWAPFILE 失败(mkswap 未成功或内核拒绝该文件)"; RC=1
-  fi
-fi
-
-# 2) fstab:已有该路径的条目则跳过;否则备份后追加(备份只在不存在时创建)
-SWAP_LINE="$SWAPFILE  none  swap  sw,nofail  0 0"
-# 按首个字段精确匹配(不用 grep -F:否则 /swapfile2、/swapfile.bak 会被误判为已有条目而静默不落盘)
-cur="$(awk -v p="$SWAPFILE" '!/^[[:space:]]*#/ && $1==p' "$FSTAB" 2>/dev/null || true)"
-if [ -n "$cur" ]; then
-  log "fstab 已有 $SWAPFILE 条目,跳过写入: $(printf '%s' "$cur" | head -n 1)"
-  case "$cur" in *swap*) ;; *) log "警告: 该条目未见 swap 关键字,请手工核对 $FSTAB" ;; esac
-  case "$cur" in *nofail*) ;; *) log "警告: 该条目缺 nofail(设计第 8 节 F 组判据:L4 写入的三条(共享盘、/snapshots、swapfile)带 nofail),请手工核对 $FSTAB" ;; esac
-else
+  [ -e /sys/block/zram0 ]
+}
+zram_detail() { "$ZRAMCTL" 2>/dev/null | grep '^zram0' | head -n 1 || printf '%s' "${ZRAMCTL} 不可用,看 /sys/block/zram0"; }
+fstab_cur() { awk -v p="$SWAPFILE" '!/^[[:space:]]*#/ && $1==p' "$FSTAB" 2>/dev/null || true; }
+fstab_add() {
   if [ ! -e "$FSTAB_BAK" ]; then
-    cp -a "$FSTAB" "$FSTAB_BAK" && log "已备份 $FSTAB -> $FSTAB_BAK(重跑不覆盖首次备份)" || { log "错误: 备份 $FSTAB 失败"; RC=1; }
-  else
-    log "备份已存在,保留不覆盖: $FSTAB_BAK"
+    if cp -a "$FSTAB" "$FSTAB_BAK"; then dbk_add_action "备份 $FSTAB -> $FSTAB_BAK(仅首次,重跑不覆盖)"
+    else ISSUES+=("备份 $FSTAB 失败"); return 0; fi
   fi
-  if printf '\n# L4 交换空间(决策 3.8):zram + swapfile,不做休眠\n%s\n' "$SWAP_LINE" >>"$FSTAB"; then
-    log "已追加 fstab 行: $SWAP_LINE"
-  else
-    log "错误: 写入 $FSTAB 失败"; RC=1
-  fi
-fi
+  if printf '\n# L4 交换空间(决策 3.8):zram + swapfile,不做休眠\n%s\n' "$1" >>"$FSTAB"; then
+    dbk_add_action "追加 fstab 行: $1"; dbk_mark_changed
+  else ISSUES+=("写入 $FSTAB 失败"); fi
+  return 0
+}
 
-# 3) zram 配置:与模板一致则跳过;有差异先备份再覆盖
-if [ -f "$ZRAM_CONF" ] && cmp -s "$ZRAM_TPL" "$ZRAM_CONF"; then
-  log "$ZRAM_CONF 已是模板内容,跳过"
-else
-  if [ -f "$ZRAM_CONF" ] && [ ! -e "$ZRAM_CONF.dbk.bak" ]; then
-    cp -a "$ZRAM_CONF" "$ZRAM_CONF.dbk.bak" && log "已备份 $ZRAM_CONF -> $ZRAM_CONF.dbk.bak"
-  fi
-  mkdir -p "$(dirname "$ZRAM_CONF")" 2>/dev/null
-  if cp -a "$ZRAM_TPL" "$ZRAM_CONF"; then
-    log "已安装 $ZRAM_TPL -> $ZRAM_CONF"
-  else
-    log "错误: 写入 $ZRAM_CONF 失败"; RC=1
-  fi
-fi
+ISSUES=(); MANUAL=(); EXTRA_MANUAL=(); REBOOT_NEEDED=0
 
-# 4) 让 systemd 接手:重载单元并启动 zram 设备
-if command -v systemctl >/dev/null 2>&1; then
-  systemctl daemon-reload || { log "警告: systemctl daemon-reload 失败"; RC=1; }
-  if systemctl start systemd-zram-setup@zram0.service 2>/dev/null; then
-    log "已启动 systemd-zram-setup@zram0.service"
-  else
-    log "错误: 启动 systemd-zram-setup@zram0.service 失败(确认已装 systemd-zram-generator 包)"; RC=1
+judge() {
+  local cur
+  ISSUES=(); MANUAL=()
+  if swap_active; then dbk_add_check "交换空间已启用:$SWAPFILE"
+  else ISSUES+=("交换空间 $SWAPFILE 未启用(--apply 会创建并启用)"); fi
+  cur="$(fstab_cur)"
+  if [ -n "$cur" ]; then
+    dbk_add_check "fstab 已有 $SWAPFILE 行"
+    case "$cur" in *nofail*) ;; *) MANUAL+=("fstab 的 $SWAPFILE 行缺 nofail(设计第 8 节 F 组判据),请人工核对");; esac
+  else ISSUES+=("fstab 缺少 $SWAPFILE 行(--apply 会追加)"); fi
+  if zram_present; then dbk_add_check "zram0 已建立(核对通过):$(zram_detail)"
+  elif command -v "$ZRAMCTL" >/dev/null 2>&1; then
+    ISSUES+=("zramctl 未列出 zram0(硬前置: rpm-ostree install $ZRAM_PKG 后重启)")
+  else MANUAL+=("无 zramctl 也无 /sys/block/zram0,脚本判不了 zram(请人工看 lsblk)"); fi
+  if [ ! -r "$ZRAM_TPL" ]; then MANUAL+=("缺少 zram 模板 $ZRAM_TPL(zram0 缺失时 --apply 需要它)"); fi
+  if command -v "$SYSTEMCTL" >/dev/null 2>&1; then
+    dbk_add_check "systemd-oomd(R6): is-enabled=$("$SYSTEMCTL" is-enabled systemd-oomd 2>&1 || true) is-active=$("$SYSTEMCTL" is-active systemd-oomd 2>&1 || true)"
   fi
-else
-  log "警告: 无 systemctl(非 systemd 环境),跳过 zram 启动"; RC=1
-fi
+  return 0
+}
 
-# 5) 验证:以实测输出为准
-log "=== 验证(实测输出)==="
-if command -v swapon >/dev/null 2>&1; then
-  log "swapon --show:
-$(swapon --show 2>&1 | sed 's/^/  /')"
-  if swap_names | grep -qxF "$SWAPFILE"; then
-    log "DBK-RESULT ok swapfile $SWAPFILE 处于活动状态"
-  else
-    log "DBK-RESULT fail swapfile $SWAPFILE 不在 swapon --show 列表里"; RC=1
+finish() {
+  local msg="${1:-}" m
+  if [ "${#EXTRA_MANUAL[@]}" -gt 0 ]; then MANUAL+=(${EXTRA_MANUAL[@]+"${EXTRA_MANUAL[@]}"}); fi
+  if [ "${#ISSUES[@]}" -gt 0 ]; then
+    for m in "${ISSUES[@]}"; do dbk_add_check "失败项: $m"; done
+    dbk_exit FAIL "$msg:有 ${#ISSUES[@]} 项判据未达成;逐条见 checks,修好后重跑本脚本(幂等)"
   fi
-else
-  log "DBK-RESULT fail swapfile 无 swapon 命令,无法验证"; RC=1
-fi
-if command -v zramctl >/dev/null 2>&1; then
-  zr_out="$(zramctl 2>&1)"; st=$?
-  log "zramctl:
-$(printf '%s\n' "$zr_out" | sed 's/^/  /')"
-  if [ "$st" -eq 0 ] && printf '%s\n' "$zr_out" | grep -q '^zram0'; then
-    log "DBK-RESULT ok zram0 已建立(swap-priority=100,优先于 swapfile)"
-  else
-    log "DBK-RESULT fail zramctl 未列出 zram0(硬前置: 必须先执行 sudo apt install -y $ZRAM_PKG 再重跑本脚本)"; RC=1
+  if [ "${#MANUAL[@]}" -gt 0 ]; then
+    for m in "${MANUAL[@]}"; do dbk_add_check "需人工: $m"; done
+    dbk_exit 需人工 "$msg:有 ${#MANUAL[@]} 项脚本判不了或需重启后复核;逐条见 checks"
   fi
-else
-  log "DBK-RESULT fail zram 无 zramctl 命令,无法验证(可看 /dev/zram0 与 lsblk)"; RC=1
-fi
-if command -v systemctl >/dev/null 2>&1; then
-  log "systemd-oomd(R6): is-enabled=$(systemctl is-enabled systemd-oomd 2>&1 || true) is-active=$(systemctl is-active systemd-oomd 2>&1 || true)"
-fi
+  dbk_exit PASS "$msg:swapfile 已启用 + fstab 行齐备 + zram0 已建立"
+}
 
-if [ "$RC" -eq 0 ]; then
-  log "完成:swapfile 与 zram 均验证通过"
-else
-  log "结束:有未通过项,见上面的 DBK-RESULT 行;修好后可重跑本脚本(幂等)"
-fi
-exit "$RC"
+apply_run() {
+  local out st pkg_st cur
+  [ "$(id -u)" -eq 0 ] || { dbk_add_check "--apply 需要 root(当前 uid=$(id -u))"; dbk_exit FAIL "--apply 需要 root:sudo bash $0 --apply --yes"; }
+  # 1) swapfile:不存在则创建;存在则跳过创建(重跑幂等),未启用时补 swapon
+  if [ ! -e "$SWAPFILE" ]; then
+    if fallocate -l "$SWAP_SIZE" "$SWAPFILE"; then
+      dbk_add_action "创建 $SWAPFILE($SWAP_SIZE)"; dbk_mark_changed
+      chmod 600 "$SWAPFILE" 2>/dev/null || dbk_add_check "警告: chmod 600 $SWAPFILE 失败"
+      out="$(mkswap "$SWAPFILE" 2>&1)"; st=$?
+      if [ "$st" -eq 0 ]; then dbk_add_action "mkswap: $(printf '%s' "$out" | tail -n 1)"
+      else ISSUES+=("mkswap $SWAPFILE 失败: $(printf '%s' "$out" | tail -n 2 | tr '\n' ' ')"); fi
+    else ISSUES+=("fallocate -l $SWAP_SIZE $SWAPFILE 失败(root 空间不足?决策 3.6 给 root 约 113GiB)"); fi
+  else dbk_add_action "$SWAPFILE 已存在,跳过创建(fallocate 不覆盖已有文件)"; fi
+  if [ -e "$SWAPFILE" ] && ! swap_active; then
+    if "$SWAPON" "$SWAPFILE" 2>/dev/null; then dbk_add_action "已启用 $SWAPFILE"; dbk_mark_changed
+    else ISSUES+=("swapon $SWAPFILE 失败(mkswap 未成功或内核拒绝该文件)"); fi
+  fi
+  # 2) fstab:已有该路径条目则跳过;否则备份后追加
+  cur="$(fstab_cur)"
+  if [ -n "$cur" ]; then dbk_add_action "fstab 已有 $SWAPFILE 条目,跳过写入"
+  else fstab_add "$SWAPFILE  none  swap  sw,nofail  0 0"; fi
+  # 3) zram:默认只核对;缺失时才安装(原子版分层安装需重启)
+  if zram_present; then
+    dbk_add_action "zram0 已存在,跳过分层安装与配置(本卡 zram 只核对)"
+  elif [ ! -r "$ZRAM_TPL" ]; then
+    ISSUES+=("缺少 zram 模板 $ZRAM_TPL,无法补齐 zram 配置")
+  else
+    if [ -f "$ZRAM_CONF" ] && cmp -s "$ZRAM_TPL" "$ZRAM_CONF"; then dbk_add_action "$ZRAM_CONF 已是模板内容,跳过写入"
+    else
+      if [ -f "$ZRAM_CONF" ] && [ ! -e "$ZRAM_CONF.dbk.bak" ]; then cp -a "$ZRAM_CONF" "$ZRAM_CONF.dbk.bak" && dbk_add_action "备份 $ZRAM_CONF -> $ZRAM_CONF.dbk.bak"; fi
+      mkdir -p "$(dirname "$ZRAM_CONF")" 2>/dev/null
+      if cp -a "$ZRAM_TPL" "$ZRAM_CONF"; then dbk_add_action "安装 $ZRAM_TPL -> $ZRAM_CONF"; dbk_mark_changed
+      else ISSUES+=("写入 $ZRAM_CONF 失败"); fi
+    fi
+    pkg_st=0; pkg_ensure "$ZRAM_PKG" "sudo rpm-ostree install $ZRAM_PKG && sudo systemctl reboot" || pkg_st=$?
+    if [ "$pkg_st" -eq 9 ]; then EXTRA_MANUAL+=("DBK_SKIP_OSTREE=1:未分层安装 $ZRAM_PKG,zram 需人工确认")
+    elif [ "$pkg_st" -eq 1 ]; then ISSUES+=("分层安装 $ZRAM_PKG 失败;硬前置: sudo rpm-ostree install $ZRAM_PKG && sudo systemctl reboot 后重跑")
+    else dbk_add_action "已请求分层安装 $ZRAM_PKG"; pkg_reboot_hint; fi
+    if command -v "$SYSTEMCTL" >/dev/null 2>&1; then
+      "$SYSTEMCTL" daemon-reload || dbk_add_check "警告: systemctl daemon-reload 失败"
+      if "$SYSTEMCTL" start systemd-zram-setup@zram0.service 2>/dev/null; then dbk_add_action "已启动 systemd-zram-setup@zram0.service"
+      else dbk_add_check "警告: 启动 systemd-zram-setup@zram0.service 失败(可能需重启后生效)"; fi
+    fi
+    if ! zram_present; then
+      EXTRA_MANUAL+=("zram0 仍未出现:分层安装需重启后才生效,重启后重跑本脚本核对 zram0")
+      REBOOT_NEEDED=1
+    fi
+  fi
+  return 0
+}
+
+if [ "$DBK_MODE" = apply ]; then apply_run; fi
+if [ "$REBOOT_NEEDED" -ne 1 ]; then judge; fi
+if [ "$DBK_MODE" = apply ]; then finish "交换空间落地已执行(--apply;复读判据)"; else finish "交换空间核对完成(--check 零写)"; fi
