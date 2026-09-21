@@ -140,7 +140,7 @@
   3. 把只读取证输出(`efibootmgr -v`、`lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT`)也拷到共享盘或外置盘,别留在 `~/`
      看到:仓库外可读;本步没有任何写 ESP / 写 NVRAM / 改分区的动作
 脚本:scripts/windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup;scripts/windows/verify-baseline.ps1 -BaselineDir baseline
-坑:用默认 `-OutDir baseline` 会覆盖 L2 基线(它正是本阶段的比对基准与回滚源);这批产物是**仓库外产物、不是基线**,不要拷进 `baseline/`(见 [baseline/README.md](../baseline/README.md))。
+坑:用默认 `-OutDir baseline` 会覆盖 L2 基线(它正是本阶段的比对基准与回滚源);这批产物是**仓库外产物、不是基线**,不要拷进 `baseline/`(见 [baseline/README.md](../baseline/README.md))。另:`backup-esp.ps1` **默认模式就执行备份**,本卡不加 `-Check`(它只校验已有备份),该脚本也没有 `-Apply` 参数(写了会被 PowerShell 参数绑定拦下、退 1)。
 出错时:清单文件数与备份树对不上 -> 先解决磁盘/权限问题再继续;`verify-baseline.ps1` 退出码 1 但只有 ④ 有差异 -> 属预期,记备注后继续。
 
 ### 07-11 退役第三步:删 Fedora 分区(只按分区号 / GPT GUID 精确删)

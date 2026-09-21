@@ -11,7 +11,7 @@
 - Silverblue 侧:`scripts/linux/verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual]`
 - Windows 侧:`scripts/windows/verify-all.ps1 [-Check|-Apply] [-BaselineDir <目录>] [-OutDir <目录>] [-ConfirmManual]`
 
-能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到 `baseline/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录,再把两份汇总人工合并为填写版(避免互相覆盖)。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
+能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到 `baseline/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录,再把两份汇总人工合并为填写版(避免互相覆盖)。**注意同名覆盖**:两个总控的**默认汇总落点就是 `baseline/08-verification.md`**,与上面那份「人填写的设备勾选版」同名——不带参数落汇总会把填写版直接盖掉。因此落汇总时**必须显式用 `--out-dir`/`-OutDir` 指到填写版之外的目录**(例如 `baseline/auto/` 或临时目录),再人工合并;填写版自身只手工维护。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
 
 **执行顺序建议**:A -> B -> C -> F -> D -> E。D 组含"真做一次退役"与"真做一次原地重装",做完这台设备上可能已没有 Linux 或已被格式化,必须排最后(F 组要在 D 组真做之前完成);E 组是归档收尾。**验收期间不改分区表、不改固件设置**(设计 I4)。
 
