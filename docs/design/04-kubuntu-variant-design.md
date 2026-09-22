@@ -58,7 +58,18 @@ Ubuntu 提供 ZFS root 安装选项,快照与回滚是 ZFS 原生能力(`zfs sna
 
 ---
 
-## 3. snap 规避策略(用户约束"规避 snap 包")
+## 3. snap 规避策略(用户约束"规避 snap 包";2026-09-22 确认采用 **S1+S2+S3 全套**)
+
+**用户已确认的两项子决定**:
+
+| 项 | 结论 |
+|---|---|
+| 规避力度 | **S1+S2+S3 全套**(最小安装 + 清除残留 + apt pin 压制);不接受"只不用但留着 snapd" |
+| 浏览器来源 | **Mozilla 官方 APT 仓库的 deb**(并给该仓库较高优先级);**Flatpak 作备选**;不保留 snap 版 Firefox |
+
+**为什么必须成套**:S1/S2 只解决"现在干净",S3 解决"以后一直干净且破功时报警"。留着 snapd 会被四条机制静默拉回:① `kubuntu-desktop` 的 `Recommends: snapd`(完整安装默认就装);② 归档里的 `firefox`/`chromium-browser` 是**过渡包**,`apt install firefox` 实际装的是 snap(包描述原文 "Transitional package - firefox -> firefox snap");③ `do-release-upgrade` 会重新引入 snap;④ `snapd.refresh.timer` 等后台行为。
+
+**S3 用 pin -1 而非 `apt-mark hold`**:`hold` 只冻结已装版本的升级,包不存在时拦不住安装,且会在硬依赖时报 broken dependency;`Pin-Priority: -1` 是"该包永不作为候选"—— 遇到 `Recommends` 安静跳过,遇到硬 `Depends` **响亮失败**,正是我们要的行为(不静默放行)。
 
 六条措施,按执行顺序:
 
@@ -174,3 +185,4 @@ Ubuntu 提供 ZFS root 安装选项,快照与回滚是 ZFS 原生能力(`zfs sna
 | 日期 | 变更 |
 |---|---|
 | 2026-09-22 | 初版:依据用户决定 A(换 Kubuntu 26.04 LTS)+ 约束"规避 snap 包"编写;六项决定 + 六条 snap 规避措施 + 分区改名 + 回滚降级 + 影响面清单 |
+| 2026-09-22 | 修订一:用户确认 snap 规避采用 **S1+S2+S3 全套**、浏览器来源为 **Mozilla 官方 APT 仓库的 deb(Flatpak 备选)**;补上四条"静默拉回 snap"的机制证据与 pin -1 与 hold 的区别 |
