@@ -156,7 +156,8 @@ for f in docs/00-overview.md README.md README.zh-CN.md checklists/deploy.md chec
          docs/design/03-step-automation-design.md; do
   runcheck "真实样本 $f(应过)" OK 0 "$ROOT/$f"
 done
-runcheck "设计文档 01(既有中间态:1 条 C5 —— 卡本体示例里的 01-3 因 doc_of 取自身而解析不到;04-2/04-3/07-6 均已随手册落地而解析)" C5 1 "$ROOT/docs/design/01-playbook-reshape-design.md"
+runcheck "设计文档 01(应过:卡编号引用按编号回退到手册解析)" OK 0 "$ROOT/docs/design/01-playbook-reshape-design.md"
+runcheck "设计文档 04(应过:04-* 是设计文档序号,卡 04-2 在 docs/04-*.md 里)" OK 0 "$ROOT/docs/design/04-kubuntu-variant-design.md"
 
 printf '\nPASS=%s FAIL=%s\n' "$pass" "$bad"
 [ "$bad" -eq 0 ] || exit 1

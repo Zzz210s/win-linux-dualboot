@@ -59,7 +59,14 @@ scope_of() {
 }
 # NN -> 文档路径:被检查文件自身命名匹配时用自身(夹具场景),否则取 docs/NN-*.md
 doc_of() { case "$(basename "$2")" in "$1"-*.md) printf '%s' "$2";; *) ls "$ROOT/docs/$1"-*.md 2>/dev/null | head -1;; esac; }
-card_exists() { local d; d="$(doc_of "${1%%-*}" "$2")"; [ -n "$d" ] && grep -qE "^### $1([[:space:]]|\$)" "$d"; }
+card_exists() {
+  local ref="$1" d
+  d="$(doc_of "${ref%%-*}" "$2")"
+  [ -n "$d" ] && grep -qE "^### $ref([[:space:]]|\$)" "$d" && return 0
+  # 回退:引用方自身不是该编号的手册(例如 docs/design/NN-*.md 的编号是设计文档序号,不是手册号)时,
+  # 按编号到 docs/ 里找承载该卡的手册;保持单文件模式与仓库模式结论一致。
+  grep -lqE "^### $ref([[:space:]]|\$)" "$ROOT"/docs/"${ref%%-*}"-*.md 2>/dev/null
+}
 card_header_cards() {
   local line cards
   line="$(grep -m1 -oE "$CARDRE" "$1" || true)"

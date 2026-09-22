@@ -4,6 +4,7 @@
 # 缺省集合 = docs/*.md(仅深度 1)+ checklists/*.md + 仓库根 README.md / README.zh-CN.md;显式传文件时只查这些文件;
 # 加 --repo 时即使只传单个文件,也追加仓库级 C9b/C9c/C9d(实现在同目录 check-docs-repo.sh,库在 check-docs-lib.sh)。
 # 计数口径两处不同:C1 的「## 开始前 3-5 行」不计空行与 --- 分隔线;C4 的「卡体 ≤25 行」计全部物理行。
+# C5 解析:优先引用方自身(文件名形如 NN-*.md),否则按编号到 docs/NN-*.md 里找承载该卡的手册。
 # 适用范围:01-07 查 C1-C5/C7/C8/C9a;08 查 C6/C9a;09/10 查 C6(速查卡只要求卡标题);
 # 00-overview、README、checklists 只查 C5/C7/C8;docs/design/* 与 baseline/README.md 只查 C5/C7/C8。
 set -uo pipefail
