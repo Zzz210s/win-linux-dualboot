@@ -1,26 +1,26 @@
 步骤号	脚本路径	破坏性(0/1)	说明
-02-3	scripts/linux/check-partition-plan.sh	0	轨道 L 的分盘核对(live):ESP-Fedora 1GiB + /boot 1GiB ext4 + root 约 113GiB btrfs
-04-2	scripts/linux/check-partition-plan.sh	0	手动分区前核对:Windows ESP 未被挂载/未被改动 + 输出下一步该建什么
-04-3	scripts/linux/verify-l3.sh	0	装完重启验证:ostree 部署 / /boot 独立 ext4 / 两块 ESP / BootOrder 首位
+02-3	scripts/linux/check-partition-plan.sh	0	轨道 L 的分盘核对(live):ESP-Ubuntu 1GiB + /boot 1GiB ext4 + root 约 113GiB ext4
+04-2	scripts/linux/check-partition-plan.sh	0	手动分区前核对:Windows ESP 未被挂载/未被改动 + 输出下一步该建什么(Calamares 里只指定挂载点)
+04-3	scripts/linux/verify-l3.sh	0	装完重启验证:grub-efi-amd64/shim-signed 在位 / GRUB 落 \EFI\ubuntu\ / /boot 独立 ext4 / 两块 ESP 互不干扰 / BootOrder 首位
 04-4	scripts/linux/collect-l3.sh	0	落 L3 产物:baseline/03-efi-layout.txt
 05-1	scripts/linux/mount-shared.sh	1	挂载共享盘 D:(写 /etc/fstab,需 --yes)
 05-2	scripts/linux/xdg-redirect.sh	1	家目录重定向(写 user-dirs.dirs,需 --yes)
-05-3	scripts/linux/graphics.sh	1	显卡栈收敛(ublue NVIDIA rebase,需 --yes)
-05-3	scripts/linux/graphics-mok.sh	1	MOK 注册与签名复检(同卡第二脚本:ujust enroll-secure-boot-key + modinfo 签名)
+05-3	scripts/linux/graphics.sh	1	显卡驱动收敛(ubuntu-drivers 装 Ubuntu 官方预签名包 + Wayland/PRIME 核对;需 --yes)
 05-4	scripts/linux/set-time.sh	0	时间收敛:RTC 走 UTC(RTC in local TZ: no)+ NTP 启用
-05-5	scripts/linux/bt-keys-sync-wrapper.sh	1	蓝牙配对密钥同步(分层装 chntpw + 写 Windows hive,需 --yes)
-05-6	scripts/linux/storage.sh	1	zram 与 swapfile 核对(zram 由安装改核对;写 fstab 与 zram 配置,需 --yes)
+05-5	scripts/linux/bt-keys-sync-wrapper.sh	1	蓝牙配对密钥同步(apt 装 chntpw + 读 Windows hive;需 --yes)
+05-6	scripts/linux/storage.sh	1	zram 与 swapfile(优先 systemd-zram-generator,退化 zram-tools;不配休眠;需 --yes)
 05-7	scripts/linux/set-journald.sh	0	journald 持久化
-05-7	scripts/linux/set-updates.sh	0	更新策略:rpm-ostreed-automatic 只 check/download,不自动应用与重启
-05-8	scripts/linux/set-remote-health.sh	0	SSH 与 SMART:sshd 启用 + 分层装 smartmontools + smartd
-05-9	scripts/linux/dbk-rollback.sh	1	部署回滚:--list/--pin/--unpin/rpm-ostree rollback(需 --yes);被 07-7 巡检复用
-05-10	scripts/linux/upgrade-release.sh	1	发行版升级:前置 pin 当前部署 -> rpm-ostree rebase 新分支(需 --yes)
+05-7	scripts/linux/set-updates.sh	0	更新策略:unattended-upgrades 只装安全更新、不自动重启
+05-8	scripts/linux/set-remote-health.sh	0	SSH 与 SMART:apt 装 smartmontools + enable --now sshd smartd
+05-9	scripts/linux/rollback-pkg.sh	1	包级回退与变更前备份:--list/--check/--apply(降级 + apt-mark hold)/--unhold(需 --yes)
+05-10	scripts/linux/upgrade-release.sh	1	发行版升级:前置备份 baseline/ + 留档 pin/Mozilla 源 -> do-release-upgrade -> 后置与 S5 复核(需 --yes)
 05-11	scripts/linux/reboot-to-windows.sh	0	一次性重启进 Windows(不改 BootOrder)
-05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md
+05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md(发行版/驱动来源/snap 四条判据/待升级包数)
 05-13	scripts/linux/first-boot.sh	1	L4 汇总执行(可选):按顺序跑各模块并聚合结果
-05-13	scripts/linux/hardening.sh	1	L4 汇总执行(可选):R1-R9 六项(被 first-boot.sh 编排,也可单跑)
-07-1	scripts/linux/triage.sh	0	判层:只读采集分区/挂载/固件条目/两块 ESP 内容/部署,给判层结论与建议卡号
+05-13	scripts/linux/hardening.sh	1	L4 汇总执行(可选):R1-R9 九项(被 first-boot.sh 编排,也可单跑)
+05-14	scripts/linux/step-snap-free.sh	1	snap 规避:四条判据核对 + 清除 snapd + apt pin 压制 + Mozilla 官方源(需 --yes)
+07-1	scripts/linux/triage.sh	0	判层:只读采集分区/挂载/固件条目/两块 ESP 内容/包管理与错误日志,给判层结论与建议卡号
 07-2	scripts/linux/gen-grub-rescue-commands.sh	0	从 GRUB 提示符回去:生成两套可复制命令(不执行、不改启动顺序)
-07-5	scripts/linux/check-partition-plan.sh	0	只重装 Silverblue:装前核对 Fedora 三块分区与 Windows 侧不被触碰(安装人工,ESP 绝不格式化)
-07-7	scripts/linux/dbk-rollback.sh	0	周期巡检(Linux 侧):部署列表与固定状态 + nvidia 签名 + 会话类型(--check;Windows 侧见 verify-baseline.ps1)
-07-7	scripts/linux/check-signature.sh	0	周期巡检(Linux 侧):nvidia 模块签名与 MOK 注册状态(未签名/未注册 → 需人工)
+07-5	scripts/linux/check-partition-plan.sh	0	只重装 Kubuntu:装前核对 Ubuntu 三块分区与 Windows 侧不被触碰(安装人工,ESP 绝不格式化)
+07-7	scripts/linux/check-health.sh	0	周期巡检(Linux 侧):会话/显卡/snap 零残留/待升级/systemd 状态/根分区余量(--check;Windows 侧见 verify-baseline.ps1)
+07-7	scripts/linux/check-signature.sh	0	周期巡检(Linux 侧):nvidia 模块签名者与 Secure Boot 状态(未签名/未开启 → 需人工,指向 05-3)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 验收总控(Fedora/Silverblue 侧;执行器:不进卡映射表、不登记 steps.tsv):按 docs/08-verification.md 的 A-F 六组
+# 验收总控(Kubuntu 侧;执行器:不进卡映射表、不登记 steps.tsv):按 docs/08-verification.md 的 A-F 六组
 #   逐项判定——能自动的调既有步骤脚本的 --check/--list 或读系统状态,不能自动的记「需人工」并给手动核对步骤。
 #   **绝不执行任何 --apply**:只允许 --check 与只读子命令,收到 --apply/--rollback/--pin/--unpin → 64 且一个子脚本
 #   都不调。汇总只在 --apply 时落盘 <out-dir>/08-verification.md(每台设备副本,含「已知例外」表与结论行);
@@ -9,7 +9,7 @@
 # 夹具注入(真机不需要):DBK_EFIBOOTMGR/DBK_FINDMNT/DBK_MOKUTIL/DBK_TIMEDATECTL/DBK_FWUPDMGR/DBK_SYSTEMCTL/DBK_ZRAMCTL/
 #   DBK_SMARTCTL/DBK_JOURNALCTL/DBK_XDG_USER_DIR、DBK_SESSION_TYPE、DBK_STEP_ROOT/DBK_GIT_ROOT/DBK_BASELINE_DIR/
 #   DBK_FSTAB/DBK_JOURNAL_DIR/DBK_SHARED_MNT/DBK_DISK;白名单依据=设计 03 第 6 节「验收六组」。待核实(以官方文档为准):
-#   mokutil/timedatectl/fwupdmgr/smartctl 输出文本与 rpm-ostree status 分层包行未在真机验证,取不到时按「需人工」而非 FAIL。
+#   mokutil/timedatectl/fwupdmgr/smartctl/dpkg-query 输出文本未在真机验证,取不到时按「需人工」而非 FAIL。
 set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$SRC/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
@@ -73,15 +73,15 @@ else
   H1="$(printf '%s\n' "$HOOK_OUT" | grep -E "^Boot${BO%%,*}\*?" | head -n1 || true)"; H2="$(printf '%s\n' "$HOOK_OUT" | grep -E "^Boot${BO##*,}\*?" | head -n1 || true)"
   case "$H1" in *Windows*Boot*Manager*|*Windows*启动管理器*) item A1 pass "BootOrder 首位仍是 Windows Boot Manager($H1)" "07-7" ;;
     *) item A1 fail "BootOrder 首位不是 Windows Boot Manager(实际 ${H1:-空});处置见 07-9" "07-9" ;; esac
-  case "$H2" in *fedora*|*Fedora*) item A5 pass "Fedora 条目位于 BootOrder 末位($H2)" "04-3" ;;
-    *) item A5 fail "BootOrder 末位不是 Fedora 条目(实际 ${H2:-空});处置见 04-3" "04-3" ;; esac
+  case "$H2" in *ubuntu*|*Ubuntu*) item A5 pass "ubuntu 条目位于 BootOrder 末位($H2)" "04-3" ;;
+    *) item A5 fail "BootOrder 末位不是 ubuntu 条目(实际 ${H2:-空});处置见 04-3" "04-3" ;; esac
 fi
 item A2 manual "连续重启 3 次(不按键、不选菜单),每次都自动进 Windows" "03-8"
 item A3 manual "Windows 侧跑 verify-baseline.ps1 -BaselineDir baseline 看 ② 行是否为「通过」(\\EFI\\Microsoft\\ 逐文件比对)" "07-7"
 chk_step A7 "07-7" "两个 ESP 互不干扰(两块 ESP 内容完整 + BootOrder 首位;逐文件比对见 A3)" scripts/linux/verify-l3.sh --check
 item A4 manual "Windows 管理员会话 bcdedit /enum {bootmgr} 的 path 与基线逐字一致" "07-7"
 item A6 manual "复核全部执行记录:没有任何一次 efibootmgr -o / displayorder 调整永久顺序" "07-7"
-item A8 manual "可撤除性演练:另存 \\EFI\\fedora\\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测" "07-8"
+item A8 manual "可撤除性演练:另存 \\EFI\\ubuntu\\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测" "07-8"
 G=B   # ===== B 系统功能组 =====
 ST="${DBK_SESSION_TYPE:-${XDG_SESSION_TYPE:-}}"
 if [ -z "$ST" ]; then item B1 manual "XDG_SESSION_TYPE 取不到;手动核对:echo \$XDG_SESSION_TYPE 应为 wayland" "05-12"
@@ -90,14 +90,11 @@ else item B1 fail "会话类型 $ST(要求 wayland)" "05-12"; fi
 chk_step B2 "05-3" "GPU 驱动与 nvidia 模块签名" scripts/linux/check-signature.sh --check
 chk_cmd_all B3 "07-7" "Secure Boot 保持开启" "${DBK_MOKUTIL:-mokutil}" 'SecureBoot enabled' --sb-state
 chk_cmd_all B4 "05-1" "共享盘以 ntfs3 读写挂载且带 nofail" "${DBK_FINDMNT:-findmnt}" 'ntfs3;rw;nofail' -no SOURCE,FSTYPE,OPTIONS "$SHARED"
-chk_cmd_all B5 "05-3" "rpm-ostree status 显示 ublue 镜像来源" "${DBK_RPM_OSTREE:-rpm-ostree}" 'ublue|ghcr\.io/ublue-os' status
-run_hook "${DBK_RPM_OSTREE:-rpm-ostree}" status
-L6="$(printf '%s\n' "$HOOK_OUT" | sed -n 's/^[[:space:]]*LayeredPackages:[[:space:]]*//p' | tr ',' ' ' | tr -s ' ')"
-X6="$(printf '%s' "$L6" | tr ' ' '\n' | grep -vE '^(smartmontools|chntpw|)$' | tr '\n' ' ' || true)"
-if ! avail "${DBK_RPM_OSTREE:-rpm-ostree}"; then item B6 manual "未找到 rpm-ostree;手动核对:分层包清单与计划(smartmontools,蓝牙时加 chntpw)一致" "05-8"
-elif ! printf '%s' "$L6" | grep -qw smartmontools; then item B6 fail "分层包清单缺计划内的 smartmontools(实际:${L6:-空};分层安装需重启后才显示)" "05-8"
-elif [ -n "$X6" ]; then item B6 fail "分层包清单有计划外条目:$X6(计划只有 smartmontools / chntpw)" "05-8"
-else item B6 pass "分层包清单与计划一致:${L6:-（空）}" "05-8"; fi
+run_hook "${DBK_DPKG_QUERY:-dpkg-query}" -l 'nvidia-driver-*'
+if ! avail "${DBK_DPKG_QUERY:-dpkg-query}"; then item B5 manual "未找到 dpkg-query;手动核对:dpkg -l 'nvidia-driver-*' 有已安装的官方驱动包" "05-3"
+elif printf '%s' "$HOOK_OUT" | grep -qE '^ii[[:space:]]+nvidia-driver'; then item B5 pass "显卡驱动来源为 Ubuntu 官方包:$(printf '%s\n' "$HOOK_OUT" | grep -m1 -E '^ii[[:space:]]+nvidia-driver' | cut -c1-100)" "05-3"
+else item B5 fail "没有已安装的 nvidia-driver-* 官方包;见 05-3(不用 NVIDIA 显卡的设备可记为已知例外)" "05-3"; fi
+chk_step B6 "05-14" "snap 零残留(snap list 空 + dpkg -l snapd 无输出)" scripts/linux/step-snap-free.sh --check
 item B7 manual "跨系统双向可见性:Windows 写 D:\\Shared\\dbk-verify-win.txt -> Linux 读到;反向再测一次" "05-1"
 XU="${DBK_XDG_USER_DIR:-xdg-user-dir}"; B8BAD=""
 if ! avail "$XU"; then item B8 manual "未找到 xdg-user-dir;手动核对:六项 XDG 目录都指向 $SHARED 下" "05-2"
@@ -137,15 +134,9 @@ item E3 manual "本次与设备参数表的偏差已回写 baseline/ 或 00-over
 item E4 manual "所有未勾选项都整理成已知例外(条目/原因/影响面/是否阻塞/后续动作)" "08"
 item E5 manual "至少一台设备 A-F 全绿(或例外都不阻塞),方可称参考实现" "08"
 G=F   # ===== F 健壮性组 =====
-item F1 manual "部署回滚演练(真做一次):rpm-ostree rollback -> 重启 -> 桌面可用 -> 复检模块与 Wayland -> 回滚回来;并确认 /var 用户数据仍在" "05-9"
-run_step scripts/linux/dbk-rollback.sh --list
-DN="$(printf '%s' "$STEP_OUT" | sed -n 's/^.*部署数=\([0-9]\{1,\}\);.*$/\1/p' | head -n1)"; PN="$(printf '%s' "$STEP_OUT" | sed -n 's/^.*已固定部署数=\([0-9]\{1,\}\).*$/\1/p' | head -n1)"
-if [ "$STEP_RC" -ne 0 ]; then
-  item F2 manual "dbk-rollback.sh --list 退出码 $STEP_RC;手动核对:rpm-ostree status 的 Pinned 行" "05-9"; item F3 manual "读不到部署列表;手动核对:Deployments 至少两个" "05-9"
-else
-  if [ "${PN:-0}" -ge 1 ]; then item F2 pass "pin 状态可读,已固定部署数=$PN(变更前先 pin 见 05-9)" "05-9"; else item F2 manual "pin 状态可读但已固定部署数=0;按 05-9 在变更前先 rpm-ostree pin" "05-9"; fi
-  if [ "${DN:-0}" -ge 2 ]; then item F3 pass "部署数=$DN(>=2,GRUB 菜单可选旧部署)" "05-9"; else item F3 manual "部署数=${DN:-0}(<2);多部署在分层/升级后自然产生,见 05-9/05-10" "05-9"; fi
-fi
+item F1 manual "包级回退演练(真做一次):rollback-pkg.sh --list <包> -> --apply --pkg <包> --version <旧版本> --yes -> 复测 -> --unhold;并确认 D: 数据不受影响" "05-9"
+item F3 manual "原地重装演练(参考设备至少真做一法:只格 C: 或只格 root):装完复检 A 组四条不变量,数据在 D: 不受影响" "07-4"
+chk_step F2 "05-9" "包级回退可用(apt-mark hold 清单 + apt 历史可读)" scripts/linux/rollback-pkg.sh --check
 run_hook "${DBK_JOURNALCTL:-journalctl}" --list-boots
 NB="$(printf '%s\n' "$HOOK_OUT" | grep -cE '^[[:space:]]*-?[0-9]+[[:space:]]' || true)"
 if [ ! -d "$JRNL" ]; then item F4 fail "journald 未持久化($JRNL 不存在);见 05-7" "05-7"
@@ -183,7 +174,7 @@ else
 fi
 if [ "$DBK_MODE" = apply ]; then
   mkdir -p "$OUTDIR"
-  { printf '# 验收汇总:A-F 六组逐项判定\n\n- 设备:%s\n- 判定侧:Linux(Silverblue)\n- 生成时间:%s\n- 判定脚本:%s\n- 依据:%s\n\n' \
+  { printf '# 验收汇总:A-F 六组逐项判定\n\n- 设备:%s\n- 判定侧:Linux(Kubuntu)\n- 生成时间:%s\n- 判定脚本:%s\n- 依据:%s\n\n' \
       "$HOST" "$(date '+%F %T%z')" '`scripts/linux/verify-all.sh`(执行器,不进卡映射表)' '`docs/08-verification.md`(唯一判据)'
     printf '## 逐项结果\n\n| 项 | 组 | 结论 | 原因 | 关联卡 |\n|---|---|---|---|---|\n'
     for r in "${R[@]}"; do IFS='|' read -r i g s m c <<<"$r"; printf '| %s | %s | %s | %s | %s |\n' "$i" "$g" "$(tag_of "$s")" "$(printf '%s' "$m" | sed 's/|/\\|/g')" "$c"; done

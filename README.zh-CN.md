@@ -140,7 +140,7 @@ Fedora Silverblue 是原子版系统,方案顺着它设计而不是对抗它:
 
 - **`/usr` 只读**:系统本体由 ostree 管理,不能就地装包;系统级工具要用 `rpm-ostree install` 分层安装;
 - **分层 / 更新 / rebase 都产生新部署**:必须重启才生效,"命令成功"与"系统可用"是两个判据;
-- **回滚是部署级**:开机菜单选上一个部署,或 `rpm-ostree rollback`([scripts/linux/dbk-rollback.sh](scripts/linux/dbk-rollback.sh) 负责列出部署、pin/unpin 与回滚)。`/var` 与 `/var/home` 不属于部署,**用户数据不随回滚丢失**——系统退回去,文件留在原地;
+- **回滚是包级 + 原地重装**:单个包降级用 `apt install <包>=<版本>` 并用 `apt-mark hold` 固定([scripts/linux/rollback-pkg.sh](scripts/linux/rollback-pkg.sh) 负责列可用版本、hold/unhold);系统级损坏走原地重装(见 [docs/07-rescue.md](docs/07-rescue.md)),数据盘 `D:` 两种情况都不受影响。**本轨道没有"一条命令回退整个系统"的能力**;
 - **明确不使用**:**`snapd`**(应用走 Flatpak,系统层走 `rpm-ostree`);**`snapper` / `grub-btrfs` / btrfs 快照回滚**(回滚是系统部署级,不是文件系统快照级,设计文档把它列为被否方案);
 - **四级回滚粒度**:单步 <-> 卡的「出错时:」;部署级 <-> 开机菜单或 `rpm-ostree rollback`;基线级 <-> ESP 镜像 + 固件启动项快照;阶段级 <-> L5 退役流程。
 

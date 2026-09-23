@@ -105,7 +105,7 @@ fi
 D1="(hd$DISK,gpt$ESP_P)"
 if [ -n "$BOOT_P" ]; then D2="(hd$DISK,gpt$BOOT_P)"; P2="$D2/grub"; else D2="(hd$DISK,gpt$ROOT_P)"; P2="$D2/boot/grub"; fi
 B1="① 从 GRUB 提示符回 Windows(不执行 efibootmgr,永久启动顺序不动)
-说明: 开机进固件启动菜单选 Fedora / GRUB,在 grub> 提示符下逐条输入下面 4 行(盘号与 Windows ESP 分区来自参数:hd$DISK / gpt$ESP_P)
+说明: 开机进固件启动菜单选 ubuntu / GRUB,在 grub> 提示符下逐条输入下面 4 行(盘号与 Windows ESP 分区来自参数:hd$DISK / gpt$ESP_P)
   insmod chain
   search --file --set=root /EFI/Microsoft/Boot/bootmgfw.efi
   chainloader /EFI/Microsoft/Boot/bootmgfw.efi
@@ -120,10 +120,10 @@ B2="② 修 GRUB 自身(root / prefix 按现场给:root=$D2,prefix=$P2)
   insmod normal
   normal
 看到: insmod normal 报 file not found = prefix 指错(分区号或 /boot/grub 路径不对);修正 prefix 后重来。
-  normal 成功会回到正常 GRUB 菜单。Fedora 原子版若把 GRUB 放在分区根的 grub2 下,prefix 改成 $D2/grub2 再试。
+  normal 成功会回到正常 GRUB 菜单。若发行版把 GRUB 放在分区根的 grub2 下,prefix 改成 $D2/grub2 再试。
   独立 /boot 分区由 --boot-part 指定(本脚本探测到独立 /boot 时会自动用它)。"
 TAIL="纪律提醒:以上只走 GRUB 提示符。不要改永久启动顺序(不执行 efibootmgr 的 -o 写操作)、不要改 {bootmgr} 的 path、
-不要关闭 Secure Boot(NVIDIA 签名与 MOK 见卡 07-7 的 check-signature.sh)。修好后进系统把偏差写进 L4 记录。"
+不要关闭 Secure Boot(驱动签名与 Secure Boot 状态见卡 07-7 的 check-signature.sh)。修好后进系统把偏差写进 L4 记录。"
 emit "$B1"; emit "$B2"; emit "$TAIL"
 dbk_add_check "已生成两套命令:① 回 Windows(4 条,目标 $D1);② 修 GRUB(root=$D2,prefix=$P2)"
 if [ "$UNKNOWN" -eq 1 ]; then

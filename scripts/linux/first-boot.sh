@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # 对应卡:05-13
-# L4 首启编排器:依次调用 storage.sh、hardening.sh、mount-shared.sh、graphics.sh、graphics-mok.sh,
+# L4 首启编排器:依次调用 storage.sh、hardening.sh、mount-shared.sh、graphics.sh,
 # 每模块单独落日志,末尾生成 /var/log/dbk/first-boot-summary.txt(模块 / 状态 / 关键输出)。
 #
 # 用法:bash scripts/linux/first-boot.sh [--check|--apply] [--uuid <SHARED_PART_UUID>] [--user <name>] [--log-dir <dir>]
 #   缺省(或 --check)是 dry-run:各模块以 --check 调用,只判定不改动系统;--apply(需要 root)才真正改系统,
 #   并给模块统一透传 --yes(全仓契约:--apply 的破坏性动作必须显式给 --yes)。
 #   模块顺序:storage(交换空间与 zram)-> hardening(健壮性 R1-R9)-> mount-shared(共享盘挂载 + 家目录重定向;
-#   缺 --uuid 时记 skipped)-> graphics(NVIDIA 栈与 MOK)-> graphics-mok(Secure Boot 下的一次性 MOK 注册);
-#   脚本文件缺失的模块打印提示级消息并记 skipped,不阻塞登录。
+#   缺 --uuid 时记 skipped)-> graphics(NVIDIA 驱动与 Wayland/PRIME 核对);脚本文件缺失的模块打印提示级消息并记 skipped。
 #   整机目标:能进桌面 + 记录失败项 —— 单模块失败不改变本脚本退出码(始终 0),失败/跳过项在摘要末尾显式列出。
-#   注意:R2 部署级回滚可用性在 hardening 里只读核对;mount-shared 失败不阻塞登录。
+#   注意:R1/R2(备份 baseline 与包级回退)在 hardening 里只读核对;mount-shared 失败不阻塞登录。
 # 日志:/var/log/dbk/first-boot.log(编排)、/var/log/dbk/<模块>.log(本脚本重定向的模块输出)、first-boot-summary.txt;
 #   日志目录不可写时(非 root,或该目录曾由 sudo 创建)回落 <TMPDIR>/dbk-<uid>/ 并打印警告。
-# 设计依据:docs/design/02-fedora-atomic-variant-design.md 第 4 节与 docs/design/00-design.md 4.7 的 R1-R9。
+# 设计依据:docs/design/04-kubuntu-variant-design.md 第 2 节(D4 回滚降级为包级回退 + 原地重装、D5 分区表 8 项)
+#   与第 7 节(R1-R9 的替代方案);docs/design/00-design.md 4.7 的 R1-R9。
 # 本脚本是逐项汇总型,不得 set -e。夹具级验证,真机未跑。
 set -uo pipefail
 
@@ -95,8 +95,7 @@ if [ -n "$UUID" ]; then
 else
   record_mod mount-shared skipped "缺少 --uuid/DBK_SHARED_UUID:共享盘与 D: 文档目录暂不可用(见 docs/05-first-boot.md 步骤 1)"
 fi
-run_module graphics.sh graphics "仓库文件缺失;NVIDIA 栈与 MOK 未配置,需按手册手工收敛" "${MODE[@]}"
-run_module graphics-mok.sh graphics-mok "仓库文件缺失;Secure Boot 下的一次性 MOK 注册需按手册手工完成" "${MODE[@]}"
+run_module graphics.sh graphics "仓库文件缺失;NVIDIA 驱动与 Wayland/PRIME 未核对,需按手册手工收敛" "${MODE[@]}"
 
 # 统计失败/跳过项:与摘要写出解耦 —— 摘要写不出去时也要给出正确的失败项数量
 count_states() {
@@ -124,7 +123,7 @@ write_summary() {
     for i in "${!MOD_NAMES[@]}"; do
       if [ "${MOD_STATES[$i]}" = fail ]; then printf '%s ' "${MOD_NAMES[$i]}"; fi
     done
-    printf '\n结论: 单模块失败不改变整体退出码(本脚本退出码固定 0);R2 部署级回滚可用性由 hardening 只读核对;'
+    printf '\n结论: 单模块失败不改变整体退出码(本脚本退出码固定 0);R1/R2(备份与包级回退)由 hardening 只读核对;'
     printf '失败项见上表,按各模块日志修正后可单独重跑。\n'
   } >"$SUMMARY.new" 2>/dev/null; then
     log "错误: 摘要未写出(无法创建 $SUMMARY.new,检查 $LOG_DIR 是否可写)"

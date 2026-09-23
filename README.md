@@ -140,7 +140,7 @@ Fedora Silverblue is an atomic OS, and the playbook leans on that instead of fig
 
 - **`/usr` is read-only.** The system is managed by ostree and cannot be changed with an in-place package install; system-level tools are added with `rpm-ostree install` as layers.
 - **Layering, updating and rebasing all produce a new deployment** that only takes effect after a reboot. A successful command and a working system are two different verdicts.
-- **Rollback is deployment-level**: pick the previous deployment in the boot menu, or run `rpm-ostree rollback` ([scripts/linux/dbk-rollback.sh](scripts/linux/dbk-rollback.sh) lists deployments, pins/unpins and rolls back). `/var` and `/var/home` are not part of a deployment, so user data survives a rollback — the system goes back, the files stay.
+- **Rollback is package-level plus in-place reinstall**: downgrade a single package with `apt install <pkg>=<version>` and freeze it with `apt-mark hold` ([scripts/linux/rollback-pkg.sh](scripts/linux/rollback-pkg.sh) lists available versions, holds and unholds); for system-level damage, reinstall in place (see [docs/07-rescue.md](docs/07-rescue.md)) — the data disk `D:` is untouched either way. There is no one-command system rollback on this track.
 - **Deliberately not used (被否)**: `snapd` (applications are Flatpak, the system layer is `rpm-ostree`) and `snapper` / `grub-btrfs` / btrfs snapshot rollback (rollback is deployment-level, not filesystem-snapshot-level; the design document lists this as a rejected alternative).
 - **Four rollback granularities**: single step <-> the card's own undo; deployment <-> boot menu or `rpm-ostree rollback`; baseline <-> ESP image plus firmware entries; stage <-> the L5 decommission path.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 库文件:非步骤脚本
-# 用途:步骤脚本的统一 CLI 契约(Linux/Fedora 侧):参数解析、卡号断言、破坏性门槛、退出码常量。
+# 用途:步骤脚本的统一 CLI 契约(Linux/Kubuntu 侧):参数解析、卡号断言、破坏性门槛、退出码常量。
 # 契约真源:docs/design/03-step-automation-design.md 第 2 节(CLI、退出码、可观测性)与第 7 节(夹具要求)。
 # 用法(步骤脚本自己 set -euo pipefail 后 source 本文件,再依次调用):
 #   dbk_parse_args "$@" → DBK_MODE/DBK_JSON/DBK_YES/DBK_LOG/DBK_STEP;dbk_assert_step → 与脚本头卡号集合比对(不一致 → 64)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 总控入口(Fedora 侧,非步骤脚本):读步骤索引 scripts/linux/steps.tsv,分发到步骤脚本并汇总结果。
+# 总控入口(Kubuntu 侧,非步骤脚本):读步骤索引 scripts/linux/steps.tsv,分发到步骤脚本并汇总结果。
 # 契约真源:docs/design/03-step-automation-design.md 第 5 节(总控入口)与第 2 节(CLI/退出码/2.1 可观测性)。
 # 只做分发与汇总,不含业务逻辑:校验步骤号与索引脚本存在 → 透传 --check/--apply/--yes/--json/--log → 汇总。
 # 破坏性步骤(索引第 3 列 = 1)在 --apply 且未给 --yes 时**不调用子脚本**,按用法错误退 64;汇总规则:

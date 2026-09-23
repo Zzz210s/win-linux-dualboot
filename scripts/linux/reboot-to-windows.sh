@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 对应卡:05-11
-# L4 卡 05-11:以**一次性**启动项从 Fedora 切回 Windows(`efibootmgr -n`,等价 EFI BootNext),并断言 BootOrder 未变(I2)。
+# L4 卡 05-11:以**一次性**启动项从 Kubuntu 切回 Windows(`efibootmgr -n`,等价 EFI BootNext),并断言 BootOrder 未变(I2)。
 # 判据(--check,零写):① 有 efibootmgr(非 UEFI → 跳过 9);② 能读到 BootOrder(efivarfs 只对 root 可读,读不到 → 需人工);
 #   ③ 能唯一定位 Windows Boot Manager 条目。三条齐 → PASS 并给出将执行的 `efibootmgr -n <编号>`。
 # --apply(需要 root;本卡不改永久启动顺序,故不声明破坏性、不强制 --yes):执行 efibootmgr -n <编号>,
@@ -47,7 +47,7 @@ probe() {
   ORDER=""; WIN_LINE=""; WIN_NUM=""; NEXT=""
   if ! efi_available; then
     dbk_add_check "未找到 ${EFI[0]}(本机非 UEFI,或该工具未安装)"
-    dbk_exit 跳过 "跳过:未找到 efibootmgr;若系统以 Legacy/BIOS 方式安装,请改用开机厂商启动菜单键(BOOT_MENU_KEY)选 Windows Boot Manager(rpm-ostree install efibootmgr 可分层安装,需重启)"
+    dbk_exit 跳过 "跳过:未找到 efibootmgr;若系统以 Legacy/BIOS 方式安装,请改用开机厂商启动菜单键(BOOT_MENU_KEY)选 Windows Boot Manager(sudo apt-get install -y efibootmgr 可装上)"
   fi
   ORDER="$(read_order || true)"
   if [ -z "$ORDER" ]; then

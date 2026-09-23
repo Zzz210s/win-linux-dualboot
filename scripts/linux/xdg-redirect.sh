@@ -158,7 +158,7 @@ apply_run() {
     if run_as_user xdg-user-dirs-update --force; then dbk_add_action "已以 $TARGET_USER 身份执行 xdg-user-dirs-update --force"
     else dbk_add_check "警告: xdg-user-dirs-update --force 返回非零(六行已写入,注销重登后再核对)"; fi
   else
-    EXTRA_MANUAL+=("未找到 xdg-user-dirs-update(Silverblue 应自带该命令):六行已写入,请注销重登后人工核对")
+    EXTRA_MANUAL+=("未找到 xdg-user-dirs-update(Kubuntu 的 xdg-user-dirs 包应提供该命令):六行已写入,请注销重登后人工核对")
   fi
   while IFS= read -r line; do
     case "$line" in

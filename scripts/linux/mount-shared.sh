@@ -6,7 +6,7 @@
 #   ③ 该分区当前挂在 /mnt/shared 且挂载选项含 rw。只读判定**不做写测试**(写测试是写动作,只在 --apply 成功路径做)。
 # --apply(需要 root,且必须 --yes):备份 fstab(.dbk.bak,仅首次)-> 补写缺失行 -> 建挂载点 -> daemon-reload
 #   -> mount -a -> 写测试(.dbk-write-test)-> bash xdg-redirect.sh --apply --yes -> 复读判据。幂等:重跑只补缺失。
-# 注:快照分区与 btrfs 快照体系已作废(设计 02 第 8 节),本脚本只挂共享盘。
+# 注:快照分区与快照体系已作废(设计 04 第 7 节明确不引入 snapper/timeshift/btrfs 快照),本脚本只挂共享盘。
 # 设计依据:设计 3.16 / 4.5 / 5.3(共享盘与四条前提)、02 设计 5 节(D: ≈635GiB NTFS)。夹具级验证,真机未跑。
 # 用法:mount-shared.sh [--uuid <SHARED_UUID>(或 DBK_SHARED_UUID)] [--user <name>] [--template <fstab 片段>]
 #   [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 对应卡:04-4
-# 落 L3 产物:--apply 写 baseline/03-efi-layout.txt,六节固定——\EFI\ 两棵树(Windows ESP + Fedora ESP)、
-# efibootmgr -v、BootOrder、lsblk、findmnt、rpm-ostree status 摘要;--check(缺省)只打印,零写。
+# 落 L3 产物:--apply 写 baseline/03-efi-layout.txt,六节固定——\EFI\ 两棵树(Windows ESP + Ubuntu ESP)、
+# efibootmgr -v、BootOrder、lsblk、findmnt、引导包与内核版本摘要(dpkg-query + uname -r);--check(缺省)只打印,零写。
 # 产物不入库(baseline/* 被 .gitignore 排除,仅 baseline/README.md 例外);多设备落 baseline/<设备别名>/。
 # 夹具级验证,真机未跑。用法: collect-l3.sh [--check|--apply] [--out <文件>] [--json] [--log <路径>] [--step NN-K]
 # 夹具注入(真机不需要设置):BOOT_DIR、ESP_DIR、WIN_ESP_MNT、OUT。
@@ -43,7 +43,7 @@ fi
 
 sec() { printf '%s\n' "$1"; printf '\n'; }
 BODY="$(sec "# baseline/03-efi-layout.txt (L3 产物)"
-  sec "## \\EFI\\ 目录树(Fedora ESP:$ESP_DIR)"
+  sec "## \\EFI\\ 目录树(Ubuntu ESP:$ESP_DIR)"
   if [ -d "$ESP_DIR/EFI" ]; then find "$ESP_DIR/EFI" -maxdepth 3 2>/dev/null | sort; else printf '%s\n' "(读不到 $ESP_DIR/EFI)"; fi
   printf '\n'
   sec "## \\EFI\\ 目录树(Windows ESP:${WIN_MNT:-读不到})"
@@ -61,8 +61,11 @@ BODY="$(sec "# baseline/03-efi-layout.txt (L3 产物)"
   sec "## findmnt"
   if command -v findmnt >/dev/null 2>&1; then findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS 2>&1 || true; else printf '%s\n' "(未安装 findmnt)"; fi
   printf '\n'
-  sec "## rpm-ostree status(摘要)"
-  if command -v rpm-ostree >/dev/null 2>&1; then rpm-ostree status 2>&1 | head -n 30 || true; else printf '%s\n' "(未安装 rpm-ostree)"; fi
+  sec "## 引导包与内核版本(dpkg-query + uname -r)"
+  if command -v dpkg-query >/dev/null 2>&1; then
+    dpkg-query -W -f='${Package} ${Version}\n' grub-efi-amd64 grub-efi-amd64-signed shim-signed 2>&1 | head -n 10 || true
+  else printf '%s\n' "(未安装 dpkg-query)"; fi
+  uname -r 2>&1 || true
 )"
 
 if [ -n "$WIN_MNT" ]; then dbk_add_check "Windows ESP 树:已采集($WIN_MNT/EFI)"; else dbk_add_check "Windows ESP 树:未采集(读不到;产物里会留占位说明)"; fi
