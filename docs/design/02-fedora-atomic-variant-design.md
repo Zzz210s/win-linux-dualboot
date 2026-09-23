@@ -1,5 +1,7 @@
 # 设计:Fedora 44 Silverblue(原子版)变体
 
+> **本文档已被 `04-kubuntu-variant-design.md` 取代,保留为历史记录**(记录"为什么曾选原子版、为什么改回传统可变系统");文中 Fedora/ostree/ESP-Fedora 等字样均为当时的命名,不作为实施依据。
+
 日期:2026-09-19
 状态:待实施(实施前需用户复审)
 适用:本仓库(win-linux-dualboot)全部文档与 Linux 侧脚本
@@ -93,7 +95,7 @@
 | MSR | 16MiB | 不变 |
 | `C:` Windows 系统 | 200GiB | 不变(原地重装 Windows 时唯一被格式化) |
 | `D:` 共享数据盘 | ≈635GiB | NTFS;Windows 原生访问,Linux 侧 `ntfs3` 读写(保留) |
-| **ESP-Fedora** | **1GiB** | 新建;只放 `\EFI\fedora\` |
+| **ESP-Fedora**(历史名;现为 `ESP-Ubuntu`) | **1GiB** | 新建;只放 `\EFI\fedora\` |
 | **`/boot`** | **1GiB ext4** | 原子版**必须独立**(每个 deployment 的内核与 initrd 在此) |
 | **root** | **≈113GiB btrfs** | ostree 部署 + `var` 子卷;`/home` 是 `/var/home` 的符号链接 |
 | WinRE | 1GiB | 盘尾;不变 |

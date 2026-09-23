@@ -43,7 +43,7 @@
 | **D2** | 生命周期:**LTS 3 年**,期间只收安全更新;大版本升级(`do-release-upgrade`)写成正式卡,前置快照要求改为"前置备份 `baseline/` 与配置文件" | 与"省心"一致:3 年内不动大版本 | 冻结在 26.04 不升级(3 年后无补丁);改用 interim 版本(9 个月寿命) |
 | **D3** | Secure Boot:**保持开启**;显卡走 Ubuntu 官方**预签名** `nvidia` 包(`ubuntu-drivers` 安装) | 官方签名链现成,**不需要自签、不需要 MOK 注册**;I3 由结构保证(独立 ESP) | 关 Secure Boot;只留 nouveau;自定义 SB 密钥 |
 | **D4** | **回滚策略降级**:不引入任何快照体系;**包级回退**(`apt install <pkg>=<版本>` + `apt-mark hold`)+ **原地重装两法** + 数据隔离(`D:` 共享盘) | 用户已否决 snapper/timeshift/btrfs 快照;接受"坏了就重装,数据不丢" | btrfs + snapper + grub-btrfs;Timeshift;ZFS root 快照(见 2.1) |
-| **D5** | 分区表 **8 项不变**,仅把 `ESP-Fedora 1GiB` 改名 **`ESP-Ubuntu 1GiB`**;`/boot` 1GiB ext4 保留(独立于 ESP);root 仍约 113GiB | 与 Windows 隔离的结构性保证不变;`/boot` 独立让重装 root 时可选择保留 | 复用 Windows ESP(违反 I3 的结构性保证);取消 `/boot`(重装 root 时内核随之丢失,反而更麻烦) |
+| **D5** | 分区表 **8 项不变**,仅把 `ESP-Fedora` 这一历史名改名 **`ESP-Ubuntu 1GiB`**;`/boot` 1GiB ext4 保留(独立于 ESP);root 仍约 113GiB | 与 Windows 隔离的结构性保证不变;`/boot` 独立让重装 root 时可选择保留 | 复用 Windows ESP(违反 I3 的结构性保证);取消 `/boot`(重装 root 时内核随之丢失,反而更麻烦) |
 | **D6** | **合并成一次改版**:文档换 Kubuntu 语义 + 卡式结构 + snap 规避,一段内容只写一次 | 与 01 号设计同一原则:分两次写会重复劳动 | 先改内容再改结构 |
 
 ### 2.1 被否方案:ZFS root 快照(明确记录)
