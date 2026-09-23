@@ -50,11 +50,11 @@
 
 ### C. 双系统切换组(C1-C3)
 
-- [ ] C1 从 Windows 用一次性 BootNext(或厂商菜单键)进 Linux -> 看到:重启进入 Kubuntu;`scripts/windows/set-bootnext.ps1` 退出码为 0(它自带"执行后 `BootOrder` 首位仍是 Windows Boot Manager"的断言)(需人工)
+- [ ] C1 从 Windows 用一次性 BootNext(或厂商菜单键)进 Linux -> 看到:重启进入 Kubuntu;`scripts/windows/set-bootnext.ps1 -Apply -Yes` 退出码为 0(它自带"执行后 `BootOrder` 首位仍是 Windows Boot Manager"的断言;缺 `-Yes` 会以用法错误 64 退出且零写)(需人工)
 - [ ] C2 一次性入口不改变下次默认启动项 -> 看到:用掉后再重启一次、不按任何键,自动回到 Windows;`bcdedit /enum {fwbootmgr}` 的 `displayorder` 与 `baseline/02-firmware-entries.txt` 逐字一致(需人工)
 - [ ] C3 切换 3 次后 A 组首项检查仍成立 -> 看到:完成 3 轮 Windows -> Kubuntu -> Windows 之后重跑 A1/A3/A4(必要时加 A5)全部通过,3 轮里没有出现 `grub>` / `grub rescue>`(需人工)
 
-脚本:本组必须实机切换,两侧都记 `需人工`;可复用的只读判定是 `set-bootnext.ps1`(带 `BootOrder` 断言)与 A 组复检。
+脚本:本组必须实机切换,两侧都记 `需人工`;可复用的只读判定是 `set-bootnext.ps1 -Check`(带 `BootOrder` 断言)与 A 组复检。
 
 这组全绿才可以进下一步
 

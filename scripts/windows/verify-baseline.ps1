@@ -7,19 +7,25 @@
   依据设计文档 7.1 与不变量 I1/I3,核对四项:① BootOrder 首位是否仍是 Windows Boot Manager(比对 02-firmware-entries.txt);
   ② 挂载 ESP 后对 \EFI\Microsoft\ 逐文件比对 02-esp-backup\manifest.sha256(清单格式见 backup-esp.ps1);
   ③ {bootmgr} 的 path 是否与基线一致;④ BitLocker 状态是否与 02-preflight-report.md 的记录一致(变化即提示人工介入)。
-  **只读**:不修改任何内容(挂载 ESP 只为读取,收尾必然卸载);唯一输出是控制台文本。
+  **只读**:不修改任何内容(挂载 ESP 只为读取,收尾必然卸载);唯一输出是控制台文本与 -Json 的单行 JSON。
+  CLI 契约(设计 03 第 2 节):-Check 是**缺省**且只读;本脚本没有任何写动作,故 -Apply 与 -Check **同义**(都只做只读巡检),但显式接受该开关;两者同时给按用法错误 64(与全仓一致)。
   本文件必须保存为 UTF-8 with BOM(Windows PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI 解码,中文会解析失败)。
   用法(仓库根目录、以管理员身份运行 Windows PowerShell;多设备时 -BaselineDir 指到 baseline\<设备别名>):
-    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -BaselineDir baseline
-  退出码:0 = 四项全部通过;1 = 需人工介入(含读不到基线或读不到现场状态)。
+    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -Check -BaselineDir baseline
+  退出码:0 = 四项全部通过;1 = 需人工介入(含读不到基线或读不到现场状态);9 = 非 Windows 会话;64 = 用法错误。
 #>
 [CmdletBinding()]
 param(
-  [string]$BaselineDir = 'baseline',
-  [string]$EspLetter = ''
+  [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes,
+  [string]$BaselineDir = 'baseline', [string]$EspLetter = '',
+  [string]$Step = '', [string]$Log = '', [string[]]$Extra = @()
 )
-
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'dbk-cli.ps1')
+Parse-DbkArgs -Check:$Check -Apply:$Apply -Json:$Json -Yes:$Yes -Step $Step -Log $Log -Extra $Extra
+Assert-DbkStep
+if ($script:DbkMode -eq 'apply') { Set-DbkLogDefault -Name 'verify-baseline' }
+if ($env:OS -ne 'Windows_NT') { Write-DbkNote '跳过:非 Windows 会话($env:OS 不是 Windows_NT)'; exit $script:DBK_SKIP }
 $WBM = 'Windows Boot Manager|Windows 启动管理器'
 $results = @()
 
@@ -164,15 +170,13 @@ elseif (-not $baseState) { Add-Result '④ BitLocker 状态' $false ('当前 ' +
 elseif ($curState -eq $baseState) { Add-Result '④ BitLocker 状态' $true ('与基线一致:基线"' + $baseBl + '";当前 ' + $curBl) }
 else { Add-Result '④ BitLocker 状态' $false ('发生变化(提示人工确认):基线"' + $baseBl + '"->当前 ' + $curBl + ';若确有变更,须重做 L2 基线') }
 
-# 结论
-Write-Host 'L2 基线巡检(只读;不修改系统任何设置,ESP 只在比对期间临时挂载并卸载)'
-Write-Host ('基线目录:' + [System.IO.Path]::GetFullPath($BaselineDir))
-foreach ($r in $results) { Write-Host ($r.Item + ' -> ' + $(if ($r.Ok) { '通过' } else { '需人工介入' }) + ':' + $r.Detail) }
+# 结论(-Json 模式下人读输出必须闭嘴,否则 stdout 不止一行 JSON;① / ② / ③ 行是验收总控的解析输入,格式不得改)
 $bad = @($results | Where-Object { -not $_.Ok })
-if ($bad.Count -eq 0) {
-  Write-Host '巡检通过:四项与 L2 基线一致(BootOrder 首位、ESP\EFI\Microsoft\ 文件哈希、{bootmgr} path、BitLocker 状态)。'
-  exit 0
+if (-not $script:DbkJson) {
+  Write-Host 'L2 基线巡检(只读;不修改系统任何设置,ESP 只在比对期间临时挂载并卸载)'
+  Write-Host ('基线目录:' + [System.IO.Path]::GetFullPath($BaselineDir))
+  foreach ($r in $results) { Write-Host ($r.Item + ' -> ' + $(if ($r.Ok) { '通过' } else { '需人工介入' }) + ':' + $r.Detail) }
 }
-Write-Host ('需人工介入:' + $bad.Count + ' 项 —— ' + (($bad | ForEach-Object { $_.Item }) -join '、'))
-Write-Host '处置:按 docs/03-windows.md 的 03-6(preflight.ps1)与 baseline/README.md 核对;确认改动属实且必要后,重做 L2 基线(backup-esp.ps1 + preflight.ps1)再继续。'
-exit 1
+if ($bad.Count -eq 0) { Write-DbkExit -Status PASS -Message '巡检通过:四项与 L2 基线一致(BootOrder 首位、ESP\EFI\Microsoft\ 文件哈希、{bootmgr} path、BitLocker 状态)。' }
+foreach ($b in $bad) { Add-DbkCheck ('失败项:' + $b.Item + ':' + $b.Detail) }
+Write-DbkExit -Status FAIL -Message ('需人工介入:' + $bad.Count + ' 项 —— ' + (($bad | ForEach-Object { $_.Item }) -join '、') + ';处置:按 docs/03-windows.md 的 03-6(preflight.ps1)与 baseline/README.md 核对;确认改动属实且必要后,重做 L2 基线(backup-esp.ps1 + preflight.ps1)再继续。')

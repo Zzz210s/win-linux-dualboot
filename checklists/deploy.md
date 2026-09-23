@@ -27,7 +27,7 @@
 - `[ ]` L0-2 存储控制器设为 AHCI / NVMe(VMD / RAID On 关闭),**必须在安装任何系统之前** | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:固件界面显示 AHCI 或 NVMe | 卡:`01-1`
 - `[ ]` L0-3 Secure Boot 保持开启、Fast Boot 关闭、仅 UEFI(CSM 关闭) | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:三项目标状态已记录 | 卡:`01-1`
 - `[ ]` L0-4 做两个安装介质并校验:Fedora ISO 按官方 `CHECKSUM` 文件比对;Windows ISO 官方未发布镜像哈希,只做"官方下载域 + 官方安装器校验" | 脚本:`scripts/windows/verify-install-media.ps1 -Check` | 判据:校验结论写进产物 | 卡:`01-2`
-- `[ ]` L0-5 安装前核对目标磁盘(`DISK_MODEL` / `DISK_SIZE`),防装错盘 | 脚本:`scripts/windows/preflight.ps1 -Only target-disk` | 判据:实测值与设备参数表一致 | 卡:`01-3`
+- `[ ]` L0-5 安装前核对目标磁盘(`DISK_MODEL` / `DISK_SIZE`),防装错盘 | 脚本:`scripts/windows/preflight.ps1 -Only target-disk`(只打印磁盘段,零写) | 判据:实测值与设备参数表一致 | 卡:`01-3`
 - `[ ]` L0-6 记下厂商启动菜单键 `BOOT_MENU_KEY`(它替代"改启动顺序") | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:写进产物 | 卡:`01-1`
 - `[ ]` L0-7 生成 `baseline/00-firmware.md` | 脚本:`scripts/windows/collect-l0.ps1`(默认只打印,加 `-Apply` 落盘) | 判据:字段无空缺,且含"启动顺序(`BootOrder` 首位)原值"一行 | 卡:`01-4`
 
@@ -49,7 +49,7 @@
 - `[ ]` W-3 系统盘隔离:六个已知文件夹(桌面/文档/下载/图片/视频/音乐)与游戏库、容器镜像全部重定向到 `D:` | 脚本:`scripts/windows/redirect-known-folders.ps1 -Check`(执行时加 `-Apply -Yes`) | 判据:六个已知文件夹的路径值全部以 `D:\` 开头,`D:\Shared\` 存在 | 卡:`03-3`
 - `[ ]` W-4 完成激活并落盘状态 | 脚本:`scripts/windows/check-activation.ps1 -Check` | 判据:状态已记录(激活失败不阻塞,但必须记下报错) | 卡:`03-4`
 - `[ ]` W-5 落 L1 产物 | 脚本:`scripts/windows/collect-l1.ps1`(加 `-Apply` 落盘) | 判据:`baseline/01-partitions.txt` 与 `baseline/01-activation.md` 在位 | 卡:`03-5`
-- `[ ]` W-6 L2 只读体检(管理员会话) | 脚本:`scripts/windows/preflight.ps1` | 判据:报告逐项有实测值,不出现红项;红项就地修复后重跑 | 卡:`03-6`
+- `[ ]` W-6 L2 只读体检(管理员会话) | 脚本:`scripts/windows/preflight.ps1 -Check`(只读判定);`scripts/windows/preflight.ps1 -Apply -OutFile baseline\02-preflight-report.md`(落盘报告) | 判据:报告逐项有实测值,不出现红项;红项就地修复后重跑 | 卡:`03-6`
 - `[ ]` W-7 读闸门结论:L2 是唯一硬闸门 | 脚本:`scripts/windows/check-gate.ps1 -Check` | 判据:结论为"结论: 允许进入 L3"(不得手工改写判定列) | 卡:`03-7`
 - `[ ]` W-8 跑基线备份(ESP 文件树 + 清单 + 固件启动项 + 分区快照) | 脚本:`scripts/windows/backup-esp.ps1 -OutDir baseline`(复验用 `-Check`) | 判据:`baseline/02-esp-backup/manifest.sha256` 与三份快照在位 | 卡:`03-8`
 - `[ ]` W-9 落 L2 产物并核对四件齐备(**与 L1 同一次会话内连续完成**,中途若 Windows 更新则基线失效须重做) | 脚本:`scripts/windows/collect-l2.ps1 -Check` | 判据:四件齐备且结论行为"允许进入 L3" | 卡:`03-9`
@@ -58,7 +58,7 @@
 
 **本阶段产物**:`baseline/03-efi-layout.txt`(六节) —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L3-1 一次性从安装 U 盘启动进 live(先确认 `/sys/firmware/efi` 存在) | 脚本:`scripts/windows/set-bootnext.ps1 -Device USB -WhatIf`(去掉 `-WhatIf` 才执行) | 判据:进 live 桌面,`lsblk` 能看到目标盘 | 卡:[04-kubuntu.md](../docs/04-kubuntu.md) 的 `04-1`
+- `[ ]` L3-1 一次性从安装 U 盘启动进 live(先确认 `/sys/firmware/efi` 存在) | 脚本:`scripts/windows/set-bootnext.ps1 -Device USB -Check`(空跑看计划;执行加 `-Apply -Yes`,缺 `-Yes` 退 64 零写) | 判据:进 live 桌面,`lsblk` 能看到目标盘 | 卡:[04-kubuntu.md](../docs/04-kubuntu.md) 的 `04-1`
 - `[ ]` L3-2 手动分区:三块建在预留区内,Calamares 只指定挂载点 | 脚本:`scripts/linux/check-partition-plan.sh --track D --check` | 判据:分区列表新增三行且 Windows 各分区原值不变,没有任何 Windows 分区被标成"格式化" | 卡:`04-2`
 - `[ ]` L3-3 装完重启验证(默认仍进 Windows;进 Kubuntu 后逐项核对) | 脚本:`scripts/linux/verify-l3.sh --check` | 判据:`grub-efi-amd64-signed` 与 `shim-signed` 在位、GRUB 落 `\EFI\ubuntu\`、`/boot` 独立且为 ext4、两块 ESP 内容齐全、`BootOrder` 首位仍是 Windows Boot Manager | 卡:`04-3`
 - `[ ]` L3-4 落 L3 产物(六节) | 脚本:`scripts/linux/collect-l3.sh --check`(落盘加 `--apply`) | 判据:两棵 `\EFI\` 树 + `efibootmgr -v` + `BootOrder` + `lsblk` + `findmnt` + 引导包与内核版本摘要齐全 | 卡:`04-4`
@@ -77,7 +77,7 @@
 - `[ ]` L4-8 SSH 救援通道与磁盘健康(apt 装 `smartmontools`,`sshd` 与 `smartd` 启用) | 脚本:`scripts/linux/set-remote-health.sh --check` | 判据:两项 `systemctl is-active` 为 `active`;`smartctl -H` 报 PASSED | 卡:`05-8`
 - `[ ]` L4-9 **包级回退与变更前备份**(降级 + `apt-mark hold`;本轨道没有一条命令回退整个系统) | 脚本:`scripts/linux/rollback-pkg.sh --check` | 判据:`--list` 能列出包的可用版本、`--check` 能读出已 hold 清单与 apt 历史;参考设备真做一次降级并 `--unhold` 还原 | 卡:`05-9`
 - `[ ]` L4-10 **发行版升级**(约 3 年一次:`do-release-upgrade`,前置备份与留档) | 脚本:`scripts/linux/upgrade-release.sh --check`(执行加 `--apply --yes`) | 判据:pin 或 Mozilla 源文件缺失时脚本拒绝升级;重启后版本已更新、会话仍 `wayland`、snap 四条判据全过 | 卡:`05-10`
-- `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -WhatIf` | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
+- `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -Check`(执行加 `-Apply -Yes`) | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
 - `[ ]` L4-12 落 L4 两份产物 | 脚本:`scripts/linux/collect-l4.sh --check`(落盘加 `--apply`) | 判据:`baseline/04-first-boot.md` 与 `baseline/04-robustness.md` 在位 | 卡:`05-12`
 - `[ ]` L4-13 (可选)按顺序汇总跑一遍 L4 各模块 | 脚本:`scripts/linux/first-boot.sh --check`;`scripts/linux/hardening.sh --check` | 判据:单项失败不改整体退出码,只在摘要里标出失败项 | 卡:`05-13`
 - `[ ]` L4-14 **snap 零残留**(四条判据 + apt pin 压制 + Mozilla 官方源) | 脚本:`scripts/linux/step-snap-free.sh --check`(清除加 `--apply --yes`) | 判据:`snap list` 空、`dpkg -l snapd` 无输出、`apt-cache policy snapd` 无候选、`apt-get install -s firefox` 不含 snapd | 卡:`05-14`

@@ -4,31 +4,31 @@
 .SYNOPSIS
   L2 只读预检:体检本机状态并生成闸门报告(默认 baseline\02-preflight-report.md)。判定:红 = 禁止进入 L3;黄 = 记录后继续;绿 = 通过。
 .DESCRIPTION
-  只读:不修改系统任何设置,唯一写动作是生成报告文件;带 -Only <段名> 或 -Json 时只做查询输出,连报告也不写。
-  -Only <段名> 只输出指定段(段名见 $SEC,至少支持 target-disk = 磁盘段,01-3 用;结论只由选中段得出);-Json 输出单行机器可读 JSON(script/only/rows[]/red/yellow/verdict)。
-  本文件必须保存为 UTF-8 with BOM,否则 Windows PowerShell 5.1 会按 ANSI 解码中文而解析失败。
+  只读:不修改系统任何设置,唯一写动作是 -Apply 时生成报告文件;-Check 是**缺省**且零写(只打印检查表与结论);-Json 与 -Only 是查询模式,连报告也不写。
+  -Only <段名> 只输出指定段(段名见 $SEC,至少支持 target-disk = 磁盘段,01-3 用;结论只由选中段得出);-Json 输出单行机器可读 JSON(script/only/rows[]/red/yellow/verdict,保持既有查询 schema)。
+  CLI 契约与退出码(0 通过 / 1 有红项 / 64 用法错误)见 docs/design/03-step-automation-design.md 第 2 节;本文件必须保存为 UTF-8 with BOM。
   用法(在仓库根目录、以管理员身份运行 Windows PowerShell;多设备时把 -OutFile 与 -BaselineDir 都指到 baseline\<设备别名>\ 下):
-    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\preflight.ps1 -OutFile baseline\02-preflight-report.md
+    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\preflight.ps1 -Check
+    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\preflight.ps1 -Apply -OutFile baseline\02-preflight-report.md
 #>
 [CmdletBinding()]
 param(
+  [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes,
   [string]$OutFile = 'baseline\02-preflight-report.md',
-  [string]$BaselineDir = 'baseline',
-  [string]$Only = '',
-  [switch]$Json
+  [string]$BaselineDir = 'baseline', [string]$Only = '',
+  [string]$Step = '', [string]$Log = '', [string[]]$Extra = @()
 )
-
-$GREEN = '绿'; $YELLOW = '黄'; $RED = '红'
-$rows = @(); $notes = @()
-
-# -Only 段名 → 检查行名正则;段名写错按用法错误退 64(不静默返回空结果)
-$SEC = @{ admin = '管理员权限'; storage = '存储控制器'; 'secure-boot' = 'Secure Boot'; bitlocker = 'BitLocker'; power = 'Fast Startup|休眠文件'
-  'target-disk' = '磁盘 0|ESP 大小'; l0 = '^L0 基准'; l1 = '^L1 '; baseline = '^I4 基线'; system = '系统版本' }
+. (Join-Path $PSScriptRoot 'dbk-cli.ps1')
+Parse-DbkArgs -Check:$Check -Apply:$Apply -Json:$Json -Yes:$Yes -Step $Step -Log $Log -Extra $Extra
+Assert-DbkStep
+if ($script:DbkMode -eq 'apply') { Set-DbkLogDefault -Name 'preflight' }
+$GREEN = '绿'; $YELLOW = '黄'; $RED = '红'; $rows = @(); $notes = @()
+$SEC = @{ admin = '管理员权限'; storage = '存储控制器'; 'secure-boot' = 'Secure Boot'; bitlocker = 'BitLocker'; power = 'Fast Startup|休眠文件'; 'target-disk' = '磁盘 0|ESP 大小'; l0 = '^L0 基准'; l1 = '^L1 '; baseline = '^I4 基线'; system = '系统版本' }
 $onlyRe = ''
 if ($Only) {
   if (-not $SEC.ContainsKey($Only)) { Write-Host ('用法错误:-Only 不认识的段 ' + $Only + ';可用段:' + (($SEC.Keys | Sort-Object) -join '、')); exit 64 }
   $onlyRe = $SEC[$Only]
-}
+} elseif ($script:DbkMode -eq 'check') { $onlyRe = '.' }
 
 function Add-Row {
   param([string]$Item, [string]$Value, [string]$Verdict)
@@ -145,11 +145,15 @@ $redList = '无'; if ($reds.Count -gt 0) { $redList = ($reds | ForEach-Object { 
 $yellowList = '无'; if ($yellows.Count -gt 0) { $yellowList = ($yellows | ForEach-Object { $_.Item }) -join '、' }
 $verdictLine = '结论: 允许进入 L3'; if ($reds.Count -gt 0) { $verdictLine = '结论: 禁止进入 L3' }
 
-# 查询模式:-Json 只输出一行 JSON、-Only 只打印选中段的表行;两者都不写报告文件(退出码按选中段的红项)
+# 查询/只读模式:-Json 只输出一行 JSON;-Only 或 -Check(缺省)只打印表行;三者都不写报告文件(退出码按选中段/全部的红项)
 $arr = @($rows | ForEach-Object { '{"item":"' + (EscJ $_.Item) + '","value":"' + (EscJ $_.Value) + '","verdict":"' + $_.Verdict + '"}' })
 $rc = 0; if ($reds.Count -gt 0) { $rc = 1 }
 if ($Json) { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false); Write-Output ('{"script":"preflight","only":"' + (EscJ $Only) + '","rows":[' + ($arr -join ',') + '],"red":' + $reds.Count + ',"yellow":' + $yellows.Count + ',"verdict":"' + $verdictLine + '"}'); exit $rc }
-if ($onlyRe) { foreach ($r in $rows) { Write-Output ('| ' + $r.Item + ' | ' + $r.Value + ' | ' + $r.Verdict + ' |') }; Write-Output ('段:' + $Only + ';行数 ' + $rows.Count + ';红 ' + $reds.Count + ';黄 ' + $yellows.Count); exit $rc }
+if ($onlyRe) {
+  foreach ($r in $rows) { Write-Output ('| ' + $r.Item + ' | ' + $r.Value + ' | ' + $r.Verdict + ' |') }
+  Write-Output ('段:' + $(if ($Only) { $Only } else { '全部(-Check)' }) + ';行数 ' + $rows.Count + ';红 ' + $reds.Count + ';黄 ' + $yellows.Count)
+  Write-DbkExit -Status $(if ($reds.Count -gt 0) { 'FAIL' } else { 'PASS' }) -Message $verdictLine
+}
 
 $table = ($rows | ForEach-Object { '| ' + $_.Item + ' | ' + $_.Value + ' | ' + $_.Verdict + ' |' }) -join "`r`n"
 $noteText = '- 无'; if ($notes.Count -gt 0) { $noteText = ($notes | ForEach-Object { '- ' + $_ }) -join "`r`n" }
@@ -193,5 +197,4 @@ $outDir = Split-Path -Parent $outFull
 if ($outDir -and -not (Test-Path -LiteralPath $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }
 [System.IO.File]::WriteAllText($outFull, (($md -replace "`r?`n", "`r`n").TrimEnd() + "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
 Write-Host ('报告已写入:' + $outFull)
-Write-Host $verdictLine
-if ($reds.Count -gt 0) { exit 1 } else { exit 0 }
+Write-DbkExit -Status $(if ($reds.Count -gt 0) { 'FAIL' } else { 'PASS' }) -Message $verdictLine

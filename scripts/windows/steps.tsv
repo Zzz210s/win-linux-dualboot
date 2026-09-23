@@ -1,7 +1,7 @@
 步骤号	脚本路径	破坏性(0/1)	说明
 01-1	scripts/windows/check-firmware.ps1	0	固件核对:Secure Boot 与 VMD/RAID 推断 + 固件界面人工核对清单
 01-2	scripts/windows/verify-install-media.ps1	0	安装介质校验:Kubuntu ISO SHA256 比对 + Windows ISO 来源声明 + 可移动盘列举
-01-3	scripts/windows/preflight.ps1	0	核对目标盘:preflight.ps1 -Only target-disk(磁盘段)
+01-3	scripts/windows/preflight.ps1	0	核对目标盘:preflight.ps1 -Check(只读、零写;-Only target-disk 可只看磁盘段)
 01-4	scripts/windows/collect-l0.ps1	0	落 L0 产物:写 baseline/00-firmware.md(BootOrder 首位原值)
 02-1	scripts/windows/check-partition-layout.ps1	0	分盘总则:三种轨道的目标布局只读核对
 02-2	scripts/windows/check-partition-layout.ps1	0	轨道 W 的分盘核对:只 Windows(ESP-Win/MSR/C:/WinRE)
@@ -11,14 +11,14 @@
 03-3	scripts/windows/redirect-known-folders.ps1	1	已知文件夹重定向到 D:六个目录 + D:\Shared\(需 -Yes)
 03-4	scripts/windows/check-activation.ps1	0	KMS 激活状态只读核对(激活动作人工,不阻塞 L1)
 03-5	scripts/windows/collect-l1.ps1	0	落 L1 产物:01-partitions.txt 与 01-activation.md
-03-6	scripts/windows/preflight.ps1	0	只读体检:闸门判据与基线报告(写 baseline/02-preflight-report.md)
+03-6	scripts/windows/preflight.ps1	0	只读体检:闸门判据与基线报告(-Check 只读;-Apply 才写 baseline/02-preflight-report.md)
 03-7	scripts/windows/check-gate.ps1	0	读闸门结论:列红项并给退出码(只有它判能否进入 L3)
 03-8	scripts/windows/backup-esp.ps1	0	基线备份:ESP 全量文件树 + manifest.sha256(-Check 校验已有备份)
 03-9	scripts/windows/collect-l2.ps1	0	核对 L2 四件产物齐全(报告/ESP 备份/固件启动项/分区快照)
 04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(-Device USB -Check / -Apply -Yes;写 bootsequence,不改 BootOrder)
 07-3	scripts/windows/repair-windows-boot.ps1	1	Windows 侧修引导:mountvol + bcdboot 重建 \EFI\Microsoft\(破坏性,需 -Yes)
 07-6	scripts/windows/restore-esp.ps1	1	基线回滚:从 02-esp-backup 逐文件比对 manifest 复原 \EFI\Microsoft\(破坏性,需 -Yes)
-07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线
+07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线(-Check 缺省;-Apply 同义,无写动作)
 07-9	scripts/windows/restore-boot-order.ps1	1	归位引导顺序:只用一次性 bootsequence(不改 BootOrder;永久归位靠固件设置界面)
 07-10	scripts/windows/backup-esp.ps1	0	L5 退役备份现状:手动执行 -OutDir D:\dbk-l5-backup(仓库外;不要覆盖 baseline/)
 07-11	scripts/windows/delete-linux-partition.ps1	1	删 Ubuntu 分区:按分区号/GPT GUID 精确删除(拒绝 Windows ESP/C:/D:/MSR/WinRE)

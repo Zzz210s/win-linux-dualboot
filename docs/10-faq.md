@@ -22,7 +22,7 @@
 | `10-2` | 装完没网 / 键盘失灵,要不要换发行版 | `scripts/linux/triage.sh --check` |
 | `10-3` | 手动分区界面找不到"引导器位置"选项 | `scripts/linux/check-partition-plan.sh --track D --check` |
 | `10-4` | 是不是必须切独显直连才能进系统 | `scripts/linux/graphics.sh --check` |
-| `10-5` | 引导菜单阶段黑屏,但键盘还能用 | `scripts/windows/set-bootnext.ps1 -Device USB -WhatIf` |
+| `10-5` | 引导菜单阶段黑屏,但键盘还能用 | `scripts/windows/set-bootnext.ps1 -Device USB -Check` |
 | `10-6` | 更新后进不了桌面 | `scripts/linux/check-health.sh --check` |
 | `10-7` | 反复强制重启对系统有什么影响 | `scripts/linux/triage.sh --check` |
 | `10-8` | 两个系统运行期会不会互相影响 | `scripts/windows/verify-baseline.ps1 -BaselineDir baseline` |
@@ -82,7 +82,7 @@
 - 从 Windows 侧用一次性入口进 Kubuntu(按 `04-1` 的 `-Device USB`,或厂商 `BOOT_MENU_KEY`),不改永久顺序。
 - 进系统后按 [templates/grub-defaults.snippet](../templates/grub-defaults.snippet) 的注释行开 `GRUB_TERMINAL=console` 再 `update-grub`,让菜单可见;撤销就去掉该行重跑。
 -> `04-1`、`05-11`、`05-13`;设计 3.19
-脚本:`scripts/windows/set-bootnext.ps1 -Device USB -WhatIf`;`scripts/linux/reboot-to-windows.sh`
+脚本:`scripts/windows/set-bootnext.ps1 -Device USB -Check`(执行需 `-Apply -Yes`);`scripts/linux/reboot-to-windows.sh`
 
 ### 10-6 更新后进不了桌面
 

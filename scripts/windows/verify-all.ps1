@@ -53,7 +53,8 @@ function Invoke-BaselineCheck {
   if (-not (Test-Path -LiteralPath $BaselineScript)) { return }
   $exe = Get-Command powershell.exe -ErrorAction SilentlyContinue
   if (-not $exe) { return }
-  $script:BaseOut = (& $exe.Source '-NoProfile' '-ExecutionPolicy' 'Bypass' '-File' $BaselineScript '-BaselineDir' $BaselineDir 2>&1 | Out-String)
+  # 不合并 stderr:子脚本按 O2 把失败写 stderr,而 `2>&1` 会把原生 stderr 变成 NativeCommandError,在 Stop 下终止执行器(①/②/③ 行在 stdout,不合并也能解析)
+  $script:BaseOut = (& $exe.Source '-NoProfile' '-ExecutionPolicy' 'Bypass' '-File' $BaselineScript '-BaselineDir' $BaselineDir | Out-String)
   $script:BaseRc = $LASTEXITCODE
 }
 function Get-BaselineVerdict {
@@ -127,8 +128,9 @@ if ($missing.Count -gt 0) { Add-VerifyItem E1 E 'fail' ('baseline 产物缺失:'
 else { Add-VerifyItem E1 E 'pass' ('baseline 十一件产物齐全(' + $base + ')') '03-9' }
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Add-Manual E2 E '未找到 git;手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md' '03-9' }
 else {
-  $gs = (& git -C $GitRoot status --porcelain 2>&1 | Out-String); $grc1 = $LASTEXITCODE
-  $tracked = @(& git -C $GitRoot ls-files baseline/ 2>&1 | Where-Object { $_ -and $_.Trim() -ne 'baseline/README.md' }); $grc2 = $LASTEXITCODE
+  # 同理不合并 git 的 stderr(它把 CRLF 等警告写 stderr,合并后同样终止执行器,还可能把警告文字误当 baseline/ 命中)
+  $gs = (& git -C $GitRoot status --porcelain | Out-String); $grc1 = $LASTEXITCODE
+  $tracked = @(& git -C $GitRoot ls-files baseline/ | Where-Object { $_ -and $_.Trim() -ne 'baseline/README.md' }); $grc2 = $LASTEXITCODE
   if ($grc1 -ne 0 -or $grc2 -ne 0) { Add-Manual E2 E ('git 读不到工作区(' + $GitRoot + ');手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md') '03-9' }
   elseif ($gs -match 'baseline/') { Add-VerifyItem E2 E 'fail' ('baseline/ 内容混进了工作区:' + (($gs -split "`r?`n" | Where-Object { $_ -match 'baseline/' }) -join ' ')) '03-9' }
   elseif ($tracked.Count -gt 0) { Add-VerifyItem E2 E 'fail' 'baseline/ 已被 git 追踪(只允许 baseline/README.md)' '03-9' }

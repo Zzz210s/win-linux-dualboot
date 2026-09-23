@@ -90,13 +90,13 @@
 ### 07-7 周期巡检(Windows 大版本 / 累积更新之后)
 
 做:每次更新之后复核四项基线,顺带看 Linux 侧的系统体检与模块签名;只看不改。
-  1. 管理员会话跑 Windows 侧巡检
+  1. 管理员会话跑 Windows 侧巡检(`-Check` 缺省且只读;本脚本没有任何写动作,`-Apply` 与 `-Check` 同义)
      看到:四项逐条给"通过 / 需人工介入"——① `BootOrder` 首位仍是 Windows Boot Manager;② `\EFI\Microsoft\` 与 `manifest.sha256` 逐文件一致;③ `{bootmgr}` 的 `path` 与基线一致;④ BitLocker 状态与 `02-preflight-report.md` 的记录一致
   2. 在 Kubuntu 里跑系统体检与模块签名
      看到:`scripts/linux/check-health.sh --check` 报 PASS(会话为 wayland、snap 零残留、`systemctl is-system-running` 为 running、根分区余量 ≥10%)或逐条给出失败项;`scripts/linux/check-signature.sh --check` 报 PASS(签名者非空且 Secure Boot enabled)或"需人工"
   3. 把巡检输出连同结论记进 `baseline/` 或清单备注
      看到:四项结论与偏差都有文字;没有为了"让基线成立"去改 `baseline/` 的既有记录
-脚本:scripts/windows/verify-baseline.ps1 -BaselineDir baseline;scripts/linux/check-health.sh --check;scripts/linux/check-signature.sh --check
+脚本:scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline;scripts/linux/check-health.sh --check;scripts/linux/check-signature.sh --check
 坑:更新之后 ESP 出现差异要当"引导被接管"处理,先按 `07-1` 判层,而不是先重做基线;`bcdboot` 重建过 BCD 的设备,②项的差异属预期(记备注);签名者取不到时不要关 Secure Boot(那会破坏预签名 NVIDIA 包路径),补救走 `05-3`。
 出错时:① 或 ③ 不符 -> 按 `07-3` / `07-6` 复原并把偏差写进备注;更新后两个系统都进不去但分区与文件都在 -> 属 SBAT / DBX 类事故(微软 2024-08 起推送的 DBX 会把旧 SBAT 判为过旧):清 SBAT 策略(Windows 侧清 `SbatLevel` 注册表值,Linux 侧 `sudo mokutil --set-sbat-policy delete`)后再按 `07-3` / `07-6` 复原;具体键值名与命令**以官方公告为准**。
 
@@ -139,7 +139,7 @@
      看到:① `BootOrder` 首位、② `\EFI\Microsoft\` 逐文件、③ `{bootmgr}` 的 path 三项"通过";④ BitLocker 若与 L2 记录不同(L3 收尾已重新启用保护)属**预期差异**,记进备注
   3. 把只读取证输出(`efibootmgr -v`、`lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT`)也拷到共享盘或外置盘,别留在 `~/`
      看到:仓库外可读;本步没有任何写 ESP / 写 NVRAM / 改分区的动作
-脚本:scripts/windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup;scripts/windows/verify-baseline.ps1 -BaselineDir baseline
+脚本:scripts/windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup;scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline
 坑:用默认 `-OutDir baseline` 会覆盖 L2 基线(它正是本阶段的比对基准与回滚源);这批产物是**仓库外产物、不是基线**,不要拷进 `baseline/`(见 [baseline/README.md](../baseline/README.md))。另:`backup-esp.ps1` **默认模式就执行备份**,本卡不加 `-Check`(它只校验已有备份),该脚本也没有 `-Apply` 参数(写了会被 PowerShell 参数绑定拦下、退 1)。
 出错时:清单文件数与备份树对不上 -> 先解决磁盘/权限问题再继续;`verify-baseline.ps1` 退出码 1 但只有 ④ 有差异 -> 属预期,记备注后继续。
 

@@ -80,12 +80,12 @@
 ### 03-6 跑只读体检(闸门判据)
 
 做:在**管理员** Windows PowerShell 里跑只读预检,生成闸门报告(逐项实测值 + 红/黄/绿判定 + 末行结论)。红项共六类:存储控制器命中 VMD/RAID、BitLocker 保护已开启、Fast Startup 已开启、最大连续未分配 <115GiB、I4 基线产物缺任一、非管理员会话(报告不可用)。
-  1. 跑 `preflight.ps1 -OutFile baseline\02-preflight-report.md -BaselineDir baseline`
-     看到:报告在位;此时"I4 基线产物齐备"通常是红(还没做 `03-8`),末行是"结论: 禁止进入 L3"
+  1. 先跑 `-Check`(缺省、零写)只看判定,确认后加 `-Apply` 落盘报告
+     看到:`-Check` 逐行打印检查表与结论行、`baseline\` 下没有新文件;`-Apply` 后报告在位(此时"I4 基线产物齐备"通常还是红,末行"结论: 禁止进入 L3")
   2. 逐条处置红项后重跑(黄项只在"补充说明"里登记,带风险继续)
      看到:报告"结论"节的红项一行为 `无`;黄项一行列出的是可带风险继续的项
-脚本:scripts/windows/preflight.ps1 -OutFile baseline\02-preflight-report.md -BaselineDir baseline
-坑:非管理员会话下存储控制器、BitLocker、固件启动项、分区表都读不到,脚本把结论强制为"禁止进入 L3",报告不可用(设计 4.3);盘尾空隙必然接近 0(WinRE 占盘尾),判据只看"最大连续未分配"。
+脚本:scripts/windows/preflight.ps1 -Check / -Apply -OutFile baseline\02-preflight-report.md -BaselineDir baseline
+坑:非管理员会话下存储控制器、BitLocker、固件启动项、分区表都读不到,脚本把结论强制为"禁止进入 L3",报告不可用(设计 4.3);盘尾空隙必然接近 0(WinRE 占盘尾),判据只看"最大连续未分配";`-Check` 是缺省且零写(只打印检查表),报告只在 `-Apply` 时落盘,`-Check` 与 `-Apply` 同时给按用法错误 64。
 出错时:BitLocker 保护已开启 -> 先备份 48 位恢复密钥再挂起保护,口径见 `10-faq.md`;最大连续未分配不足 115GiB 或 ESP 被削减 -> 回 `02-4` 整盘重排,不缩容。
 
 ### 03-7 读闸门结论(红项停)

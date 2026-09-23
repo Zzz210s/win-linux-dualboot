@@ -16,12 +16,12 @@
 ### 04-1 以 UEFI 模式从安装 U 盘启动,进 live 环境
 
 做:从 Windows 侧把"下次启动"设成一次性从安装 U 盘启动,再重启进 live;不动永久启动顺序。
-  1. 管理员会话先空跑看计划,确认后再执行(脚本只设一次性 `bootsequence`,用过即消失)
-     看到:`-Device USB -WhatIf` 打印目标条目与 `bcdedit /set {fwbootmgr} bootsequence {GUID}`;去掉 `-WhatIf` 后打印"I1 断言通过:BootOrder 首位仍是 Windows Boot Manager"
+  1. 管理员会话先空跑看计划,确认后加 `-Apply -Yes` 执行(脚本只设一次性 `bootsequence`,用过即消失)
+     看到:`-Device USB -Check` 打印目标条目与 `bcdedit /set {fwbootmgr} bootsequence {GUID}`;`-Device USB -Apply -Yes` 执行后打印"I1 断言通过:BootOrder 首位仍是 Windows Boot Manager";只给 `-Apply` 漏 `-Yes` 会以用法错误 64 退出且零写
   2. 重启,在厂商启动菜单里选带 `UEFI:` 前缀的 Kubuntu 条目
      看到:进入 live 桌面(不是 `grub>`、不是黑屏);终端里 `/sys/firmware/efi` 存在,`lsblk` 能看到目标盘
-脚本:scripts/windows/set-bootnext.ps1 -Device USB -WhatIf / -Device USB
-坑:在固件设置界面把 U 盘拖到永久首位、或用 `bcdedit displayorder` / `efibootmgr -o` 改序,都会破坏 I2(设计 I2);U 盘与目标盘同时列出时选错盘,后果到 `04-2` 才暴露。
+脚本:scripts/windows/set-bootnext.ps1 -Device USB -Check / -Device USB -Apply -Yes
+坑:缺 `-Yes` 会以用法错误 64 退出且一个命令都不执行(一次性引导切换算破坏性写);在固件设置界面把 U 盘拖到永久首位、或用 `bcdedit displayorder` / `efibootmgr -o` 改序,都会破坏 I2(设计 I2);U 盘与目标盘同时列出时选错盘,后果到 `04-2` 才暴露。
 出错时:看不到 U 盘条目 -> 回 `01-2` 核对介质与写入方式;`\EFI\Microsoft\` 或 `BootOrder` 有异常 -> 停下按 `07-1` 判层,不要重装。
 
 ### 04-2 手动分区:三块建在 115GiB 预留区内,Calamares 只指定挂载点

@@ -156,7 +156,7 @@ Kubuntu 26.04 LTS 的三条硬事实贯穿全文:系统是**传统可变系统**
      看到:空跑打印 `BootOrder` 与目标条目;执行后报 PASS(一次性启动项已设置且 `BootOrder` 未变),再手工 `sudo systemctl reboot`
   2. 厂商菜单键兜底:开机按参数表 `BOOT_MENU_KEY`,选 `Windows Boot Manager`
      看到:进入 Windows;这条路径零副作用,也是 L3 进 Linux 用的同一条
-  3. Windows 侧等价入口:`scripts/windows/set-bootnext.ps1`(用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做一次性切换)
+  3. Windows 侧等价入口:`scripts/windows/set-bootnext.ps1 -Apply -Yes`(用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做一次性切换;缺 `-Yes` 会以用法错误 64 退出且零写)
      看到:脚本断言 `BootOrder` 首位仍是 Windows Boot Manager
 脚本:sudo bash scripts/linux/reboot-to-windows.sh --check / --apply
 坑:**任何改永久顺序的做法都破坏 I2**(`efibootmgr -o`、`displayorder`);一次性设置只生效一次,进 Linux 后要再回 Windows 必须重新设置。
