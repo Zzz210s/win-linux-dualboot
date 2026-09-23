@@ -3,22 +3,22 @@
 日期:2026-09-18
 状态:待实施(实施前需用户复审)
 适用:本仓库全部动作卡与 `scripts/`
-相关设计:`01-playbook-reshape-design.md`(卡格式与文档结构)、`02-fedora-atomic-variant-design.md`(Fedora 44 Silverblue 原子版:部署级回滚、ublue NVIDIA 路径、独立 ESP 与 `/boot`)。本设计为第三层:**把"卡"与"脚本"一一绑定**。
+相关设计:`01-playbook-reshape-design.md`(卡格式与文档结构)、`04-kubuntu-variant-design.md`(Kubuntu 26.04 LTS:包级回退、Ubuntu 官方预签名驱动、独立 ESP 与 `/boot`;它取代原原子版设计,历史叙述仍留在 `02-fedora-atomic-variant-design.md`)。本设计为第三层:**把"卡"与"脚本"一一绑定**。
 
 ---
 
 ## 1. 背景与目标
 
-现状:**46 张动作卡**(底座 4 / 分盘 4 / 轨道 W 9 / 轨道 L 4 / 首启收敛 12 / 退役与救援 13;卡号按 `01-playbook-reshape-design.md` 第 4 节的"三轨道 + 分盘前置章节"结构)对应 **18 个脚本**,其中真正覆盖动作的约 10 个,缺的恰是最危险的 L5(删分区、清 NVRAM)与 07(救援)。
+现状:**48 张动作卡**(底座 4 / 分盘 4 / 轨道 W 9 / 轨道 L 4 / 首启收敛 14 / 退役与救援 13;卡号按 `01-playbook-reshape-design.md` 第 4 节的"三轨道 + 分盘前置章节"结构)对应 **18 个脚本**,其中真正覆盖动作的约 10 个,缺的恰是最危险的 L5(删分区、清 NVRAM)与 07(救援)。
 
-目标:**每个动作卡都有一个脚本**,卡里的"做:"就是"跑哪个脚本、看什么判据";人工只保留两类无法自动化的动作(固件设置界面的开关、Anaconda 里的点击)。
+目标:**每个动作卡都有一个脚本**,卡里的"做:"就是"跑哪个脚本、看什么判据";人工只保留两类无法自动化的动作(固件设置界面的开关、Calamares 里的点击)。
 
 已定的三项(用户逐条确认):
 
 | # | 决定 |
 |---|---|
 | S1 | **双模式型**:每步一个脚本,**默认 `--check`**(只读,自动判定该卡的 `看到:` 判据,输出 `PASS`/`FAIL`/`需人工`)、**`--apply`** 才执行(幂等 + 前置断言 + 破坏性动作显式 `--yes`)。**不做阶段级一键连跑编排**(被否理由:无法在真机上做到彻底,且放大连跑改分区表的风险) |
-| S2 | **L3 的 Fedora 安装保持人工**(Anaconda 交互);用"L3 前置核对脚本(`check-partition-plan.sh`)+ L3 后置校验脚本(`verify-l3.sh`)"把这步包住。kickstart 无人值守**不作为 v1 路径**(被否理由:出错时无人拦,分区写错即毁 Windows) |
+| S2 | **L3 的 Kubuntu 安装保持人工**(Calamares 交互);用"L3 前置核对脚本(`check-partition-plan.sh`)+ L3 后置校验脚本(`verify-l3.sh`)"把这步包住。无人值守安装(autoinstall)不作为 v1 路径(被否理由:出错时无人拦,分区写错即毁 Windows) |
 | S3 | **危险三步**(删 Linux 分区、清 NVRAM、改引导顺序)允许 `--apply`,但必须:默认 `--check`、需 `--yes`、脚本内前置断言(基线存在 + `BootOrder` 首位仍是 Windows Boot Manager)、执行后立刻复读断言并在输出里打印结果 |
 
 ## 2. 统一的 CLI 契约(所有步骤脚本)
@@ -118,7 +118,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 入口 | 作用 | 约束 |
 |---|---|---|
 | `scripts/windows/dbk.ps1 <step> [-Apply] [-Yes] [-Json]` | Windows 侧步骤分发(读步骤索引 → 调对应脚本 → 汇总输出) | 只做分发与汇总,**不含任何业务逻辑**;拒绝未知步骤名 |
-| `scripts/linux/dbk.sh <step> [--apply] [--yes] [--json]` | Fedora 侧同上 | 同上 |
+| `scripts/linux/dbk.sh <step> [--apply] [--yes] [--json]` | Kubuntu 侧同上 | 同上 |
 | `windows/verify-all.ps1` / `linux/verify-all.sh` | 按 `08-verification.md` 的 A–F 逐项自动判定,汇总写 `baseline/08-verification.md`(每台设备副本) | **执行器**:只做判定与汇总,按`-out-dir`/`--out-dir` 落盘;**不得自动执行任何 `--apply`**(对所有子脚本只允许 `--check` 与只读子命令);不进卡映射表、不登记 steps.tsv(与库文件同列,见第 6 节 C9d 白名单) |
 
 步骤索引文件:`scripts/windows/steps.tsv`、`scripts/linux/steps.tsv`(列:步骤号、脚本路径、是否破坏性、说明)。总控读它分发,C9d 也校验它的一致性:脚本路径必须存在且属本侧、本侧步骤脚本必须登记进索引、破坏性列 ∈ {0,1}、索引步骤号必须落在脚本头卡号集合里、同一 (步骤号, 脚本路径) 对不得重复(同一步骤号可以有多行 = 一张卡对应多个脚本;一脚本服务多张卡时按步骤号各占一行,同一脚本路径也允许出现多行)。**索引行不是装饰**:它既是总控的分发表,也是“这一步会不会改系统”的第二道记录。
@@ -127,7 +127,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 ## 6. 逐卡脚本映射表(48 张动作卡 → 脚本)
 
-> **状态说明(2026-09-22,K2 批次更新)**:本节映射表**已按 `docs/design/04-kubuntu-variant-design.md` 重写并取代原子版口径** —— 基础系统由 Fedora 44 Silverblue(原子版)改为 **Kubuntu 26.04 LTS**,因此表中不再出现原子版专属脚本(`dbk-ostree.sh`、`dbk-rollback.sh`、`graphics-mok.sh`),回滚由**包级回退**(`scripts/linux/rollback-pkg.sh`)承担,snap 规避由 `scripts/linux/step-snap-free.sh` 承担。表里的脚本名与 `scripts/linux/steps.tsv`、`scripts/windows/steps.tsv` 以及脚本头 `# 对应卡:` 三处必须一致,不一致时以自检 C9b/C9c/C9d 的输出为准。
+> **状态说明(2026-09-22,K2 批次更新)**:本节映射表**已按 `docs/design/04-kubuntu-variant-design.md` 重写并取代原子版口径** —— 基础系统由 Fedora 44 Silverblue(原子版)改为 **Kubuntu 26.04 LTS**,因此表中不再出现原原子版专属脚本(已废弃:`dbk-ostree.sh`、`dbk-rollback.sh`、`graphics-mok.sh`),回滚由**包级回退**(`scripts/linux/rollback-pkg.sh`)承担,snap 规避由 `scripts/linux/step-snap-free.sh` 承担。表里的脚本名与 `scripts/linux/steps.tsv`、`scripts/windows/steps.tsv` 以及脚本头 `# 对应卡:` 三处必须一致,不一致时以自检 C9b/C9c/C9d 的输出为准。
 
 **图例**:`[有]` 既有脚本(按 Kubuntu 语义改写后仍在用);`新` = 本方案新增;`人工` = 无法自动化(卡内标注)。卡号取 `01-playbook-reshape-design.md` 第 4 节的"三轨道 + 分盘前置章节"结构(底座 = 01 / **分盘(安装前的前置章节)= 02** / **轨道 W = 03** / 轨道 L = 04 / 首启收敛 = 05 / 退役与救援 = 07)。
 
@@ -189,14 +189,14 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 | 文件 | 处置 |
 |---|---|
-| `linux/dbk-pkg.sh` | **apt/dpkg 语义的包助手**(已由它取代原子版的分层安装助手):`pkg_installed` 走 `dpkg-query -W`,`pkg_install` 走 `apt-get install -y`;保留 `DBK_SKIP_*` 与退出码语义。属库文件(C9d 白名单),被 05-5/05-6/05-7/05-8 等卡间接使用 |
+| `linux/dbk-pkg.sh` | **apt/dpkg 语义的包助手**(已由它取代原原子版的分层安装助手,后者已废弃):`pkg_installed` 走 `dpkg-query -W`,`pkg_install` 走 `apt-get install -y`;保留 `DBK_SKIP_*` 与退出码语义。属库文件(C9d 白名单),被 05-5/05-6/05-7/05-8 等卡间接使用 |
 | `linux/dbk-obs.sh` / `windows/dbk-obs.ps1` | **可观测性库**(报告与 JSON、日志落盘、失败三处可见与 errtrap,见第 2.1 节)。属库文件(C9d 白名单),分别被同侧的 `dbk-cli.sh` / `dbk-cli.ps1` source |
 | `windows/dbk-win-probe.ps1` | **轨道 W 的只读探测库**:分区布局读数、`templates/partitions.txt` 目标值解析、最大连续未分配间隙、系统版本/内部版本;被 `verify-windows-baseline.ps1`、`collect-l1.ps1` 与 07-9…07-13 五张退役卡 dot-source。属库文件(C9d 白名单),不登记进 `steps.tsv`、不被卡引用 |
 | `linux/verify-all.sh` / `windows/verify-all.ps1` | **验收总控执行器**:按 `08-verification.md` 的 A-F 逐项只读判定,汇总落 `baseline/08-verification.md`(每台设备副本)。**不绑定卡**——验收六组不是一张动作卡,故与库文件同列(C9d 白名单)、**不登记 `steps.tsv`**;对子脚本一律只传 `--check`/`--list` |
 | `linux/hardening.sh` | 逐项改为 apt/dpkg 语义(R1 变更前备份、R2 包级回退、R3 旧内核保留、R4 救援介质、R5 journald、R6 OOM/zram、R7 SSH、R8 保守更新、R9 SMART);`--check/--apply` 结构与"失败不中断"口径不变 |
 | `linux/graphics.sh` | 已由 akmods/自签密钥改为 **`ubuntu-drivers install` 装官方预签名包 + Wayland/PRIME 核对 + nouveau 兜底**(与卡 05-3 绑定) |
 | `linux/first-boot.sh` | 逐模块调用改为 `storage -> hardening -> mount-shared -> graphics`;摘要与退出码语义不变 |
-| **已删除**(原子版专属,已由包级回退与 snap 规避脚本取代) | `linux/dbk-ostree.sh`(分层安装)、`linux/dbk-rollback.sh`(部署级回滚)、`linux/graphics-mok.sh`(密钥注册);Ubuntu 上没有对应机制 |
+| **已删除**(原原子版专属,已废弃;已由包级回退与 snap 规避脚本取代) | `linux/dbk-ostree.sh`(分层安装)、`linux/dbk-rollback.sh`(部署级回滚)、`linux/graphics-mok.sh`(密钥注册);Ubuntu 上没有对应机制 |
 | 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受基础系统切换影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约 |
 
 **合计**:动作卡 **48 张**(01 四 + 02 四 + 03 九 + 04 四 + 05 十四 + 07 十三),对应**步骤脚本 46 个**——其中 `check-partition-plan.sh` 服务 02-3/04-2/07-5 三张卡,`verify-windows-baseline.ps1` 服务 03-1/07-4,`backup-esp.ps1` 服务 03-8/07-10,`verify-baseline.ps1`+`check-health.sh`+`check-signature.sh` 共服务 07-7;另有**库与总控 11 个**(两侧 `dbk-cli`、两侧 `dbk-obs`、`dbk-pkg.sh`、`dbk-win-probe.ps1`、`dbk.sh`、`dbk.ps1`、`verify-all.sh`、`verify-all.ps1`)、**仓库自检 4 个**(`check-docs.sh`、`check-docs-lib.sh`、`check-docs-repo.sh`、`check-scripts.sh`)与**步骤索引 2 个**(`linux/steps.tsv`、`windows/steps.tsv`)。
@@ -207,19 +207,19 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 2. **失败路径**:至少一处判据为假 → 退出码 1,且输出指明是哪一项;
 3. **dry-run 不改系统**:`--check` 运行后夹具目录的时间戳/内容零变化;
 4. **破坏性脚本额外**:缺 `--yes` 时退出码 64 且**不产生任何写操作**;后置断言失败时退出码 1 并打印复读结果;
-5. 夹具放在 `.superpowers/sdd/fedora-reshape/fixtures/<script>/`,用假的 `rpm`/`dnf`/`efibootmgr`/`lsblk`/`sgdisk`/`diskpart`/`bcdedit` 可执行文件注入 PATH(本条指步骤脚本夹具;check-docs 自检脚本自身的夹具是例外,已入库到 `scripts/repo/tests/check-docs/`,见第 4 节)。
+5. 夹具放在 `.superpowers/sdd/kubuntu/fixtures/<批次或脚本名>/`(**不入库**),用假的 `apt-get`/`dpkg`/`snap`/`efibootmgr`/`lsblk`/`sgdisk`/`diskpart`/`bcdedit` 可执行文件或同名桩函数注入(本条指步骤脚本夹具;check-docs 自检脚本自身的夹具是例外,已入库到 `scripts/repo/tests/check-docs/`,见第 4 节)。
 6. **失败必须可表现**(第 2.1 节,每条至少要有一个夹具):① 调了 `dbk_enable_errtrap` 的 `set -e` 脚本在命令失败时,stderr、`--log` 日志、`--json` 的 `checks[]` 三处都能看到 errtrap 条目与失败命令行;② 没调 errtrap 的脚本失败时,stderr 与 JSON 仍能看到失败项与原因(不允许只返回退出码);③ `--json` 模式下失败信息不丢失(`message` 有原因、`checks[]` 有失败项);④ 取值缺失/空值(`--log`、`--log ""`、`--step`)一律退 64 且零写。
 
 ## 8. 诚实说明:这次扩充的代价
 
 | 项 | 代价 |
 |---|---|
-| 规模 | 新增 **43 个脚本类文件**(其中 35 个是步骤脚本、4 个契约库);仓库脚本总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **59 个**;实施任务从 21 个增到约 29 个 |
+| 规模 | 新增 **46 个步骤脚本** + 两侧契约/可观测性库与两个总控入口;仓库脚本类文件总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **63 个**(46 步骤脚本 + 11 库与总控 + 4 仓库自检 + 2 步骤索引);实施任务从 21 个增到约 29 个 |
 | 审查 | 每个脚本都要过"实现 + 审查 + 修复轮",工作量约翻倍 |
-| **验证等级** | 这些脚本**全部无法在真机上验证**(无 Fedora/无第二台 Windows)→ 只有夹具级验证。文档与**脚本头**都必须标注"夹具级验证,真机未跑";`08-verification.md` 的参考设备首次真跑即是对全套脚本的首次真机验证 |
+| **验证等级** | 这些脚本**全部无法在真机上验证**(无 Kubuntu 装机环境 / 无第二台 Windows)→ 只有夹具级验证。文档与**脚本头**都必须标注"夹具级验证,真机未跑";`08-verification.md` 的参考设备首次真跑即是对全套脚本的首次真机验证 |
 | 收益 | 每步可自动判定(减少"照着文档敲错"),危险步骤有前置断言与复读(比人手工点更安全),卡与脚本双向绑定(C9)防脱钩 |
 
-明确接受的取舍:**用"约一倍的工作量"换"每步可自动判定 + 危险步骤有断言"**;不接受的是"为了脚本数量而写无法验证的自动化"——因此 S2 明确放弃 kickstart,人工步骤(固件开关、Anaconda、Windows 安装、激活动作)一律不做假自动化。
+明确接受的取舍:**用"约一倍的工作量"换"每步可自动判定 + 危险步骤有断言"**;不接受的是"为了脚本数量而写无法验证的自动化"——因此 S2 明确放弃无人值守安装,人工步骤(固件开关、Calamares、Windows 安装、激活动作)一律不做假自动化。
 
 ## 9. 变更历史
 
@@ -227,7 +227,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 |---|---|
 | 2026-09-18 | 初版:确立 S1 双模式型 / S2 L3 人工 + 前置后置脚本 / S3 危险三步的三条硬规则;统一 CLI 与退出码;卡↔脚本双向绑定(C9);总控入口与步骤索引;43 卡映射表(新增 35 个步骤脚本、共 41 个新文件);夹具测试五条;代价与验证等级说明 |
 | 2026-09-18 | 修复轮 2:check-docs 夹具套件入库到 `scripts/repo/tests/check-docs/`(版本化,换机器可复跑);路径含 `/tests/` 的文件豁免 C9b/C9c/C9d 与 check-scripts 扫描 |
-| 2026-09-19 | 与 `02-fedora-atomic-variant-design.md` 对齐:第 6 节映射表按原子版改写——卡号同步三轨道结构(原 03 的 4 张卡并入 02,编号 02-7…02-10;原 06 的 5 张卡并入 07,编号 07-9…07-13);卡 05-9 由"快照与回滚"改为"**部署回滚**"(删除 `snapshot.sh`/`set-snapshots.sh`,新增 `dbk-rollback.sh`);新增库文件 `dbk-ostree.sh`(取代 `dbk-pkg.sh`:分层安装 + `rpm-ostree status --json`);`graphics.sh`/`graphics-mok.sh` 改 rebase + MOK、`set-updates.sh` 改 `rpm-ostreed-automatic`、`upgrade-release.sh` 改 `rpm-ostree rebase`、`set-remote-health.sh`/`storage.sh` 改 rpm-ostree 语义;四个 PowerShell 脚本不受影响;第 8 节代价表按新表重算(34 个步骤脚本 / 40 个新文件 / 总数 56);第 2–5 节 CLI 契约与第 7 节夹具要求不动 |
+| 2026-09-19 | 与 `02-fedora-atomic-variant-design.md` 对齐(历史:该文档已被 `04-kubuntu-variant-design.md` 取代、只留作历史):第 6 节映射表按原子版改写(该口径已废弃,现行口径见第 6 节开头的状态说明)——卡号同步三轨道结构(原 03 的 4 张卡并入 02,编号 02-7…02-10;原 06 的 5 张卡并入 07,编号 07-9…07-13);卡 05-9 由"快照与回滚"改为"**部署回滚**"(删除 `snapshot.sh`/`set-snapshots.sh`,新增 `dbk-rollback.sh`);新增库文件 `dbk-ostree.sh`(取代 `dbk-pkg.sh`:分层安装 + `rpm-ostree status --json`);`graphics.sh`/`graphics-mok.sh` 改 rebase + MOK、`set-updates.sh` 改 `rpm-ostreed-automatic`、`upgrade-release.sh` 改 `rpm-ostree rebase`、`set-remote-health.sh`/`storage.sh` 改 rpm-ostree 语义;四个 PowerShell 脚本不受影响;第 8 节代价表按新表重算(34 个步骤脚本 / 40 个新文件 / 总数 56);第 2–5 节 CLI 契约与第 7 节夹具要求不动 |
 | 2026-09-20 | 修复轮 1(任务 1 审查修正 + 用户新增硬要求 O-1):第 2 节新增 **2.1 可观测性**——失败不得只给退出码、三处可见(stderr / `--log` / JSON `checks[]`)、opt-in 的 `dbk_enable_errtrap`、库层不吞 stderr、PS 侧 UTF-8 输出;新增两侧可观测性库 `scripts/linux/dbk-obs.sh` 与 `scripts/windows/dbk-obs.ps1`(第 4 节 C9d 白名单与 `check-docs-lib.sh` 的 WL 两处同步);CLI 取值错误(`--log`/`--step` 缺值或空值)改为用法错误 64 且不落盘(不再经 `die()`);破坏性脚本必须在脚本头声明 `# 破坏性:1`,由库层在执行前拦 `--apply` 缺 `--yes`;卡头支持逗号列表(一脚本服务多张卡)与行首 BOM,C9b/C9d 同步升级并新增破坏性列、步骤号一致性、重复步骤号三项交叉校验;`--json` 增加 `message` 字段并在判据为空时补一条失败项;库不再替调用方打开 `errexit`;`--log` 缺省口径明确为“库不落盘、需要时由步骤脚本调 `dbk_log_default`/`Set-DbkLogDefault`”;第 6 节增库文件行与重算合计(42 个新文件 / 总数 58);第 7 节夹具新增第 6 条“失败必须可表现”;夹具套件新增 4 个样例仓库(带 BOM 的 `.ps1` 卡头、多卡列表头、破坏性列非法、步骤号重复) |
 | 2026-09-20 | **用户撤回指令**:用户声明触发 2.1 节的那条指令为错误输入并撤回其相关生成内容。裁定:2.1 节与两侧可观测性库**保留为工程约定**(非用户需求,已在 2.1 开头加归因说明);同批提交中来自**审查者发现**的修复(C-1、I-1…I-5、M-1…M-5、F3/F5…F8)**不受影响**。 |
 | 2026-09-20 | 修复轮 2(任务 1 收尾):errtrap 触发后进程必须以 1 退出(trap 报完即 `exit "$DBK_FAIL"`,不再泄漏失败命令自身状态;JSON 只输出一次);`dbk_enable_errtrap` 新增 `errexit` 断言(未开 `set -e` 误用 → 64),`dbk_report` 新增第二道防线(已有 errtrap 条目时拒绝 PASS → 64);PS 侧 `Get-DbkHeaderField` 改 `-CaseSensitive`,与 C9b 的 `CARDRE` 对齐;第 2.1 节补 errtrap 退出码/误用防护/PS 两条已知差异(`-Log`/`-Step` 缺值被 PS 参数绑定拦下退 1、空串被归一成“未给”)与 `.gitattributes` 行尾约定;`check-docs-repo.sh` 的重复步骤号改报真实行号;两侧夹具新增 6 条断言(errtrap 退出码 2、未开 `set -e` 误用 1、errtrap 后报 PASS 1、PS errtrap/opt-in 各 1) |
