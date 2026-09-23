@@ -9,6 +9,10 @@
 #     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-all.ps1 -Check
 #   -BaselineDir(缺省 baseline)/-OutDir(缺省与 -BaselineDir 同;汇总写在它下面)/-BaselineScript/-FirmwareText/-GitRoot
 #   为夹具注入点。本文件必须保存为 UTF-8 with BOM。夹具级验证,真机未跑。
+#   -Step 语义(执行器专用,真源 docs/design/03 第 5 节):取**验收条目关联的卡号**(NN-K),不是第 2 节的
+#   「脚本头卡号集合成员判断」——本执行器不绑卡,没有「# 对应卡:」头。合法值 = 本脚本条目表里出现过的卡号
+#   (非法时打印可用集合并非零退出 64);`08-A-F` = 六组全判(缺省)。给了 -Step 时**只判定关联到该卡号的条目**,
+#   其余条目记「跳过」、不计入退出码(退出码语义不变:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项)。
 [CmdletBinding()]
 param(
   [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes, [switch]$ConfirmManual,
@@ -19,8 +23,11 @@ $ErrorActionPreference = 'Stop'
 $sourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $sourceDir '..\..'))
 . (Join-Path $sourceDir 'dbk-cli.ps1')
+. (Join-Path $sourceDir 'dbk-win-probe.ps1')
 Parse-DbkArgs -Check:$Check -Apply:$Apply -Json:$Json -Yes:$Yes -Step $Step -Log $Log -Extra $Extra
-$script:DbkStep = '08-A-F'
+# -Step:缺省 '08-A-F' = 六组全判;其它值在条目表建好后按「关联卡号」过滤(非法值 -> 64,见下面的过滤段)。
+if (-not $script:DbkStep) { $script:DbkStep = '08-A-F' }
+$script:StepSel = ''; if ($script:DbkStep -ne '08-A-F') { $script:StepSel = $script:DbkStep }
 if ($script:DbkMode -eq 'apply') { Set-DbkLogDefault -Name 'verify-all' }
 if (-not $BaselineScript) { $BaselineScript = Join-Path $repoRoot 'scripts\windows\verify-baseline.ps1' }
 if (-not $GitRoot) { $GitRoot = $repoRoot }
@@ -29,18 +36,13 @@ if (-not $OutDir) { $OutDir = $base }
 $summary = Join-Path ([System.IO.Path]::GetFullPath($OutDir)) '08-verification.md'
 $script:Items = New-Object System.Collections.ArrayList
 $script:nPass = 0; $script:nFail = 0; $script:nManual = 0; $script:nSkip = 0
-function Get-DbkTag {
-  param([string]$State)
-  switch ($State) {
+function Get-DbkTag { param([string]$State); switch ($State) {
     'pass' { return 'PASS' } 'fail' { return 'FAIL' } 'skip' { return '跳过' }
-    default { if ($ConfirmManual) { return '需人工(已确认)' } return '需人工' }
-  }
-}
+    default { if ($ConfirmManual) { return '需人工(已确认)' } return '需人工' } } }
 function Add-VerifyItem {
+  # 只登记;打印与计数在「-Step 过滤与计数」段(否则 -Step 过滤后的结论会与已打印的行不一致)。
   param([string]$Id, [string]$Group, [string]$State, [string]$Reason, [string]$Card)
   [void]$script:Items.Add([pscustomobject]@{ Id = $Id; Group = $Group; State = $State; Reason = $Reason; Card = $Card })
-  if ($State -eq 'pass') { $script:nPass++ } elseif ($State -eq 'fail') { $script:nFail++ } elseif ($State -eq 'manual') { $script:nManual++ } else { $script:nSkip++ }
-  if (-not $script:DbkJson) { Write-Host ('[' + (Get-DbkTag $State) + '] ' + $Id + ' ' + $Reason) }
 }
 function Add-Manual { param([string]$Id, [string]$Group, [string]$Reason, [string]$Card) Add-VerifyItem $Id $Group 'manual' $Reason $Card }
 function Get-VerifyState { param([string]$Id) foreach ($i in $script:Items) { if ($i.Id -eq $Id) { return $i.State } } return '' }
@@ -70,39 +72,25 @@ function Add-BaselineItem {
   elseif ($v -eq '通过') { Add-VerifyItem $Id 'A' 'pass' ($Lab + ':基线巡检判为通过') $Card }
   else { Add-VerifyItem $Id 'A' 'fail' ($Lab + ':基线巡检判为需人工介入,与 L2 基线不一致;处置见 07-6') $Card }
 }
-# bcdedit /enum firmware 文本 → BootOrder 的 GUID 序列(含跨行续行),每项 = @{Guid;Desc}。
+# 固件枚举文本 → @{Order;Desc;Path}(BootOrder 的 GUID 序列含跨行续行);解析实现见 dbk-win-probe.ps1。
 function Get-FwOrder {
   $t = ''
   if ($FirmwareText) { if (Test-Path -LiteralPath $FirmwareText) { $t = [System.IO.File]::ReadAllText($FirmwareText) } }
   else { try { $t = (& bcdedit /enum firmware 2>&1 | Out-String) } catch { $t = '' } }
-  if ($t -match '拒绝访问|Access is denied') { return @() }
-  $guids = @(); $desc = @{}; $cur = ''; $inOrder = $false
-  foreach ($line in ($t -split "`r?`n")) {
-    if ($line -match '^\s*(identifier|标识符)\s+(\{[^}]+\})') { $cur = $Matches[2]; continue }
-    if ($cur -and $line -match '^\s*(description|描述)\s+(\S.*?)\s*$') { $desc[$cur] = $Matches[2] }
-    if ($line -match '^\s*(displayorder|显示顺序|启动顺序)\s*(.*)$') {
-      $inOrder = $true
-      foreach ($g in [regex]::Matches($Matches[2], '\{[^}]+\}')) { $guids += $g.Value }
-      continue
-    }
-    if ($inOrder) {
-      if ($line -match '^\s*(\{[^}]+\}\s*)+$') { foreach ($g in [regex]::Matches($line, '\{[^}]+\}')) { $guids += $g.Value } }
-      elseif ($line.Trim() -and $line -notmatch '^\s*[-=]+\s*$') { $inOrder = $false }
-    }
-  }
-  return @($guids | ForEach-Object { [pscustomobject]@{ Guid = $_; Desc = [string]$desc[$_] } })
+  return (Get-DbkFwInfo -Text $t)
 }
 
 Invoke-BaselineCheck
-$fw = @(Get-FwOrder)
+$fw = Get-FwOrder
+$fo = @($fw.Order)
 # ===== A 引导安全组 =====
 Add-BaselineItem A1 '07-7' '① BootOrder 首位仍是 Windows Boot Manager' '① BootOrder 首位'
 Add-Manual A2 A '连续重启 3 次(不按键、不选菜单),每次都自动进 Windows' '03-8'
 Add-BaselineItem A3 '07-7' '② \EFI\Microsoft\ 与 L2 基线逐文件一致' '② ESP\EFI\Microsoft\ 比对'
 Add-BaselineItem A4 '07-7' '③ {bootmgr} 的 path 与基线一致' '③ {bootmgr} 的 path'
-if ($fw.Count -eq 0) { Add-Manual A5 A '读不到 bcdedit /enum firmware(非管理员或非 UEFI);手动核对:BootOrder 末位是否为 ubuntu' '04-3' }
-elseif ($fw[$fw.Count - 1].Desc -match 'ubuntu') { Add-VerifyItem A5 A 'pass' ('BootOrder 末位是 Ubuntu 条目(' + $fw[$fw.Count - 1].Desc + ')') '04-3' }
-else { Add-VerifyItem A5 A 'fail' ('BootOrder 末位不是 Ubuntu 条目(实际:' + $fw[$fw.Count - 1].Desc + ');处置见 04-3') '04-3' }
+if ($fo.Count -eq 0) { Add-Manual A5 A '读不到 bcdedit /enum firmware(非管理员或非 UEFI);手动核对:BootOrder 末位是否为 ubuntu' '04-3' }
+elseif ([string]$fw.Desc[$fo[$fo.Count - 1]] -match 'ubuntu') { Add-VerifyItem A5 A 'pass' ('BootOrder 末位是 Ubuntu 条目(' + [string]$fw.Desc[$fo[$fo.Count - 1]] + ')') '04-3' }
+else { Add-VerifyItem A5 A 'fail' ('BootOrder 末位不是 Ubuntu 条目(实际:' + [string]$fw.Desc[$fo[$fo.Count - 1]] + ');处置见 04-3') '04-3' }
 Add-Manual A6 A '复核全部执行记录:没有任何一次 bcdedit /set {fwbootmgr} displayorder 或 efibootmgr -o 调整永久顺序' '07-7'
 if ((Get-VerifyState 'A1') -eq 'pass' -and (Get-VerifyState 'A3') -eq 'pass') { Add-VerifyItem A7 A 'pass' '两个 ESP 互不干扰:Windows ESP 逐文件与基线一致且 BootOrder 首位仍是 Windows' '07-7' }
 elseif ((Get-VerifyState 'A1') -eq 'fail' -or (Get-VerifyState 'A3') -eq 'fail') { Add-VerifyItem A7 A 'fail' '两个 ESP 不再互不干扰:Windows ESP 或 BootOrder 首位已被改动;处置见 07-6' '07-6' }
@@ -160,6 +148,19 @@ Add-Manual F6 F '在 Kubuntu 侧 systemctl is-active sshd 应为 active,并从�
 Add-Manual F7 F '在 Kubuntu 侧 systemd-oomd 为 active 且 zramctl 有 /dev/zram0' '05-6'
 Add-Manual F8 F '在 Kubuntu 侧 smartd 为 active 且 smartctl -H 报 PASSED' '05-8'
 Add-Manual F9 F '在 Kubuntu 侧 fstab 非 root 条目都带 nofail,/boot/efi 不带' '05-1'
+
+# ===== -Step 过滤与计数(执行器 -Step 语义:见脚本头与设计 03 第 5 节)=====
+$known = @($script:Items | ForEach-Object { $_.Card } | Sort-Object -Unique)
+if ($script:StepSel -and ($known -notcontains $script:StepSel)) {
+  Show-DbkUsage
+  Write-DbkNote ('用法错误: -Step ' + $script:StepSel + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + ($known -join '、') + ';08-A-F = 六组全判(缺省)')
+  exit $script:DBK_USAGE
+}
+foreach ($i in $script:Items) {
+  if ($script:StepSel -and $i.Card -ne $script:StepSel) { $i.State = 'skip'; $i.Reason = ('未选中(-Step ' + $script:StepSel + ' 只判卡 ' + $script:StepSel + '):' + $i.Reason) }
+  if ($i.State -eq 'pass') { $script:nPass++ } elseif ($i.State -eq 'fail') { $script:nFail++ } elseif ($i.State -eq 'manual') { $script:nManual++ } else { $script:nSkip++ }
+  if (-not $script:DbkJson) { Write-Host ('[' + (Get-DbkTag $i.State) + '] ' + $i.Id + ' ' + $i.Reason) }
+}
 
 # ===== 汇总与落盘 =====
 if ($script:nFail -gt 0) { $overall = 'fail'; $concl = '不通过(自动判定失败 ' + $script:nFail + ' 项;逐条见下表)' }

@@ -34,7 +34,7 @@
 | `--yes` | 破坏性动作(删分区、清 NVRAM、改引导顺序、写 fstab)必需;缺省时打印将执行的命令与影响并要求加上 |
 | `--json` | 机器可读输出(供总控与验收汇总消费);字段:`step`、`status`、`message`(结论与失败原因的文本)、`checks[]`、`actions[]`、`changed` |
 | `--log <path>` | 日志路径;**不给就不落盘**——库层不主动建 `/var/log/dbk/`,也不向默认路径写任何东西。需要缺省日志的步骤脚本在 source 库之后显式调 `dbk_log_default <脚本名>`(Linux,得 `/var/log/dbk/<脚本名>.log`)或 `Set-DbkLogDefault -Name <脚本名>`(Windows,得 `%LOCALAPPDATA%\dbk\logs\<脚本名>.log`);落这份日志是**步骤脚本**的决定,不是库的决定 |
-| `--step <NN-K>` | 显式声明本脚本服务的卡号;**集合成员判断**:必须落在脚本头 `# 对应卡:` 声明的卡号集合里(支持一脚本服务多张卡的逗号列表),否则报用法错误退出 |
+| `--step <NN-K>` | 显式声明本脚本服务的卡号;**集合成员判断**:必须落在脚本头 `# 对应卡:` 声明的卡号集合里(支持一脚本服务多张卡的逗号列表),否则报用法错误退出。**执行器例外**:两侧 `verify-all.*` 不绑卡(没有 `# 对应卡:` 头),它们的 `--step`/`-Step` 语义见第 5 节 |
 
 **退出码语义(全仓统一,PowerShell 与 Bash 一致)**
 
@@ -45,6 +45,13 @@
 | 2 | `需人工`(脚本无法判定的项,必须人看;不视为失败) |
 | 9 | 跳过(显式 `DBK_SKIP_*` 或环境不适用,如非 Linux 上跑 Linux 脚本) |
 | 64 | 用法错误(参数缺失、`--yes` 未给、`--step` 冲突) |
+
+**缺省只读 + `-Yes` 门槛(2026-09-24 补全,与实现逐字一致)**
+
+- `-Check`/`--check` 是**缺省**且零写:不给 `-Check` 也不给 `-Apply` 时脚本只做只读判定——**任何脚本都不许“默认就执行”**(硬规则 4);`-Apply`/`--apply` 才执行。
+- 凡会改动系统状态的写动作都必须 `-Apply -Yes`/`--apply --yes`:`-Yes` 门槛不只覆盖删分区 / 清 NVRAM / 写 fstab / 重建 `\EFI\Microsoft\`,也覆盖**一次性引导切换**(`bcdedit /set {fwbootmgr} bootsequence <GUID>`、`efibootmgr -n <num>`)——它们改的是固件启动项,静默执行会把下次重启引到错误条目。
+- 缺 `-Yes` 时按 **64** 退出且**零写**(一个命令都不调);声明了 `# 破坏性:1` 的脚本由库层在解析参数时拦下(不指望作者记得调 `Assert-DbkYes`/`dbk_need_yes`),条件性破坏动作仍在动作前调后者。
+- `-WhatIf` 只在 `scripts/windows/set-bootnext.ps1` 保留(兼容手册与 FAQ 的既有写法),语义**等价于 `-Check`**(只打印将执行的命令,零写),与 `-Apply` 同时给按用法错误 64 处理。
 
 **硬规则**
 
@@ -120,6 +127,13 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | `scripts/windows/dbk.ps1 <step> [-Apply] [-Yes] [-Json]` | Windows 侧步骤分发(读步骤索引 → 调对应脚本 → 汇总输出) | 只做分发与汇总,**不含任何业务逻辑**;拒绝未知步骤名 |
 | `scripts/linux/dbk.sh <step> [--apply] [--yes] [--json]` | Kubuntu 侧同上 | 同上 |
 | `windows/verify-all.ps1` / `linux/verify-all.sh` | 按 `08-verification.md` 的 A–F 逐项自动判定,汇总写 `baseline/08-verification.md`(每台设备副本) | **执行器**:只做判定与汇总,按`-out-dir`/`--out-dir` 落盘;**不得自动执行任何 `--apply`**(对所有子脚本只允许 `--check` 与只读子命令);不进卡映射表、不登记 steps.tsv(与库文件同列,见第 6 节 C9d 白名单) |
+
+**执行器(`verify-all.sh` / `verify-all.ps1`)的 `-Step` 语义(2026-09-24 补,与实现逐字一致)**:执行器**不绑卡**(不进卡映射表、不登记 `steps.tsv`、没有 `# 对应卡:` 头),所以第 2 节的“脚本头卡号集合成员判断”对它们**不适用**——不能靠沉默豁免,故在此写明:
+
+- `--step`/`-Step` 取**验收条目所关联的卡号**(`NN-K`;`08` 是 08-verification.md 自身的记录项)。可用集合 = 执行器自带条目表里出现过的卡号(去重排序),**非法取值时打印可用集合并以 64 退出**(不再静默忽略)。
+- 给了合法 `-Step` 时**只判定关联到该卡号的条目**,其余条目记「跳过」、不计入退出码;退出码语义不变:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 `--confirm-manual`/`-ConfirmManual` 后人工项不再计入退出码)。
+- 不给 `-Step` 时判定全部条目;显式写 `08-A-F` 与缺省等价(“六组全判”),它是唯一不以卡号取值的合法写法。
+- 两侧现状:`scripts/windows/verify-all.ps1` 已按上述语义实现;**Kubuntu 侧 `scripts/linux/verify-all.sh` 尚未做过滤与校验**(只认 `08-A-F` 的“六组全判”,其它取值按全判处理),其 `-Step` 过滤待后续批次同步——在此明写以免当成“已豁免”。
 
 步骤索引文件:`scripts/windows/steps.tsv`、`scripts/linux/steps.tsv`(列:步骤号、脚本路径、是否破坏性、说明)。总控读它分发,C9d 也校验它的一致性:脚本路径必须存在且属本侧、本侧步骤脚本必须登记进索引、破坏性列 ∈ {0,1}、索引步骤号必须落在脚本头卡号集合里、同一 (步骤号, 脚本路径) 对不得重复(同一步骤号可以有多行 = 一张卡对应多个脚本;一脚本服务多张卡时按步骤号各占一行,同一脚本路径也允许出现多行)。**索引行不是装饰**:它既是总控的分发表,也是“这一步会不会改系统”的第二道记录。
 
@@ -197,7 +211,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | `linux/graphics.sh` | 已由 akmods/自签密钥改为 **`ubuntu-drivers install` 装官方预签名包 + Wayland/PRIME 核对 + nouveau 兜底**(与卡 05-3 绑定) |
 | `linux/first-boot.sh` | 逐模块调用改为 `storage -> hardening -> mount-shared -> graphics`;摘要与退出码语义不变 |
 | **已删除**(原原子版专属,已废弃;已由包级回退与 snap 规避脚本取代) | `linux/dbk-ostree.sh`(分层安装)、`linux/dbk-rollback.sh`(部署级回滚)、`linux/graphics-mok.sh`(密钥注册);Ubuntu 上没有对应机制 |
-| 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受基础系统切换影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约 |
+| 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受基础系统切换影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约;`set-bootnext` 已在 2026-09-24 补齐(见第 9 节末行),`backup-esp` 早已带 `-Check`;`preflight` 与 `verify-baseline` **仍未补**(见第 9 节末行“已知待办”) |
 
 **合计**:动作卡 **48 张**(01 四 + 02 四 + 03 九 + 04 四 + 05 十四 + 07 十三),对应**步骤脚本 46 个**——其中 `check-partition-plan.sh` 服务 02-3/04-2/07-5 三张卡,`verify-windows-baseline.ps1` 服务 03-1/07-4,`backup-esp.ps1` 服务 03-8/07-10,`verify-baseline.ps1`+`check-health.sh`+`check-signature.sh` 共服务 07-7;另有**库与总控 11 个**(两侧 `dbk-cli`、两侧 `dbk-obs`、`dbk-pkg.sh`、`dbk-win-probe.ps1`、`dbk.sh`、`dbk.ps1`、`verify-all.sh`、`verify-all.ps1`)、**仓库自检 4 个**(`check-docs.sh`、`check-docs-lib.sh`、`check-docs-repo.sh`、`check-scripts.sh`)与**步骤索引 2 个**(`linux/steps.tsv`、`windows/steps.tsv`)。
 
@@ -235,3 +249,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 2026-09-20 | **轨道 W 全量收口**(实施计划任务 7–10):7 个新步骤脚本(`windows/verify-windows-baseline.ps1`、`windows/disable-faststartup.ps1`、`windows/redirect-known-folders.ps1`、`windows/check-activation.ps1`、`windows/collect-l1.ps1`、`windows/check-gate.ps1`、`windows/collect-l2.ps1`)+ 1 个库(`windows/dbk-win-probe.ps1`);`windows/preflight.ps1` 卡头 03-7 → 03-6、`windows/backup-esp.ps1` 补 `# 对应卡:03-8` 与 `-Check`;`windows/steps.tsv` 登记 03-1…03-9(原有 preflight / backup-esp 两行按新卡号改写,不新增重复行);手册 `docs/03-windows.md` 由 `docs/02-windows.md` 改名并吸收 `docs/03-preflight.md`(9 卡 + 1 值表,后者删除) |
 | 2026-09-21 | **轨道 L 的 L4 收口(B2 修复轮):C9d 唯一性放宽为 (步骤号, 脚本路径) 对**——第 4 节 C9d 行与第 5 节步骤索引段同步改写,并写明总控的多行执行与聚合规则;`check-docs-repo.sh` 的重复检测改按 (步骤号, 脚本) 对报错(夹具新增 `c9d-multi` 正例,`c9d-dup` 改为同对重复);两侧总控 `scripts/linux/dbk.sh` / `scripts/windows/dbk.ps1` 支持同一步骤号多行(按索引行顺序逐行执行、聚合退出码、破坏性门槛逐行判定),两侧总控夹具各新增 4 条多行断言;`scripts/linux/steps.tsv` 登记 `graphics-mok.sh`(05-3)、`set-updates.sh`(05-7)与卡 05-13 的 `first-boot.sh`/`hardening.sh`,两个脚本头补 `# 对应卡:05-13`;`windows/verify-baseline.ps1` 补回 `# 对应卡:07-7` |
 | 2026-09-21 | **退役与救援收口(批次 C1,实施计划任务 18–21)**:第 6 节映射表的 13 张退役与救援卡全部落地,新增 10 个步骤脚本(`scripts/linux/triage.sh`、`scripts/linux/gen-grub-rescue-commands.sh`、`scripts/linux/check-signature.sh`、`scripts/windows/repair-windows-boot.ps1`、`scripts/windows/restore-esp.ps1`、`scripts/windows/restore-boot-order.ps1`、`scripts/windows/delete-linux-partition.ps1`、`scripts/windows/cleanup-nvram.ps1`、`scripts/windows/extend-data-partition.ps1`、`scripts/windows/disable-linux-entry.ps1`);其中 07-10 备份现状复用既有 `scripts/windows/backup-esp.ps1`(`-OutDir D:\dbk-l5-backup`,脚本头卡号扩为 03-8,07-10)、07-12 由 cleanup-nvram 与 extend-data-partition 两个脚本共卡、07-7 由 verify-baseline / check-signature / dbk-rollback 三个脚本共卡;库 `scripts/windows/dbk-win-probe.ps1` 追加固件条目与 `{bootmgr}` 断言(供 07-9…07-13 复用,白名单不变);两侧 `steps.tsv` 登记退役与救援的 11 行(含 07-12 的两行);`docs/07-rescue.md` 全量改写为 13 张场景卡并删除 `docs/06-decommission.md`(引用清扫后仅设计文档留历史叙述) |
+| 2026-09-24 | **修复轮(批次 K5:补齐两处契约缺口)**:① `scripts/windows/set-bootnext.ps1` 按第 2 节改造——补 `-Check`(缺省、只读)/`-Apply`/`-Yes`/`-Json`/`-Log`/`-Step`,脚本头加 `# 破坏性:1`(一次性引导切换算破坏性写),`-Apply` 缺 `-Yes` 由库层退 64 且零写;`-WhatIf` 保留为 `-Check` 的等价写法(与 `-Apply` 互斥 64);`-Check` 判定 = 目标存在可设 0 / 找不到目标或固件不支持 1 / 非管理员读不到 2 / 参数非法 64;固件枚举与后置断言改用 `scripts/windows/dbk-win-probe.ps1`(不再自带一份解析);`windows/steps.tsv` 的 04-1 破坏性列 0 -> 1。② `scripts/windows/verify-all.ps1` 落实 `-Step`(第 5 节新段):取验收条目关联卡号,非法值 64 并打印可用集合,合法值只判定该卡号条目、其余记「跳过」。③ 第 2 节新增“缺省只读 + `-Yes` 门槛”段。已知待办(本批未动,见 K5 报告):`preflight.ps1` 与 `verify-baseline.ps1` 仍不带 `-Check`/`-Apply`/`-Json`/`-Log`(`dbk.ps1` 转发这些开关时参数绑定失败),补齐它们会改动已写入手册的输出与缺省写行为,需与手册同步的单独批次 |

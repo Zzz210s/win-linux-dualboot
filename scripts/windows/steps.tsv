@@ -15,7 +15,7 @@
 03-7	scripts/windows/check-gate.ps1	0	读闸门结论:列红项并给退出码(只有它判能否进入 L3)
 03-8	scripts/windows/backup-esp.ps1	0	基线备份:ESP 全量文件树 + manifest.sha256(-Check 校验已有备份)
 03-9	scripts/windows/collect-l2.ps1	0	核对 L2 四件产物齐全(报告/ESP 备份/固件启动项/分区快照)
-04-1	scripts/windows/set-bootnext.ps1	0	一次性从 U 盘启动(-Device USB;写 bootsequence,不改 BootOrder)
+04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(-Device USB -Check / -Apply -Yes;写 bootsequence,不改 BootOrder)
 07-3	scripts/windows/repair-windows-boot.ps1	1	Windows 侧修引导:mountvol + bcdboot 重建 \EFI\Microsoft\(破坏性,需 -Yes)
 07-6	scripts/windows/restore-esp.ps1	1	基线回滚:从 02-esp-backup 逐文件比对 manifest 复原 \EFI\Microsoft\(破坏性,需 -Yes)
 07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线
