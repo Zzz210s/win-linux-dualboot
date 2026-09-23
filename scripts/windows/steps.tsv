@@ -1,6 +1,6 @@
 步骤号	脚本路径	破坏性(0/1)	说明
 01-1	scripts/windows/check-firmware.ps1	0	固件核对:Secure Boot 与 VMD/RAID 推断 + 固件界面人工核对清单
-01-2	scripts/windows/verify-install-media.ps1	0	安装介质校验:Fedora CHECKSUM 比对 + Windows ISO 来源声明 + 可移动盘列举
+01-2	scripts/windows/verify-install-media.ps1	0	安装介质校验:Kubuntu ISO SHA256 比对 + Windows ISO 来源声明 + 可移动盘列举
 01-3	scripts/windows/preflight.ps1	0	核对目标盘:preflight.ps1 -Only target-disk(磁盘段)
 01-4	scripts/windows/collect-l0.ps1	0	落 L0 产物:写 baseline/00-firmware.md(BootOrder 首位原值)
 02-1	scripts/windows/check-partition-layout.ps1	0	分盘总则:三种轨道的目标布局只读核对
@@ -21,7 +21,7 @@
 07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线
 07-9	scripts/windows/restore-boot-order.ps1	1	归位引导顺序:只用一次性 bootsequence(不改 BootOrder;永久归位靠固件设置界面)
 07-10	scripts/windows/backup-esp.ps1	0	L5 退役备份现状:手动执行 -OutDir D:\dbk-l5-backup(仓库外;不要覆盖 baseline/)
-07-11	scripts/windows/delete-linux-partition.ps1	1	删 Fedora 分区:按分区号/GPT GUID 精确删除(拒绝 Windows ESP/C:/D:/MSR/WinRE)
-07-12	scripts/windows/cleanup-nvram.ps1	1	清 NVRAM:删除 fedora 固件启动条目(只删条目,不改 BootOrder)
+07-11	scripts/windows/delete-linux-partition.ps1	1	删 Ubuntu 分区:按分区号/GPT GUID 精确删除(拒绝 Windows ESP/C:/D:/MSR/WinRE)
+07-12	scripts/windows/cleanup-nvram.ps1	1	清 NVRAM:删除 ubuntu 固件启动条目(只删条目,不改 BootOrder)
 07-12	scripts/windows/extend-data-partition.ps1	1	可选扩容:把腾出的未分配空间扩给 D:(不是 C:)
-07-13	scripts/windows/disable-linux-entry.ps1	1	只停用 Fedora 启动条目:不删条目、不删分区
+07-13	scripts/windows/disable-linux-entry.ps1	1	只停用 Ubuntu 启动条目:不删条目、不删分区

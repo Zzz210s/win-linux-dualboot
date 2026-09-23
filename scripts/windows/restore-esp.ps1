@@ -11,9 +11,9 @@
   指定或自动挑 S/T/U/V/W 中空闲的)。备份源不一致时**不覆盖** ESP(设计 4.8 第三选择),差异逐条打印后以 64 退出
   (用 64 同时满足「不一致 -> FAIL 且不覆盖」)。非管理员会话 -> 2(需人工):mountvol /s 要求管理员。
   判据:只复制清单里 EFI/Microsoft/ 的文件;复制后复读 ESP 上 \EFI\Microsoft\ 与清单一致(允许比清单多出 BCD.LOG/
-  BCD.LOG1/BCD.LOG2 这类事务日志,单列「预期新增」);\EFI\fedora\ 执行前后文件清单必须完全一致(L2 基线不含它,
+  BCD.LOG1/BCD.LOG2 这类事务日志,单列「预期新增」);\EFI\ubuntu\ 执行前后文件清单必须完全一致(L2 基线不含它,
   本脚本绝不创建/还原;本来不存在则写「不存在,未创建」)。不一致 -> FAIL(1)并打印复读结果。
-  纪律:不改 {bootmgr} 的 path、不用 displayorder/efibootmgr -o、不碰 \EFI\fedora\;ESP 只临时挂载,finally 卸载。
+  纪律:不改 {bootmgr} 的 path、不用 displayorder/efibootmgr -o、不碰 \EFI\ubuntu\;ESP 只临时挂载,finally 卸载。
   夹具钩子(仅离线验证,真机留空):DBK_MOUNTVOL_EXE(假 exe)、DBK_ESP_LETTER(替代 -EspLetter)、DBK_IS_ADMIN
   (1=强制管理员,0=强制非管理员)、DBK_ESP_ROOT(把 ESP 当作普通目录,替代 mountvol;此时不调 mountvol)。
   未在真机验证(夹具级验证,真机未跑);本文件 UTF-8 with BOM;清单格式与 backup-esp.ps1 一致(`<SHA256>  <相对路径>`)。
@@ -116,13 +116,13 @@ if (@($diffs).Count -gt 0) {
 Add-DbkCheck '管理员权限: 是'
 Add-DbkCheck ('备份树校验通过:清单 ' + $entries.Count + ' 行(其中 EFI/Microsoft/ ' + $want.Count + ' 个文件),逐条哈希与清单一致、无清单外文件')
 Add-DbkCheck ('还原来源:' + $bak + ';目标:' + $to)
-Add-DbkCheck ('将逐个复制 ' + $want.Count + ' 个文件;不触碰 \EFI\fedora\(L2 基线不含它,绝不还原)')
+Add-DbkCheck ('将逐个复制 ' + $want.Count + ' 个文件;不触碰 \EFI\ubuntu\(L2 基线不含它,绝不还原)')
 if ($espHook) { Add-DbkAction ('夹具模式:ESP 当作普通目录 ' + $espRoot + ',不调用 mountvol') }
 else { Add-DbkAction ('mountvol ' + $mp + ' /s -> 复制 -> 复读比对 -> mountvol ' + $mp + ' /d') }
 foreach ($e in $want) { Add-DbkAction ('复制 ' + $e.Rel) }
 if ($script:DbkMode -eq 'check') {
   Write-DbkNote '-Check 只做校验与清单打印,未挂载、未写盘(零写);确认无误后加 -Apply -Yes 重跑。'
-  Write-DbkExit -Status PASS -Message ('备份树校验通过(清单 ' + $entries.Count + ' 行,EFI/Microsoft/ ' + $want.Count + ' 个文件);-Check 零写,将把这 ' + $want.Count + ' 个文件复制到 ' + $to + ',不改 {bootmgr} 的 path、不碰 \EFI\fedora\')
+  Write-DbkExit -Status PASS -Message ('备份树校验通过(清单 ' + $entries.Count + ' 行,EFI/Microsoft/ ' + $want.Count + ' 个文件);-Check 零写,将把这 ' + $want.Count + ' 个文件复制到 ' + $to + ',不改 {bootmgr} 的 path、不碰 \EFI\ubuntu\')
 }
 $bad = @(); $mounted = $false; $boom = $false
 try {
@@ -135,7 +135,7 @@ try {
     if (-not (Test-Path -LiteralPath ($mp + '\EFI'))) { throw ('挂载 ' + $mp + ' 后看不到 \EFI,可能不是 ESP;已中止,未复制任何文件') }
     $espRoot = $mp + '\'
   }
-  $fedBefore = @(Get-DbkTreeList $espRoot 'EFI\fedora')
+  $uBefore = @(Get-DbkTreeList $espRoot 'EFI\ubuntu')
   foreach ($e in $want) {
     $src = Join-Path $bak ($e.Rel -replace '/', '\')
     $dst = Join-Path $espRoot ($e.Rel -replace '/', '\')
@@ -167,13 +167,13 @@ try {
     }
     if (@($bad).Count -eq 0) { Add-DbkCheck ('复读通过:ESP 上 \EFI\Microsoft\ 的 ' + $want.Count + ' 个文件与清单逐文件一致') }
   }
-  $fedAfter = @(Get-DbkTreeList $espRoot 'EFI\fedora')
-  if ($fedBefore.Count -eq 0) {
-    if ($fedAfter.Count -gt 0) { $bad += ('复读:\EFI\fedora\ 原本不存在,执行后却有 ' + $fedAfter.Count + ' 个文件(本脚本绝不还原它)') }
-    else { Add-DbkAction '\EFI\fedora\ 不存在,未创建' }
-  } elseif (($fedBefore -join '|') -ne ($fedAfter -join '|')) {
-    $bad += ('复读:\EFI\fedora\ 文件清单被改动(执行前 ' + $fedBefore.Count + ' 个,执行后 ' + $fedAfter.Count + ' 个;本脚本不碰它)')
-  } else { Add-DbkAction ('\EFI\fedora\ 未触碰(' + $fedBefore.Count + ' 个文件,执行前后清单一致)') }
+  $uAfter = @(Get-DbkTreeList $espRoot 'EFI\ubuntu')
+  if ($uBefore.Count -eq 0) {
+    if ($uAfter.Count -gt 0) { $bad += ('复读:\EFI\ubuntu\ 原本不存在,执行后却有 ' + $uAfter.Count + ' 个文件(本脚本绝不还原它)') }
+    else { Add-DbkAction '\EFI\ubuntu\ 不存在,未创建' }
+  } elseif (($uBefore -join '|') -ne ($uAfter -join '|')) {
+    $bad += ('复读:\EFI\ubuntu\ 文件清单被改动(执行前 ' + $uBefore.Count + ' 个,执行后 ' + $uAfter.Count + ' 个;本脚本不碰它)')
+  } else { Add-DbkAction ('\EFI\ubuntu\ 未触碰(' + $uBefore.Count + ' 个文件,执行前后清单一致)') }
 } catch {
   Enable-DbkErrTrap
   Write-DbkErrTrap -Reason ('restore-esp 执行中断:' + $_.Exception.Message)
@@ -188,9 +188,9 @@ try {
 if ($boom) { exit $script:DBK_FAIL }
 if (@($bad).Count -gt 0) {
   foreach ($b in @($bad)) { Add-DbkCheck ('失败项:' + $b) }
-  Write-DbkExit -Status FAIL -Message ('复制后复读与基线不一致(' + @($bad).Count + ' 项,见 checks);ESP 上 \EFI\Microsoft\ 可能只还原了一部分,先按上面的差异人工核对(本脚本不改 {bootmgr} 的 path、不碰 \EFI\fedora\),必要时用同一基线重跑。ESP 已卸载')
+  Write-DbkExit -Status FAIL -Message ('复制后复读与基线不一致(' + @($bad).Count + ' 项,见 checks);ESP 上 \EFI\Microsoft\ 可能只还原了一部分,先按上面的差异人工核对(本脚本不改 {bootmgr} 的 path、不碰 \EFI\ubuntu\),必要时用同一基线重跑。ESP 已卸载')
 }
 Set-DbkChanged
-$fedMsg = '\EFI\fedora\ 原本不存在,未创建'
-if ($fedBefore.Count -gt 0) { $fedMsg = ('\EFI\fedora\ 未触碰(' + $fedBefore.Count + ' 个文件)') }
-Write-DbkExit -Status PASS -Message ('已从 ' + $bak + ' 还原 \EFI\Microsoft\(' + $want.Count + ' 个文件,与清单逐文件一致);' + $fedMsg + ';ESP 已卸载')
+$uMsg = '\EFI\ubuntu\ 原本不存在,未创建'
+if ($uBefore.Count -gt 0) { $uMsg = ('\EFI\ubuntu\ 未触碰(' + $uBefore.Count + ' 个文件)') }
+Write-DbkExit -Status PASS -Message ('已从 ' + $bak + ' 还原 \EFI\Microsoft\(' + $want.Count + ' 个文件,与清单逐文件一致);' + $uMsg + ';ESP 已卸载')

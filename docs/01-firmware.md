@@ -32,12 +32,12 @@
      看到:`SHA256SUMS` 里有 `<64 位十六进制>  *kubuntu-26.04-desktop-amd64.iso` 一行
   2. 从微软官方下载页 https://www.microsoft.com/software-download/windows11 取 Windows 11 ISO,记录来源与实测 SHA256 留档(微软不发布该镜像哈希,设计 5.3)
      看到:ISO 取自微软官方下载域、未经第三方盘中转;它的 SHA256 已记下
-  3. 校验:ISO 与官方 `SHA256SUMS` 放同一目录后跑脚本(`-FedoraChecksum` 是旧发行版遗留的参数名,这里指向官方校验值文件)
+  3. 校验:ISO 与官方 `SHA256SUMS` 放同一目录后跑脚本(`-IsoChecksum` 指向官方校验值文件;旧名 `-FedoraChecksum` 是已废弃别名,仍可用但会打印提示)
      看到:Kubuntu ISO 的 SHA256 与官方值逐字符一致、`gpg --verify` 签名通过;Windows ISO 只按"官方下载域 + 官方安装器校验"两条确认
   4. 写入 U 盘:分盘写用 Rufus(https://rufus.ie/,分区类型 GPT、目标系统 UEFI);一盘多 ISO 用 Ventoy(https://www.ventoy.net/)
      看到:一次性启动菜单里出现带 `UEFI:` 前缀的 U 盘条目
 
-脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -FedoraChecksum <SHA256SUMS 路径>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
+脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -IsoChecksum <SHA256SUMS 路径>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
 坑:`SHA256SUMS` 与签名必须取自官方发布页,镜像站的文件可能滞后;Ventoy 在 `Secure Boot` 下须先完成一次密钥注册,否则报 `Verification failed`。
 出错时:哈希不一致 -> 重新下载或换镜像站重下;U 盘引导被 `Secure Boot` 拒绝 -> 先确认是不是 Ventoy,不要关闭 `Secure Boot`(见 `01-1`)。
 

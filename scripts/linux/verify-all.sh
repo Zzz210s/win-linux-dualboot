@@ -67,7 +67,7 @@ G=A   # ===== A 引导安全组 =====
 run_hook "${DBK_EFIBOOTMGR:-efibootmgr}" -v
 if [ -z "$HOOK_OUT" ]; then
   item A1 manual "读不到 efibootmgr -v(需要 root);手动核对:sudo efibootmgr -v 的 BootOrder 首位" "07-7"
-  item A5 manual "读不到 efibootmgr -v;手动核对:fedora 条目是否在 BootOrder 末位" "04-3"
+  item A5 manual "读不到 efibootmgr -v;手动核对:ubuntu 条目是否在 BootOrder 末位" "04-3"
 else
   BO="$(printf '%s\n' "$HOOK_OUT" | sed -n 's/^BootOrder:[[:space:]]*//p' | head -n1)"
   H1="$(printf '%s\n' "$HOOK_OUT" | grep -E "^Boot${BO%%,*}\*?" | head -n1 || true)"; H2="$(printf '%s\n' "$HOOK_OUT" | grep -E "^Boot${BO##*,}\*?" | head -n1 || true)"

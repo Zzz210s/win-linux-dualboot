@@ -36,7 +36,7 @@ Kubuntu 26.04 LTS 的三条硬事实贯穿全文:系统是**传统可变系统**
   2. 执行:`sudo bash scripts/linux/xdg-redirect.sh --user <用户名> --apply --yes`(`05-1` 的 `--apply` 正常路径下会自动调用它,不必重复手工跑)
      看到:脚本报 PASS;六项分别指向 `/mnt/shared/{Desktop,Documents,Downloads,Pictures,Videos,Music}`;原文件备份为 `user-dirs.dirs.dbk.bak`(**只在备份不存在时创建**,始终是改动前的内容)
   3. 回退(随时可逆):`cp -a ~/.config/user-dirs.dirs.dbk.bak ~/.config/user-dirs.dirs && sudo -u <用户名> xdg-user-dirs-update --force`
-     看到:`xdg-user-dir DOCUMENTS` 回到 `/home/<用户名>/Documents`(脚本注释里"`/home` 是指向 `/var/home` 的符号链接"是旧原子版遗留,Ubuntu 下 `/home` 就是真目录)
+     看到:`xdg-user-dir DOCUMENTS` 回到 `/home/<用户名>/Documents`(Ubuntu 下 `/home` 就是真目录,脚本用 `getent passwd` 解析家目录)
 脚本:sudo bash scripts/linux/xdg-redirect.sh --user <用户名> --check / --apply --yes
 坑:NTFS 没有 POSIX 权限语义,别把 `.ssh`、代码仓库或整个家目录搬过去;重定向只影响"新建文件落在哪",旧文件不会自动搬(设计 5.3)。
 出错时:目标目录缺失 -> 先让 `05-1` 通过再重跑;某应用仍写本地 -> 注销重登一次,不要为它把 `~/.config` 挪到共享盘。

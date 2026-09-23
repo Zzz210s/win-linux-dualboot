@@ -100,26 +100,26 @@ Add-BaselineItem A1 '07-7' '① BootOrder 首位仍是 Windows Boot Manager' '�
 Add-Manual A2 A '连续重启 3 次(不按键、不选菜单),每次都自动进 Windows' '03-8'
 Add-BaselineItem A3 '07-7' '② \EFI\Microsoft\ 与 L2 基线逐文件一致' '② ESP\EFI\Microsoft\ 比对'
 Add-BaselineItem A4 '07-7' '③ {bootmgr} 的 path 与基线一致' '③ {bootmgr} 的 path'
-if ($fw.Count -eq 0) { Add-Manual A5 A '读不到 bcdedit /enum firmware(非管理员或非 UEFI);手动核对:BootOrder 末位是否为 fedora' '04-3' }
-elseif ($fw[$fw.Count - 1].Desc -match 'fedora') { Add-VerifyItem A5 A 'pass' ('BootOrder 末位是 Fedora 条目(' + $fw[$fw.Count - 1].Desc + ')') '04-3' }
-else { Add-VerifyItem A5 A 'fail' ('BootOrder 末位不是 Fedora 条目(实际:' + $fw[$fw.Count - 1].Desc + ');处置见 04-3') '04-3' }
+if ($fw.Count -eq 0) { Add-Manual A5 A '读不到 bcdedit /enum firmware(非管理员或非 UEFI);手动核对:BootOrder 末位是否为 ubuntu' '04-3' }
+elseif ($fw[$fw.Count - 1].Desc -match 'ubuntu') { Add-VerifyItem A5 A 'pass' ('BootOrder 末位是 Ubuntu 条目(' + $fw[$fw.Count - 1].Desc + ')') '04-3' }
+else { Add-VerifyItem A5 A 'fail' ('BootOrder 末位不是 Ubuntu 条目(实际:' + $fw[$fw.Count - 1].Desc + ');处置见 04-3') '04-3' }
 Add-Manual A6 A '复核全部执行记录:没有任何一次 bcdedit /set {fwbootmgr} displayorder 或 efibootmgr -o 调整永久顺序' '07-7'
 if ((Get-VerifyState 'A1') -eq 'pass' -and (Get-VerifyState 'A3') -eq 'pass') { Add-VerifyItem A7 A 'pass' '两个 ESP 互不干扰:Windows ESP 逐文件与基线一致且 BootOrder 首位仍是 Windows' '07-7' }
 elseif ((Get-VerifyState 'A1') -eq 'fail' -or (Get-VerifyState 'A3') -eq 'fail') { Add-VerifyItem A7 A 'fail' '两个 ESP 不再互不干扰:Windows ESP 或 BootOrder 首位已被改动;处置见 07-6' '07-6' }
 else { Add-Manual A7 A '无法从 Windows 侧自动判定;手动核对:两块 ESP 分别可挂载且内容完整、BootOrder 首位仍是 Windows' '07-7' }
-Add-Manual A8 A '可撤除性演练:另存 \EFI\fedora\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测' '07-8'
-# ===== B 系统功能组(Silverblue 侧判定;此处只记需人工) =====
-Add-Manual B1 B '在 Silverblue 侧看 echo $XDG_SESSION_TYPE 应为 wayland,且登录界面无 X11 会话选项' '05-12'
-Add-Manual B2 B '在 Silverblue 侧跑 check-signature.sh --check:nvidia 模块已签名且 MOK 已注册(或 nouveau 兜底)' '05-3'
-Add-Manual B3 B '在 Silverblue 侧 mokutil --sb-state 应为 SecureBoot enabled,且未做过自签密钥导入' '07-7'
-Add-Manual B4 B '在 Silverblue 侧 findmnt /mnt/shared:ntfs3 + rw + nofail;写测试后无残留' '05-1'
-Add-Manual B5 B '在 Silverblue 侧 rpm-ostree status 应显示 ublue 镜像来源;分层包清单与计划一致' '05-3'
-Add-Manual B6 B '分层包清单与计划一致:只应有 smartmontools(蓝牙同步时加 chntpw);不一致按 05-8 处置' '05-8'
-Add-Manual B7 B '跨系统双向可见性:Windows 写 D:\Shared\dbk-verify-win.txt -> Silverblue 读到;反向再测一次' '05-1'
-Add-Manual B8 B '在 Silverblue 侧六项 XDG 目录都指向 /mnt/shared 下(桌面/文档/下载/图片/视频/音乐)' '05-2'
-Add-Manual B9 B '在 Silverblue 侧 timedatectl 的 RTC in local TZ 应为 no;切到 Windows 复核时间一致' '05-4'
+Add-Manual A8 A '可撤除性演练:另存 \EFI\ubuntu\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测' '07-8'
+# ===== B 系统功能组(Kubuntu 侧判定;此处只记需人工) =====
+Add-Manual B1 B '在 Kubuntu 侧看 echo $XDG_SESSION_TYPE 应为 wayland,且登录界面无 X11 会话选项' '05-12'
+Add-Manual B2 B '在 Kubuntu 侧跑 check-signature.sh --check:nvidia 模块已签名且签名者非空(或 nouveau 兜底)' '05-3'
+Add-Manual B3 B '在 Kubuntu 侧 mokutil --sb-state 应为 SecureBoot enabled,且未做过自签密钥导入' '07-7'
+Add-Manual B4 B '在 Kubuntu 侧 findmnt /mnt/shared:ntfs3 + rw + nofail;写测试后无残留' '05-1'
+Add-Manual B5 B '在 Kubuntu 侧 ubuntu-drivers devices 的推荐驱动与实装一致,apt policy nvidia-driver-* 候选来自 Ubuntu 归档' '05-3'
+Add-Manual B6 B '在 Kubuntu 侧 snap 零残留:snap list 空、dpkg -l snapd 无输出、apt-cache policy snapd 无候选或被 pin 到 -1' '05-14'
+Add-Manual B7 B '跨系统双向可见性:Windows 写 D:\Shared\dbk-verify-win.txt -> Kubuntu 读到;反向再测一次' '05-1'
+Add-Manual B8 B '在 Kubuntu 侧六项 XDG 目录都指向 /mnt/shared 下(桌面/文档/下载/图片/视频/音乐)' '05-2'
+Add-Manual B9 B '在 Kubuntu 侧 timedatectl 的 RTC in local TZ 应为 no;切到 Windows 复核时间一致' '05-4'
 Add-Manual B10 B '切换系统后蓝牙无需重新配对(三趟往返都能直连)' '05-5'
-Add-Manual B11 B '在 Silverblue 侧 fwupdmgr get-devices 应至少列出一项设备(UEFI 固件/NVMe)' '05-12'
+Add-Manual B11 B '在 Kubuntu 侧 fwupdmgr get-devices 应至少列出一项设备(UEFI 固件/NVMe)' '05-12'
 
 # ===== C 双系统切换组 / D 可撤除性组(必须实机切换或真做) =====
 Add-Manual C1 C '从 Windows 用 set-bootnext.ps1 或固件菜单键一次性进 Linux' '05-11'
@@ -150,16 +150,16 @@ Add-Manual E3 E '本次与设备参数表的偏差已回写 baseline/ 或 00-ove
 Add-Manual E4 E '所有未勾选项都整理成已知例外(条目/原因/影响面/是否阻塞/后续动作)' '08'
 Add-Manual E5 E '至少一台设备 A-F 全绿(或例外都不阻塞),方可称参考实现' '08'
 
-# ===== F 健壮性组(Silverblue 侧判定;此处只记需人工) =====
-Add-Manual F1 F '部署回滚演练(真做一次):rpm-ostree rollback -> 重启 -> 桌面可用 -> 复检模块与 Wayland -> 回滚回来;并确认 /var 用户数据仍在' '05-9'
-Add-Manual F2 F '在 Silverblue 侧 dbk-rollback.sh --list 应能读出 pin 状态;变更前先 rpm-ostree pin' '05-9'
-Add-Manual F3 F '在 Silverblue 侧 rpm-ostree status 应列出至少两个部署(GRUB 菜单可选旧部署)' '05-9'
-Add-Manual F4 F '在 Silverblue 侧 /var/log/journal 存在且 journalctl --list-boots 至少两条' '05-7'
-Add-Manual F5 F '在 Silverblue 侧 set-updates.sh --check:/etc/rpm-ostreed.conf 只 check/download' '05-7'
-Add-Manual F6 F '在 Silverblue 侧 systemctl is-active sshd 应为 active,并从另一台机器 ssh 登录成功' '05-8'
-Add-Manual F7 F '在 Silverblue 侧 systemd-oomd 为 active 且 zramctl 有 /dev/zram0' '05-6'
-Add-Manual F8 F '在 Silverblue 侧 smartd 为 active 且 smartctl -H 报 PASSED' '05-8'
-Add-Manual F9 F '在 Silverblue 侧 fstab 非 root 条目都带 nofail,/boot/efi 不带' '05-1'
+# ===== F 健壮性组(Kubuntu 侧判定;此处只记需人工) =====
+Add-Manual F1 F '包级回退演练 + 原地重装演练(真做一次):按 05-9 降级并 apt-mark hold,重启复测后 --unhold;并按 07-4/07-5 推演原地重装,确认 D: 数据哈希不变' '05-9'
+Add-Manual F2 F '在 Kubuntu 侧 rollback-pkg.sh --list <包> 能列出可用版本;--check 能读出 apt-mark hold 清单与 apt 历史' '05-9'
+Add-Manual F3 F '在 Kubuntu 侧变更前备份与留档可用:baseline/ 与 /etc 关键文件有 .dbk.bak,apt pin 与 Mozilla 源在升级前留档' '05-13'
+Add-Manual F4 F '在 Kubuntu 侧 /var/log/journal 存在且 journalctl --list-boots 至少两条' '05-7'
+Add-Manual F5 F '在 Kubuntu 侧 set-updates.sh --check:apt 片段 Automatic-Reboot "false" 且 Allowed-Origins 只列 -security' '05-7'
+Add-Manual F6 F '在 Kubuntu 侧 systemctl is-active sshd 应为 active,并从另一台机器 ssh 登录成功' '05-8'
+Add-Manual F7 F '在 Kubuntu 侧 systemd-oomd 为 active 且 zramctl 有 /dev/zram0' '05-6'
+Add-Manual F8 F '在 Kubuntu 侧 smartd 为 active 且 smartctl -H 报 PASSED' '05-8'
+Add-Manual F9 F '在 Kubuntu 侧 fstab 非 root 条目都带 nofail,/boot/efi 不带' '05-1'
 
 # ===== 汇总与落盘 =====
 if ($script:nFail -gt 0) { $overall = 'fail'; $concl = '不通过(自动判定失败 ' + $script:nFail + ' 项;逐条见下表)' }

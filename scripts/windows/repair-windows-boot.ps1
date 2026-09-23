@@ -12,7 +12,7 @@
   判据:允许 bcdboot 重写 <ESP>:\EFI\Microsoft\Boot\bootmgfw.efi 与 BCD(这正是它的职责),但**绝不允许** {bootmgr} 的
   path 与 BootOrder 首位变化:执行前后各读一次,不一致 -> FAIL(1)并打印复读结果;BootOrder 首位不是 Windows Boot Manager
   时判 FAIL(1,设计 I1)且不执行任何写动作。
-  纪律:不改 {bootmgr} 的 path、不写 displayorder/efibootmgr -o、不动 \EFI\fedora\;ESP 只临时挂载,finally 必卸载。
+  纪律:不改 {bootmgr} 的 path、不写 displayorder/efibootmgr -o、不动 \EFI\ubuntu\;ESP 只临时挂载,finally 必卸载。
   夹具钩子(仅离线验证,真机留空):DBK_MOUNTVOL_EXE / DBK_BCDBOOT_EXE / DBK_BCEDIT_EXE(假 exe)、DBK_WIN_DIR(替代
   -WindowsDir)、DBK_ESP_LETTER(替代 -EspLetter)、DBK_IS_ADMIN(1=强制管理员,0=强制非管理员)、DBK_ESP_ROOT(把 ESP 当
   普通目录,替代对 <盘符>:\ 的文件断言;仍会调用假 mountvol)。

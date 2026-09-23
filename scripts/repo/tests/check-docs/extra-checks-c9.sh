@@ -152,8 +152,8 @@ else verdict 1 "F12b --repo 未追加 C9d(rc=$rc C9d=$n_d)" "$out"; fi
 
 # ==== 真实仓库样本(原补充 7/8/9) =============================================
 for f in docs/00-overview.md README.md README.zh-CN.md checklists/deploy.md checklists/rollback.md \
-         baseline/README.md docs/design/00-design.md docs/design/02-fedora-atomic-variant-design.md \
-         docs/design/03-step-automation-design.md; do
+         baseline/README.md docs/design/00-design.md docs/design/03-step-automation-design.md \
+         docs/design/02-fedora-atomic-variant-design.md; do   # 02 号(历史:已被 04 号取代,保留为历史记录)
   runcheck "真实样本 $f(应过)" OK 0 "$ROOT/$f"
 done
 runcheck "设计文档 01(应过:卡编号引用按编号回退到手册解析)" OK 0 "$ROOT/docs/design/01-playbook-reshape-design.md"

@@ -3,10 +3,10 @@
 # 破坏性:1
 <#
 .SYNOPSIS
-  L5 退役(07-12):删除 Fedora 残留的 NVRAM 固件启动条目(只删条目,不动分区、不动 BootOrder)。
+  L5 退役(07-12):删除 Ubuntu 残留的 NVRAM 固件启动条目(只删条目,不动分区、不动 BootOrder)。
 .DESCRIPTION
-  目标:枚举 bcdedit /enum firmware,取 path 指向 \EFI\fedora\ 或 description 含 fedora/silverblue 的条目
-  (给了 -Match 时按该正则匹配 description,默认 'fedora|silverblue';给了 -Guid 时只认这些 GUID)。
+  目标:枚举 bcdedit /enum firmware,取 path 指向 \EFI\ubuntu\ 或 description 含 ubuntu/kubuntu 的条目
+  (给了 -Match 时按该正则匹配 description,默认 'ubuntu|kubuntu';给了 -Guid 时只认这些 GUID)。
   **不得用 displayorder 代删**(I2:不允许改 BootOrder);删除手段是 bcdedit /delete <GUID> /f。
   前置断言(任一不满足 -> 64 且零写):-BaselineDir(缺省 baseline)下 02-partitions.txt 与 02-firmware-entries.txt 都在;
   BootOrder 首位是 Windows Boot Manager;至少找到一条目标条目(-Guid 指定的某条不存在 -> 64,目标未确认)。
@@ -29,7 +29,7 @@
 [CmdletBinding()]
 param(
   [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes,
-  [string]$Match = 'fedora|silverblue', [string[]]$Guid = @(), [string]$BaselineDir = '',
+  [string]$Match = 'ubuntu|kubuntu', [string[]]$Guid = @(), [string]$BaselineDir = '',
   [string]$Step = '', [string]$Log = '', [string[]]$Extra = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -52,7 +52,7 @@ $fw0 = Get-DbkFwEnum -What firmware -Exe $script:DbkBcd
 $bm0 = Get-DbkFwEnum -What '{bootmgr}' -Exe $script:DbkBcd
 $pre = Assert-DbkFwPre -Base $base -FwText $fw0 -BmText $bm0
 $ent = @(Get-DbkFwEntries -Text $fw0)
-# 选目标:给了 -Guid 只认这些 GUID(任一不存在 -> 64,目标未确认);否则按 -Match / \EFI\fedora\ 匹配。
+# 选目标:给了 -Guid 只认这些 GUID(任一不存在 -> 64,目标未确认);否则按 -Match / \EFI\ubuntu\ 匹配。
 $guids = @($Guid | Where-Object { $_ } | ForEach-Object { ([string]$_).Trim().Trim('{', '}').ToUpper() })
 $targets = @(); $miss = @()
 if ($guids.Count -gt 0) {
@@ -68,10 +68,10 @@ if ($guids.Count -gt 0) {
     exit $script:DBK_USAGE
   }
 } else {
-  $targets = @($ent | Where-Object { $_.Guid -ne '{fwbootmgr}' -and $_.Guid -ne '{bootmgr}' -and (($_.Desc -and $_.Desc -match $Match) -or ($_.Path -and $_.Path -match '\\EFI\\fedora\\')) })
+  $targets = @($ent | Where-Object { $_.Guid -ne '{fwbootmgr}' -and $_.Guid -ne '{bootmgr}' -and (($_.Desc -and $_.Desc -match $Match) -or ($_.Path -and $_.Path -match '\\EFI\\ubuntu\\')) })
   if ($targets.Count -eq 0) {
-    Add-DbkCheck ('需人工:固件条目里没有匹配 /' + $Match + '/ 或 \\EFI\\fedora\\ 的条目(共枚举到 ' + $ent.Count + ' 条)')
-    Write-DbkExit -Status 需人工 -Message ('没有找到可删的 fedora 条目(可能已清干净):请人工在固件设置界面核对是否还有 Fedora/其他 Linux 残留条目;本脚本只删条目、不删分区,已零写')
+    Add-DbkCheck ('需人工:固件条目里没有匹配 /' + $Match + '/ 或 \\EFI\\ubuntu\\ 的条目(共枚举到 ' + $ent.Count + ' 条)')
+    Write-DbkExit -Status 需人工 -Message ('没有找到可删的 ubuntu 条目(可能已清干净):请人工在固件设置界面核对是否还有 Ubuntu/其他 Linux 残留条目;本脚本只删条目、不删分区,已零写')
   }
 }
 $tg = @($targets | ForEach-Object { ([string]$_.Guid).Trim('{', '}').ToUpper() })
@@ -81,7 +81,7 @@ foreach ($t in $targets) { Write-DbkNote ('  bcdedit /delete ' + $t.Guid + ' /f 
 Write-DbkNote '纪律:本脚本绝不执行 bcdedit /set {fwbootmgr} displayorder 之类的改序操作(I2);只删条目、不删分区。'
 if ($script:DbkMode -eq 'check') {
   Write-DbkNote '-Check 零写:未执行任何删除;确认目标无误后加 -Apply -Yes 重跑。'
-  Write-DbkExit -Status PASS -Message ('识别到 ' + $targets.Count + ' 条 fedora NVRAM 条目可删(见 actions);BootOrder 首位仍是 Windows Boot Manager;-Check 零写')
+  Write-DbkExit -Status PASS -Message ('识别到 ' + $targets.Count + ' 条 ubuntu NVRAM 条目可删(见 actions);BootOrder 首位仍是 Windows Boot Manager;-Check 零写')
 }
 $bad = @()
 foreach ($t in $targets) {
@@ -104,4 +104,4 @@ if (@($bad).Count -gt 0) {
   foreach ($b in @($bad)) { Add-DbkCheck ('失败项:' + $b) }
   Write-DbkExit -Status FAIL -Message ('已执行删除,但后置复读不符(' + @($bad).Count + ' 项,见 checks 与上面的复读值);先人工核对 bcdedit /enum firmware,必要时在固件设置界面把 Windows Boot Manager 改回首位(I2)')
 }
-Write-DbkExit -Status PASS -Message ('已删除 ' + $targets.Count + ' 条 fedora NVRAM 条目;目标条目消失、非目标条目仍在;BootOrder 首位仍是 Windows Boot Manager(删条目会让它从列表里消失,但首位不变)、{bootmgr} path 未变')
+Write-DbkExit -Status PASS -Message ('已删除 ' + $targets.Count + ' 条 ubuntu NVRAM 条目;目标条目消失、非目标条目仍在;BootOrder 首位仍是 Windows Boot Manager(删条目会让它从列表里消失,但首位不变)、{bootmgr} path 未变')

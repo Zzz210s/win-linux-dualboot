@@ -3,7 +3,7 @@
 # 破坏性:1
 <#
 .SYNOPSIS
-  L5 退役(07-12):把删除 Fedora 分区后腾出的未分配空间扩展给 **D:(不是 C:)**,执行后复读断言。
+  L5 退役(07-12):把删除 Ubuntu 分区后腾出的未分配空间扩展给 **D:(不是 C:)**,执行后复读断言。
 .DESCRIPTION
   前置断言(任一不满足 -> 64 且零写):-BaselineDir(缺省 baseline)下 02-partitions.txt 与 02-firmware-entries.txt 都在;
   BootOrder 首位是 Windows Boot Manager;待扩分区(D:)紧邻一段连续未分配空间(用分区表 offset/size 计算)。

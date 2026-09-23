@@ -4,7 +4,7 @@
 # L4 卡 05-2:把"文档类"家目录(桌面/文档/下载/图片/视频/音乐)重定向到共享盘,对齐 Windows 侧已知文件夹重定向。
 # 判据(--check,零写):① 模板合格(六条 XDG_*_DIR 且都指向 $SHARED_MNT,不含 .config/.ssh/.gnupg);
 #   ②(缺省)共享盘已挂载;③ ~/.config/user-dirs.dirs 已按模板写入六条且都指向 $SHARED_MNT;④ 六条目标目录都存在(缺失记需人工,由 --apply 创建)。
-# 家目录在原子版里是 /var/home/<user>(/home 是其符号链接);~/.config、~/.ssh、~/.gnupg 与代码仓库留在本地 root
+# 家目录是本地真目录(Ubuntu 下 /home 不是符号链接;resolve_home() 走 getent passwd);~/.config、~/.ssh、~/.gnupg 与代码仓库留在本地 root
 # (NTFS 无 POSIX 权限语义;设计 3.6 / 3.16 / 4.5 / 5.3)。
 # --apply(需要 root,且必须 --yes):备份 user-dirs.dirs -> .dbk.bak(仅首次)-> 写入六行 -> 以该用户身份跑
 #   xdg-user-dirs-update --force -> 建目标目录 -> 复读判据。通常由 mount-shared.sh --apply 在挂载成功后调用。
@@ -85,7 +85,7 @@ judge() {
   elif [ ! -d "$HOMEDIR" ]; then
     MANUAL+=("家目录 $HOMEDIR 不存在或不可读")
   else
-    dbk_add_check "家目录:$HOMEDIR(原子版为 /var/home/<user>;~/.config、~/.ssh、~/.gnupg 留在本地)"
+    dbk_add_check "家目录:$HOMEDIR(真目录;~/.config、~/.ssh、~/.gnupg 留在本地)"
     if [ ! -r "$UDIRS" ]; then
       ISSUES+=("缺少 $UDIRS(--apply 会按模板写入)")
     else

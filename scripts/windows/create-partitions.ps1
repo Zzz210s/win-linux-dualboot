@@ -4,13 +4,13 @@
 <#
 .SYNOPSIS
   轨道 D 首次装机:用 diskpart 预建整盘分区表(ESP-Windows 2048MB + MSR 16MB + C: 204800MB + D: 650240MB),
-  余下约 115GiB 保持未分配,留给 L3 的 Fedora 三块分区。**破坏性,只在首次装机用**。
+  余下约 115GiB 保持未分配,留给 L3 的 Ubuntu 三块分区。**破坏性,只在首次装机用**。
 .DESCRIPTION
   前置断言(任一不满足 -> 64 且零写):-Disk 指定的盘存在;该盘当前无有效分区表(0 个分区);-Apply 必须显式 -Yes。
   -Check(缺省)只打印将执行的 diskpart 脚本与断言结果,不执行、不落盘(零写)。
   -Apply -Yes 才写:生成 diskpart 脚本(缺省 %TEMP%\dbk\create-partitions.diskpart)-> diskpart /s 执行
   -> 复读分区表并打印(后置断言:4 个分区尺寸 + D: 之后连续未分配 >= 117760MB(115GiB))。
-  **绝不**创建或改动 ESP-Fedora 与 /boot,也不动 \EFI\Microsoft\ 与 {bootmgr}:那三块 Fedora 分区由 L3 在
+  **绝不**创建或改动 ESP-Ubuntu 与 /boot,也不动 \EFI\Microsoft\ 与 {bootmgr}:那三块 Ubuntu 分区由 L3 在
   未分配段里建(04-2);执行完立刻复读,不符时只能整盘 clean 重来(不做事后缩容,设计 3.5)。
   夹具钩子(仅离线验证,真机留空):DBK_PART_LAYOUT=<JSON 文件> 覆盖分区表读数(结构见 check-partition-layout.ps1;
     "disk" 可带 "model");DBK_DISKPART_EXE=<可执行文件> 替代 diskpart(夹具传假盘,记录收到的脚本内容)。
@@ -122,7 +122,7 @@ Add-DbkCheck '前置断言:目标盘存在,且当前无有效分区表(0 个分�
 Write-DbkNote ('--- 将执行的分区命令(diskpart /s;磁盘 ' + $Disk + ')---')
 foreach ($c in $plan) { Write-DbkNote ('  ' + $c) }
 Add-DbkCheck ('将执行 ' + $plan.Count + ' 条 diskpart 命令(ESP ' + $TR.WinEspMB + 'MB / MSR ' + $TR.MsrMB + 'MB / C: ' + $TR.WinMB + 'MB / D: ' + $TR.DataMB + 'MB;余下约 115GiB 不分配)')
-Add-DbkAction '不建 ESP-Fedora 与 /boot(那是 L3 在未分配段里建的,见 02-3 与 04-2)'
+Add-DbkAction '不建 ESP-Ubuntu 与 /boot(那是 L3 在未分配段里建的,见 02-3 与 04-2)'
 
 if ($script:DbkMode -eq 'check') {
   Write-DbkNote '-Check 未执行、未落盘(零写);确认型号与容量无误后加 -Apply -Yes 重跑。'
@@ -161,7 +161,7 @@ if ($data.Count -gt 0) { $dEnd = $data[0].OffsetMB + $data[0].SizeMB }
 $best = Get-MaxGapMB -Gaps (Get-GapsAfter -L $R -FromMB $dEnd)
 if ($best -lt ($TR.ReserveMB - $TOL)) {
   $f2++; Add-DbkCheck ('失败项:D: 之后连续未分配期望 >= ' + $TR.ReserveMB + 'MB(115GiB),实际 ' + (ConvertTo-GiB $best))
-} else { Add-DbkCheck ('复读通过:D: 之后仍有 ' + (ConvertTo-GiB $best) + ' 连续未分配(>= 115GiB,L3 的 Fedora 三块分区落在这里)') }
+} else { Add-DbkCheck ('复读通过:D: 之后仍有 ' + (ConvertTo-GiB $best) + ' 连续未分配(>= 115GiB,L3 的 Ubuntu 三块分区落在这里)') }
 if ($f2 -gt 0) {
   Write-DbkExit -Status FAIL -Message ('diskpart 已执行,但复读分区表与目标不符(' + $f2 + ' 项,见 checks);分区表已改动、无法自动回退:确认目标盘无误后整盘 clean 重跑本脚本,不得事后缩容')
 }

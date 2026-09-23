@@ -3,15 +3,15 @@
 # 破坏性:1
 <#
 .SYNOPSIS
-  L5 退役(07-13):**只停用** Fedora 启动条目(不删条目、不删分区),并断言分区数量与基线一致。
+  L5 退役(07-13):**只停用** Ubuntu 启动条目(不删条目、不删分区),并断言分区数量与基线一致。
 .DESCRIPTION
-  **与 07-12(cleanup-nvram.ps1)的区别**:07-12 把 fedora 的 NVRAM 条目**删掉**;07-13 连条目都不删——
-  它只用一次性 bootsequence 回落 {bootmgr}(让下次启动落在 Windows),再提示人工在固件设置界面把 fedora 条目
+  **与 07-12(cleanup-nvram.ps1)的区别**:07-12 把 ubuntu 的 NVRAM 条目**删掉**;07-13 连条目都不删——
+  它只用一次性 bootsequence 回落 {bootmgr}(让下次启动落在 Windows),再提示人工在固件设置界面把 ubuntu 条目
   移到最后或删除。分区表与 NVRAM 条目都原样保留,所以本卡可逆,适合"暂时不想删"的场景。
   本脚本绝不执行 bcdedit /set {fwbootmgr} displayorder(属于改序,I2)或任何删除动作。
   前置断言(任一不满足 -> 64 且零写):-BaselineDir(缺省 baseline)下 02-partitions.txt 与 02-firmware-entries.txt 都在;
   BootOrder 首位是 Windows Boot Manager;**当前分区数量与 baseline\02-partitions.txt 记录的一致**(证明没动分区)。
-  找不到 fedora 条目 -> 2(需人工:可能已无此条目,无需停用)。
+  找不到 ubuntu 条目 -> 2(需人工:可能已无此条目,无需停用)。
   -Check(缺省,零写)只断言并打印计划;-Apply -Yes 设一次性 bootsequence 后复读断言:固件条目数与 GUID 集合未变
   (证明不删条目)、分区数量未变(证明不删分区)、BootOrder 逐字未变且首位仍是 Windows Boot Manager、
   {bootmgr} path 未变;任一不符 -> FAIL(1)并打印复读结果。非管理员 -> 2;非 Windows -> 9。
@@ -23,12 +23,12 @@
   用法(仓库根、管理员 Windows PowerShell):
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\disable-linux-entry.ps1 -Check
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\disable-linux-entry.ps1 -Apply -Yes
-  退出码:0 通过 / 1 失败(后置复读不符) / 2 需人工(非管理员、分区表读不到或找不到 fedora 条目) / 9 跳过(非 Windows) / 64 用法错误
+  退出码:0 通过 / 1 失败(后置复读不符) / 2 需人工(非管理员、分区表读不到或找不到 ubuntu 条目) / 9 跳过(非 Windows) / 64 用法错误
 #>
 [CmdletBinding()]
 param(
   [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes,
-  [int]$Disk = 0, [string]$Match = 'fedora|silverblue', [string]$BaselineDir = '',
+  [int]$Disk = 0, [string]$Match = 'ubuntu|kubuntu', [string]$BaselineDir = '',
   [string]$Step = '', [string]$Log = '', [string[]]$Extra = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -60,10 +60,10 @@ $bm0 = Get-DbkFwEnum -What '{bootmgr}' -Exe $script:DbkBcd
 $pre = Assert-DbkFwPre -Base $base -FwText $fw0 -BmText $bm0
 $order0 = @((Get-DbkFwInfo -Text $fw0).Order)
 $ent = @(Get-DbkFwEntries -Text $fw0)
-$tg = @($ent | Where-Object { $_.Guid -ne '{fwbootmgr}' -and $_.Guid -ne '{bootmgr}' -and (($_.Desc -and $_.Desc -match $Match) -or ($_.Path -and $_.Path -match '\\EFI\\fedora\\')) })
+$tg = @($ent | Where-Object { $_.Guid -ne '{fwbootmgr}' -and $_.Guid -ne '{bootmgr}' -and (($_.Desc -and $_.Desc -match $Match) -or ($_.Path -and $_.Path -match '\\EFI\\ubuntu\\')) })
 if ($tg.Count -eq 0) {
-  Add-DbkCheck ('需人工:固件条目里没有匹配 /' + $Match + '/ 或 \\EFI\\fedora\\ 的 fedora 条目(共枚举到 ' + $ent.Count + ' 条)')
-  Write-DbkExit -Status 需人工 -Message ('没找到 fedora 启动条目:可能已经不存在(无需"只停用"),也可能条目名变了;请人工核对固件设置界面。本卡不删条目、不删分区,已零写')
+  Add-DbkCheck ('需人工:固件条目里没有匹配 /' + $Match + '/ 或 \\EFI\\ubuntu\\ 的 ubuntu 条目(共枚举到 ' + $ent.Count + ' 条)')
+  Write-DbkExit -Status 需人工 -Message ('没找到 ubuntu 启动条目:可能已经不存在(无需"只停用"),也可能条目名变了;请人工核对固件设置界面。本卡不删条目、不删分区,已零写')
 }
 # 分区数量必须与基线一致(证明本卡没动分区)
 $lay = Get-DbkPartsLayout -Disk $Disk
@@ -76,14 +76,14 @@ if ($baseCnt -lt 0 -or $baseCnt -ne $cnt) {
   exit $script:DBK_USAGE
 }
 Add-DbkCheck ('分区数量与基线一致(' + $cnt + ' 个;基线 ' + (Join-Path $base '02-partitions.txt') + ');本卡不动分区')
-Add-DbkCheck ('待停用的 fedora 条目 ' + $tg.Count + ' 条:' + (($tg | ForEach-Object { $_.Guid + '(' + $_.Desc + ')' }) -join ';'))
-Write-DbkNote '手段:设一次性 bootsequence 回落 {bootmgr}(下次启动落在 Windows);永久处置(在固件设置界面把 fedora 条目移到后面或删除)属人工动作,本脚本不代做。'
+Add-DbkCheck ('待停用的 ubuntu 条目 ' + $tg.Count + ' 条:' + (($tg | ForEach-Object { $_.Guid + '(' + $_.Desc + ')' }) -join ';'))
+Write-DbkNote '手段:设一次性 bootsequence 回落 {bootmgr}(下次启动落在 Windows);永久处置(在固件设置界面把 ubuntu 条目移到后面或删除)属人工动作,本脚本不代做。'
 Write-DbkNote '与 07-12(cleanup-nvram.ps1)的区别:07-12 删 NVRAM 条目;本卡不删条目、不删分区,只让 Linux 不再被默认选中。'
 Write-DbkNote '将执行(待核实(以官方文档为准)):bcdedit /set {fwbootmgr} bootsequence {bootmgr}'
 Add-DbkAction 'bcdedit /set {fwbootmgr} bootsequence {bootmgr}'
 if ($script:DbkMode -eq 'check') {
   Write-DbkNote '-Check 零写:未执行任何命令;确认后加 -Apply -Yes 重跑。'
-  Write-DbkExit -Status PASS -Message ('前置断言全绿:分区数量与基线一致(' + $cnt + ')、BootOrder 首位是 Windows Boot Manager、fedora 条目 ' + $tg.Count + ' 条;-Check 零写,将设一次性 bootsequence 回落 {bootmgr}')
+  Write-DbkExit -Status PASS -Message ('前置断言全绿:分区数量与基线一致(' + $cnt + ')、BootOrder 首位是 Windows Boot Manager、ubuntu 条目 ' + $tg.Count + ' 条;-Check 零写,将设一次性 bootsequence 回落 {bootmgr}')
 }
 $r = Invoke-DbkProbeExe -Exe $script:DbkBcd -CmdArgs @('/set', '{fwbootmgr}', 'bootsequence', '{bootmgr}')
 Write-DbkNote ('bcdedit /set 退出码 ' + $r.Code + ';输出:' + ($r.Out -replace "\r?\n", ' | '))
@@ -106,4 +106,4 @@ if (@($bad).Count -gt 0) {
   foreach ($b in @($bad)) { Add-DbkCheck ('失败项:' + $b) }
   Write-DbkExit -Status FAIL -Message ('已设置一次性 bootsequence,但后置复读不符(' + @($bad).Count + ' 项,见 checks 与上面的复读值);先人工核对 bcdedit /enum firmware 与分区表,必要时在固件设置界面把 Windows Boot Manager 改回首位(I2)')
 }
-Write-DbkExit -Status PASS -Message ('已设一次性 bootsequence 回落 {bootmgr}(下次启动落在 Windows);固件条目 ' + $ent.Count + ' 条、分区 ' + $cnt + ' 个均未变(未删条目、未删分区);BootOrder 逐字未变、首位仍是 Windows Boot Manager、{bootmgr} path 未变;永久停用需人工在固件设置界面把 fedora 条目移后或删除')
+Write-DbkExit -Status PASS -Message ('已设一次性 bootsequence 回落 {bootmgr}(下次启动落在 Windows);固件条目 ' + $ent.Count + ' 条、分区 ' + $cnt + ' 个均未变(未删条目、未删分区);BootOrder 逐字未变、首位仍是 Windows Boot Manager、{bootmgr} path 未变;永久停用需人工在固件设置界面把 ubuntu 条目移后或删除')

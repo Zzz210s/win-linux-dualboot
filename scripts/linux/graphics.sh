@@ -2,8 +2,8 @@
 # 对应卡:05-3
 # 破坏性:1
 # L4:显卡栈收敛(Kubuntu 26.04 LTS / apt 语义;设计依据:docs/design/04-kubuntu-variant-design.md 第 2 节 D3
-#   与第 1 节"省心"对照表:NVIDIA 走 Ubuntu 官方**预签名**包(ubuntu-drivers 安装),不需要 ublue rebase、
-#   不需要 MOK 注册、不需要自签密钥)。
+#   与第 1 节"省心"对照表:NVIDIA 走 Ubuntu 官方**预签名**包(ubuntu-drivers 安装),不需要第三方预构建镜像的
+#   rebase、不需要 MOK 注册、不需要自签密钥。
 # 用途:--check 只读判定驱动来源/签名者/会话类型/PRIME offload;--apply(需 root 且需 --yes)执行
 #   `ubuntu-drivers install`(装推荐驱动),装完复读判据。
 # 判据(--check,零写):① `ubuntu-drivers devices` 可读并给出推荐驱动行(取不到 → 需人工);

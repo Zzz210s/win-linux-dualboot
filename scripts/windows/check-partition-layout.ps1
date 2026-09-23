@@ -6,10 +6,10 @@
 .DESCRIPTION
   判据(数值即定稿值,一字不改):
     W 只 Windows:ESP-Windows 2048MB(EFI System)、MSR 16MB、C: 204800MB、WinRE;不要求预留 Linux 空间。
-    L 只 Silverblue:ESP-Fedora 1024MB(EFI System)、/boot 1024MB(Linux filesystem)、root >= 115712MB(约 113GiB)。
+    L 只 Kubuntu:ESP-Ubuntu 1024MB(EFI System)、/boot 1024MB(Linux filesystem)、root >= 115712MB(约 113GiB)。
     D 双系统:ESP-Windows 2048MB + MSR 16MB + C: 204800MB + D: 650240MB + D: 之后连续未分配 >= 117760MB(115GiB)+ WinRE
       (WinRE 未建时只提示:它由 Windows 安装程序在 03-1 阶段建,不作为失败项)。
-  口径:尺寸按 MB 比对(容差 +-2MB);角色按 GPT 类型识别;/boot 的 ext4 与 root 的 btrfs 在 Windows 侧读不到,
+  口径:尺寸按 MB 比对(容差 +-2MB);角色按 GPT 类型识别;/boot 与 root 的 ext4 在 Windows 侧读不到,
     须进 live 后按 04-2 复核(本脚本在 actions 里提示)。
   退出码:0 通过 / 1 失败(打印期望与实际) / 2 需人工(类型未识别等无法判定) / 9 跳过(非 Windows 存储环境) / 64 用法错误。
   只读:不写任何系统状态与文件;-Check 缺省,-Apply 也只重复打印一遍(本卡无自动写动作)。
@@ -42,7 +42,7 @@ if (-not $env:DBK_PART_LAYOUT -and -not (Get-Command Get-Disk -ErrorAction Silen
 
 # 定稿布局(设计 5.1):数值与 docs/02-partitioning.md 的 02-1 值表逐字一致,改这里必须同改该表。
 $TR = @{ WinEspMB = 2048; MsrMB = 16; WinMB = 204800; DataMB = 650240; WinReMB = 1024
-         FedEspMB = 1024; BootMB = 1024; RootMinMB = 115712; ReserveMB = 117760 }
+         UbuntuEspMB = 1024; BootMB = 1024; RootMinMB = 115712; ReserveMB = 117760 }
 $TOL = 2
 
 function Get-DbkLayout {
@@ -132,7 +132,7 @@ if ($Track -eq 'W' -or $Track -eq 'D') {
     $best = Get-MaxGapMB -Gaps @($gaps | Where-Object { $_.StartMB -ge ($dataEnd - $TOL) })
     if ($best -lt ($TR.ReserveMB - $TOL)) {
       $failN++; $failItems += '预留段'
-      Add-DbkCheck ('失败项:D: 之后的预留段期望 >= ' + $TR.ReserveMB + 'MB(115GiB)连续未分配,实际 ' + (ConvertTo-GiB $best) + ';L3 的 ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB 都要落在这段里')
+      Add-DbkCheck ('失败项:D: 之后的预留段期望 >= ' + $TR.ReserveMB + 'MB(115GiB)连续未分配,实际 ' + (ConvertTo-GiB $best) + ';L3 的 ESP-Ubuntu 1GiB + /boot 1GiB + root 约 113GiB 都要落在这段里')
     } else { Add-DbkCheck ('D: 之后的预留段:' + (ConvertTo-GiB $best) + ' 连续未分配(期望 >= ' + (ConvertTo-GiB $TR.ReserveMB) + ')') }
   } else {
     if ($data.Count -gt 0) { Add-DbkCheck ('数据分区 D::' + (Format-Part $data[0]) + '(轨道 W 不要求,只作提示)') }
@@ -141,18 +141,18 @@ if ($Track -eq 'W' -or $Track -eq 'D') {
 }
 
 if ($Track -eq 'L') {
-  $esp = @(Select-KindMB -Parts $parts -Kind 'efi' -MB $TR.FedEspMB)
-  if ($esp.Count -eq 0) { $failN++; $failItems += 'ESP-Fedora'; Add-DbkCheck ('失败项:ESP-Fedora 期望 ' + $TR.FedEspMB + 'MB(EFI System),实际 ' + (Show-Parts (Select-Kind -Parts $parts -Kind 'efi'))) }
-  else { Add-DbkCheck ('ESP-Fedora:' + (Format-Part $esp[0]) + '(期望 ' + $TR.FedEspMB + 'MB)') }
+  $esp = @(Select-KindMB -Parts $parts -Kind 'efi' -MB $TR.UbuntuEspMB)
+  if ($esp.Count -eq 0) { $failN++; $failItems += 'ESP-Ubuntu'; Add-DbkCheck ('失败项:ESP-Ubuntu 期望 ' + $TR.UbuntuEspMB + 'MB(EFI System),实际 ' + (Show-Parts (Select-Kind -Parts $parts -Kind 'efi'))) }
+  else { Add-DbkCheck ('ESP-Ubuntu:' + (Format-Part $esp[0]) + '(期望 ' + $TR.UbuntuEspMB + 'MB)') }
   $linux = @(Select-Kind -Parts $parts -Kind 'linux')
   if ($linux.Count -gt 2) { $manualN++; Add-DbkCheck ('需人工:盘上有 ' + $linux.Count + ' 块 Linux filesystem 分区,超出目标布局(只有 /boot 与 root 两块):' + (Show-Parts $linux)) }
   $boot = @($linux | Where-Object { Test-MB $_.SizeMB $TR.BootMB })
   if ($boot.Count -eq 0) { $failN++; $failItems += '/boot'; Add-DbkCheck ('失败项:/boot 期望 ' + $TR.BootMB + 'MB(ext4,必须独立),实际 ' + (Show-Parts $linux)) }
   else { Add-DbkCheck ('/boot:' + (Format-Part $boot[0]) + '(期望 ' + $TR.BootMB + 'MB)') }
   $big = @($linux | Sort-Object { -$_.SizeMB })
-  if ($big.Count -eq 0 -or $big[0].SizeMB -lt ($TR.RootMinMB - $TOL)) { $failN++; $failItems += 'root'; Add-DbkCheck ('失败项:root 期望 >= ' + $TR.RootMinMB + 'MB(约 113GiB,btrfs),实际 ' + (Show-Parts $linux)) }
+  if ($big.Count -eq 0 -or $big[0].SizeMB -lt ($TR.RootMinMB - $TOL)) { $failN++; $failItems += 'root'; Add-DbkCheck ('失败项:root 期望 >= ' + $TR.RootMinMB + 'MB(约 113GiB,ext4),实际 ' + (Show-Parts $linux)) }
   else { Add-DbkCheck ('root:' + (Format-Part $big[0]) + '(期望 >= ' + $TR.RootMinMB + 'MB,约 113GiB)') }
-  Add-DbkAction '文件系统与挂载点(/boot 的 ext4 与 root 的 btrfs)在 Windows 侧读不到:进 live 后按 04-2 的手动分区核对(用 check-partition-plan.sh)'
+  Add-DbkAction '文件系统与挂载点(/boot 与 root 的 ext4)在 Windows 侧读不到:进 live 后按 04-2 的手动分区核对(用 check-partition-plan.sh)'
 }
 if ($Track -eq 'D') { Add-DbkAction '两块 ESP 的固件可见性(固件能否枚举/从第二块盘引导)读不到,只能人工:按 00-overview.md 的偏离项处置表记录' }
 if ($failN -gt 0) { Write-DbkExit -Status FAIL -Message ('轨道 ' + $Track + ' 布局核对失败 ' + $failN + ' 项:' + ($failItems -join '、') + ';期望值与实际值见 checks;尺寸与目标不符时不要事后缩容,整盘重排(02-4)后重跑') }

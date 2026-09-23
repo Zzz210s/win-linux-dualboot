@@ -7,7 +7,7 @@
 #   ② 逐盘 `smartctl -H /dev/<disk>` 输出含 `SMART overall-health self-assessment test result: PASSED`
 #      或 `SMART Health Status: OK`(盘列表来自 `lsblk -dn -o NAME,TYPE` 的 disk 行);未安装 smartctl → 需人工(2);
 #   ③ 附加证据(不作为失败项):`ss -tlnp | grep :22` 能看到 22 端口监听。
-# 安装语义:apt 装包**立即生效**(与旧原子版的 rpm-ostree 分层安装不同,不需要重启);DBK_SKIP_PKG=1
+# 安装语义:apt 装包**立即生效**(与原子版(已废弃)的 rpm-ostree 分层安装不同,不需要重启);DBK_SKIP_PKG=1
 #   (兼容 DBK_SKIP_APT)只跳过 apt 动作(判据按现状判定)。
 # 人工边界:本步不声明破坏性(不写 `# 破坏性:1`):装包可用 apt-get purge 撤销,不动分区/引导。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。

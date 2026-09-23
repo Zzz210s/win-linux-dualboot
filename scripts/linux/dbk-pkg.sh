@@ -2,7 +2,7 @@
 # 库文件:非步骤脚本
 # 用途:包管理助手(Kubuntu 26.04 LTS / apt + dpkg 语义):判断、安装系统级包。
 # 契约真源:docs/design/03-step-automation-design.md 第 6 节库文件行;docs/design/04-kubuntu-variant-design.md
-#   第 6 节(脚本与文档影响面:新增 dbk-pkg.sh,apt/dpkg 语义)。旧原子版的 dbk-ostree.sh 已删除。
+#   第 6 节(脚本与文档影响面:新增 dbk-pkg.sh,apt/dpkg 语义)。原子版(已废弃)的 dbk-ostree.sh 已删除。
 # 调用约定:调用方先 source dbk-log.sh(提供 log),并按需在调用前设置 SKIP_PKG(0/1;通常取自 DBK_SKIP_PKG,
 #   兼容旧名 DBK_SKIP_APT),然后使用:
 #   pkg_installed <包>      该包已安装(dpkg-query -W 的 Status 含 install ok installed)→ 0
