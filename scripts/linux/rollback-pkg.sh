@@ -63,9 +63,9 @@ esac
 AG_STR="${DBK_APT_GET:-apt-get}"; AC_STR="${DBK_APT_CACHE:-apt-cache}"; AM_STR="${DBK_APT_MARK:-apt-mark}"
 HIST="${DBK_APT_HISTORY:-/var/log/apt/history.log}"
 AG=(); AC=(); AM=(); read -r -a AG <<<"$AG_STR"; read -r -a AC <<<"$AC_STR"; read -r -a AM <<<"$AM_STR"
-ag() { "${AG[@]}" "$@"; }        # 待核实(以官方文档为准)
-ac() { "${AC[@]}" "$@"; }        # 待核实(以官方文档为准)
-am() { "${AM[@]}" "$@"; }        # 待核实(以官方文档为准)
+ag() { command "${AG[@]}" "$@"; }        # 待核实(以官方文档为准)
+ac() { command "${AC[@]}" "$@"; }        # 待核实(以官方文档为准)
+am() { command "${AM[@]}" "$@"; }        # 待核实(以官方文档为准)
 tail3() { printf '%s' "${1:-}" | tail -n 3 | tr '\n' ' '; }
 showhold() { am showhold 2>&1 || true; }
 

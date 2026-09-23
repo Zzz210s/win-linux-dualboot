@@ -35,12 +35,13 @@ LSPCI_STR="${DBK_LSPCI:-lspci}"; XR_STR="${DBK_XRANDR:-xrandr}"
 UD=(); SMI=(); MO=(); LS=(); LSPCI=(); XR=()
 read -r -a UD <<<"$UD_STR"; read -r -a SMI <<<"$SMI_STR"; read -r -a MO <<<"$MO_STR"
 read -r -a LS <<<"$LS_STR"; read -r -a LSPCI <<<"$LSPCI_STR"; read -r -a XR <<<"$XR_STR"
-ud() { "${UD[@]}" "$@"; }
-smi() { "${SMI[@]}" "$@"; }
-mo() { "${MO[@]}" "$@"; }
-lsm() { "${LS[@]}" "$@"; }
-lspci() { "${LSPCI[@]}" "$@"; }
-xr() { "${XR[@]}" "$@"; }
+# 包装函数一律「名字不与外部命令同名 + 体内 command」双保险:函数查找优先于 PATH,同名(lspci)会无限递归。
+ud() { command "${UD[@]}" "$@"; }
+smi() { command "${SMI[@]}" "$@"; }
+mo() { command "${MO[@]}" "$@"; }
+lsm() { command "${LS[@]}" "$@"; }
+lspci_() { command "${LSPCI[@]}" "$@"; }
+xr() { command "${XR[@]}" "$@"; }
 
 ISSUES=(); MANUAL=(); APPLY_FAILS=(); PROBE_OUT=""; PROBE_RC=0
 probe() {   # 统一探针:stdout+stderr 收进 PROBE_OUT(不吞输出);PROBE_RC 分辨 127(缺命令)与执行失败
@@ -58,7 +59,7 @@ check_source() {
     MANUAL+=("①ubuntu-drivers devices 无输出(无独显或受限环境);请人工确认显卡与驱动来源")
     return 0
   fi
-  local rec; rec="$(printf '%s\n' "$PROBE_OUT" | grep -iE 'recommended' | head -n 2 | tr '\n' ';' | sed 's/;$//')"
+  local rec; rec="$(printf '%s\n' "$PROBE_OUT" | grep -iE 'recommended' | head -n 2 | tr '\n' ';' | sed 's/;$//' || true)"
   dbk_add_check "①显卡驱动来源(ubuntu-drivers devices):${rec:-见原始输出,$(printf '%s\n' "$PROBE_OUT" | grep -ciE 'driver' || true) 行}"
 }
 # 判据②:nvidia 模块签名者(官方包自带签名)
@@ -103,8 +104,8 @@ check_prime() {
 # 只读采集:硬件与 nouveau 兜底说明
 collect() {
   if command -v "${LSPCI[0]}" >/dev/null 2>&1; then
-    probe lspci -nn
-    local gpu; gpu="$(printf '%s\n' "$PROBE_OUT" | grep -E 'VGA|3D' | tr '\n' ';' | sed 's/;*$//')"
+    probe lspci_ -nn
+    local gpu; gpu="$(printf '%s\n' "$PROBE_OUT" | grep -E 'VGA|3D' | tr '\n' ';' | sed 's/;*$//' || true)"
     dbk_add_check "显卡(lspci -nn):${gpu:-未列出 VGA/3D 设备(受限环境或纯远程会话)}"
   fi
   if command -v "${LS[0]}" >/dev/null 2>&1; then

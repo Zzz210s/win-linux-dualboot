@@ -33,8 +33,8 @@ CONF="${DBK_UNATTENDED_CONF:-/etc/apt/apt.conf.d/52-dbk-unattended.conf}"   # �
 UNIT="unattended-upgrades"                                                  # 待核实(以官方文档为准)
 SC_STR="${DBK_SYSTEMCTL:-systemctl}"; DQ_STR="${DBK_DPKG_QUERY:-dpkg-query}"
 SC=(); DQ=(); read -r -a SC <<<"$SC_STR"; read -r -a DQ <<<"$DQ_STR"
-sc() { "${SC[@]}" "$@"; }
-dq() { "${DQ[@]}" "$@"; }
+sc() { command "${SC[@]}" "$@"; }
+dq() { command "${DQ[@]}" "$@"; }
 ISSUES=(); MANUAL=(); APPLY_FAILS=(); PROBE_OUT=""; PROBE_RC=0
 probe() { local out; if out="$("$@" 2>&1)"; then PROBE_RC=0; else PROBE_RC=$?; fi; PROBE_OUT="$out"; return 0; }
 

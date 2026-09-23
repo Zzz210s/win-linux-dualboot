@@ -22,9 +22,10 @@ dbk_log_default "verify-l3"
 BOOT_DIR="${DBK_BOOT_DIR:-/boot}"; ESP_DIR="${DBK_ESP_DIR:-/boot/efi}"; WIN_MNT="${DBK_WIN_ESP_MNT:-}"
 DQ_STR="${DBK_DPKG_QUERY:-dpkg-query}"; EFI_STR="${DBK_EFIBOOTMGR:-efibootmgr}"; LSB_STR="${DBK_LSBLK:-lsblk}"
 DQ=(); EFI=(); LSB=(); read -r -a DQ <<<"$DQ_STR"; read -r -a EFI <<<"$EFI_STR"; read -r -a LSB <<<"$LSB_STR"
-dq() { "${DQ[@]}" "$@"; }
-efi() { "${EFI[@]}" "$@"; }
-lsb() { "${LSB[@]}" "$@"; }
+# 包装函数体内用 command:名字若与外部命令同名,函数查找优先于 PATH 会无限递归。
+dq() { command "${DQ[@]}" "$@"; }
+efi() { command "${EFI[@]}" "$@"; }
+lsb() { command "${LSB[@]}" "$@"; }
 TMP_MNT=""; ISSUES=(); MANUAL=()
 to_mib() { awk -v b="${1:-0}" 'BEGIN{printf "%d", b/1048576}'; }
 cleanup() { if [ -n "$TMP_MNT" ]; then umount "$TMP_MNT" 2>/dev/null || true; rmdir "$TMP_MNT" 2>/dev/null || true; fi; }
@@ -81,7 +82,7 @@ if [ -z "$WIN_MNT" ] && [ -n "$LSB_OUT" ]; then   # 按"目标盘上 ≈2048MiB 
   WIN_DEV="$(printf '%s\n' "$LSB_OUT" | grep 'FSTYPE="vfat"' | while IFS= read -r line; do
     m="$(printf '%s' "$line" | sed -n 's/.*SIZE="\([^"]*\)".*/\1/p')"; mib="$(to_mib "$m")"
     if [ "$mib" -ge 1900 ] && [ "$mib" -le 2200 ]; then printf '/dev/%s' "$(printf '%s' "$line" | sed -n 's/^NAME="\([^"]*\)".*/\1/p')"; break; fi
-  done)"
+  done)" || true
   if [ -n "$WIN_DEV" ]; then
     TMP_MNT="$(mktemp -d)"
     if mount -o ro "$WIN_DEV" "$TMP_MNT" 2>/dev/null; then WIN_MNT="$TMP_MNT"; else rmdir "$TMP_MNT" 2>/dev/null || true; TMP_MNT=""; fi

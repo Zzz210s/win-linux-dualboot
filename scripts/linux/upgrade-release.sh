@@ -37,9 +37,9 @@ PIN_FILE="${DBK_SNAP_PIN_FILE:-/etc/apt/preferences.d/no-snap}"
 MOZ_SOURCES="${DBK_MOZ_SOURCES:-/etc/apt/sources.list.d/mozilla.list}"
 SMI_STR="${DBK_NVIDIA_SMI:-nvidia-smi}"; SNAP_FREE="${DBK_SNAP_FREE:-$HERE/step-snap-free.sh}"
 DRU=(); AG=(); SMI=(); read -r -a DRU <<<"$DRU_STR"; read -r -a AG <<<"$AG_STR"; read -r -a SMI <<<"$SMI_STR"
-dru() { "${DRU[@]}" "$@"; }
-ag() { "${AG[@]}" "$@"; }
-smi() { "${SMI[@]}" "$@"; }
+dru() { command "${DRU[@]}" "$@"; }
+ag() { command "${AG[@]}" "$@"; }
+smi() { command "${SMI[@]}" "$@"; }
 ISSUES=(); MANUAL=(); PROBE_OUT=""; PROBE_RC=0
 probe() { local out; if out="$("$@" 2>&1)"; then PROBE_RC=0; else PROBE_RC=$?; fi; PROBE_OUT="$out"; return 0; }
 tail3() { printf '%s' "${1:-}" | tail -n 3 | tr '\n' ' '; }
@@ -64,7 +64,7 @@ check_all() {
   rc=0; dist_upgrade_ok || rc=$?
   case "$rc" in
     0) dbk_add_check "②apt-get -s dist-upgrade 模拟无异常" ;;
-    1) ISSUES+=("②apt-get -s dist-upgrade 报异常:$(printf '%s\n' "$PROBE_OUT" | grep -E 'E:|错误|broken' | head -n 2 | tr '\n' ' ')") ;;
+    1) ISSUES+=("②apt-get -s dist-upgrade 报异常:$(printf '%s\n' "$PROBE_OUT" | grep -E 'E:|错误|broken' | head -n 2 | tr '\n' ' ' || true)") ;;
     2) MANUAL+=("②apt-get -s 跑不起来或 ${AG[0]} 缺失;请人工跑 apt-get -s dist-upgrade 核对") ;;
   esac
   if [ -r "$PIN_FILE" ]; then dbk_add_check "③snap pin 留档可读:$PIN_FILE -> $(tr '\n' ';' <"$PIN_FILE")"

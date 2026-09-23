@@ -13,6 +13,9 @@
 # 只读保证:本文件只定义函数与常量;参数错误一律打印用法到 stderr 并 exit 64,不落盘、不经 dbk-log.sh 的 die()
 #   (那是 L4 脚本的退 1 语义);只有显式 --log(或调过 dbk_log_default)才记路径,且只在失败路径追加日志。
 # 本文件不设置 shell 选项:失败必须中断的步骤脚本自己 set -e;失败不中断的脚本(hardening.sh/first-boot.sh)不得 set -e。
+# 包装外部命令的函数命名约定(脚本层,强制):① 函数名不得与外部命令同名(用 snap_/dpkg_/lspci_ 这类带后缀名),
+#   因为 bash 函数查找优先于 PATH,同名会让函数体内的 `${CMD[@]}` 又命中自己 —— 无限递归 → 子 shell 段错误(rc=139);
+#   ② 函数体内一律用 `command "${CMD[@]}" "$@"` 调真命令(双保险,即使将来改了名也不会递归)。两条同时做。
 # 夹具级验证,真机未跑。依赖 dbk-log.sh(die/need_val/dbk_json_escape)与 dbk-obs.sh(报告/JSON/errtrap)。
 
 DBK_PASS=0

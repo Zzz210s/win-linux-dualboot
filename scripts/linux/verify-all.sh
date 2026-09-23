@@ -92,7 +92,7 @@ chk_cmd_all B3 "07-7" "Secure Boot 保持开启" "${DBK_MOKUTIL:-mokutil}" 'Secu
 chk_cmd_all B4 "05-1" "共享盘以 ntfs3 读写挂载且带 nofail" "${DBK_FINDMNT:-findmnt}" 'ntfs3;rw;nofail' -no SOURCE,FSTYPE,OPTIONS "$SHARED"
 run_hook "${DBK_DPKG_QUERY:-dpkg-query}" -l 'nvidia-driver-*'
 if ! avail "${DBK_DPKG_QUERY:-dpkg-query}"; then item B5 manual "未找到 dpkg-query;手动核对:dpkg -l 'nvidia-driver-*' 有已安装的官方驱动包" "05-3"
-elif printf '%s' "$HOOK_OUT" | grep -qE '^ii[[:space:]]+nvidia-driver'; then item B5 pass "显卡驱动来源为 Ubuntu 官方包:$(printf '%s\n' "$HOOK_OUT" | grep -m1 -E '^ii[[:space:]]+nvidia-driver' | cut -c1-100)" "05-3"
+elif printf '%s' "$HOOK_OUT" | grep -qE '^ii[[:space:]]+nvidia-driver'; then item B5 pass "显卡驱动来源为 Ubuntu 官方包:$(printf '%s\n' "$HOOK_OUT" | grep -m1 -E '^ii[[:space:]]+nvidia-driver' | cut -c1-100 || true)" "05-3"
 else item B5 fail "没有已安装的 nvidia-driver-* 官方包;见 05-3(不用 NVIDIA 显卡的设备可记为已知例外)" "05-3"; fi
 chk_step B6 "05-14" "snap 零残留(snap list 空 + dpkg -l snapd 无输出)" scripts/linux/step-snap-free.sh --check
 item B7 manual "跨系统双向可见性:Windows 写 D:\\Shared\\dbk-verify-win.txt -> Linux 读到;反向再测一次" "05-1"
@@ -126,7 +126,7 @@ else
   run_hook git -C "$GIT_ROOT" status --porcelain; GS="$HOOK_OUT"; GRC="$HOOK_RC"
   run_hook git -C "$GIT_ROOT" ls-files baseline/; LT="$(printf '%s\n' "$HOOK_OUT" | grep -v '^[[:space:]]*$' | grep -cv '^baseline/README.md$' || true)"; LRC="$HOOK_RC"
   if [ "$GRC" -ne 0 ] || [ "$LRC" -ne 0 ]; then item E2 manual "git 读不到工作区($GIT_ROOT);手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md" "03-9"
-  elif printf '%s' "$GS" | grep -q 'baseline/'; then item E2 fail "baseline/ 内容混进了工作区:$(printf '%s' "$GS" | grep 'baseline/' | head -n3 | tr '\n' ' ')" "03-9"
+  elif printf '%s' "$GS" | grep -q 'baseline/'; then item E2 fail "baseline/ 内容混进了工作区:$(printf '%s' "$GS" | grep 'baseline/' | head -n3 | tr '\n' ' ' || true)" "03-9"
   elif [ "$LT" -gt 0 ]; then item E2 fail "baseline/ 已被 git 追踪(只允许 baseline/README.md)" "03-9"
   else item E2 pass "baseline/ 未入库(仅 README.md 被追踪)" "03-9"; fi
 fi
@@ -156,7 +156,7 @@ run_hook "${DBK_SYSTEMCTL:-systemctl}" is-active smartd; SMD="$HOOK_OUT"; run_ho
 if [ -z "$SMD" ]; then item F8 manual "读不到 systemctl;手动核对:systemctl is-active smartd + smartctl -H $DISK 应报 PASSED" "05-8"
 elif [ "$SMD" != active ]; then item F8 fail "smartd 不是 active(实际:${SMD:-空});见 05-8" "05-8"
 elif printf '%s' "$HOOK_OUT" | grep -q PASSED; then item F8 pass "smartd active 且 smartctl -H $DISK 报 PASSED" "05-8"
-else item F8 fail "smartctl -H $DISK 未报 PASSED:$(printf '%s' "$HOOK_OUT" | grep -iE 'health|result' | head -n1);按硬件问题处理" "05-8"; fi
+else item F8 fail "smartctl -H $DISK 未报 PASSED:$(printf '%s' "$HOOK_OUT" | grep -iE 'health|result' | head -n1 || true);按硬件问题处理" "05-8"; fi
 BADF="$(awk '!/^[[:space:]]*#/ && NF>=4 { if ($2=="/") next; if ($2=="/boot/efi") { if ($4 ~ /nofail/) print "ESP 行不应带 nofail" } else if ($4 !~ /nofail/) print "缺 nofail: " $2 }' "$FSTAB" 2>/dev/null || true)"
 if [ ! -r "$FSTAB" ]; then item F9 manual "读不到 $FSTAB;手动核对:非 root 条目都带 nofail,/boot/efi 不带" "05-1"
 elif [ -n "$BADF" ]; then item F9 fail "fstab 挂载选项不合判据:$(printf '%s' "$BADF" | tr '\n' ' ')" "05-1"

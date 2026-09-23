@@ -27,8 +27,8 @@ JC=()
 SC=()
 read -r -a JC <<<"$JC_STR"
 read -r -a SC <<<"$SC_STR"
-jc() { "${JC[@]}" "$@"; }
-sc() { "${SC[@]}" "$@"; }
+jc() { command "${JC[@]}" "$@"; }
+sc() { command "${SC[@]}" "$@"; }
 CONTENT='[Journal]
 Storage=persistent'
 ISSUES=(); MANUAL=(); APPLY_FAILS=()

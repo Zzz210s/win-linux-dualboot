@@ -39,17 +39,17 @@ MOZ_KEY_URL="https://packages.mozilla.org/apt/repo-signing-key.gpg"             
 SNAP=(); DPKG=(); AC=(); AG=()
 read -r -a SNAP <<<"$SNAP_STR"; read -r -a DPKG <<<"$DPKG_STR"
 read -r -a AC <<<"$AC_STR"; read -r -a AG <<<"$AG_STR"
-snap() { "${SNAP[@]}" "$@"; }   # 待核实(以官方文档为准)
-dpkg() { "${DPKG[@]}" "$@"; }
-ac() { "${AC[@]}" "$@"; }
-ag() { "${AG[@]}" "$@"; }
+snap_() { command "${SNAP[@]}" "$@"; }   # 名字不与命令同名 + 体内 command 双保险:函数查找优先于 PATH,同名会无限递归
+dpkg_() { command "${DPKG[@]}" "$@"; }
+ac() { command "${AC[@]}" "$@"; }
+ag() { command "${AG[@]}" "$@"; }
 ISSUES=(); MANUAL=(); APPLY_FAILS=()
 
 # 判据 ①:snap list 为空或 snap 命令不存在。返回 0=干净;1=有 snap 应用(应用名打到 stdout);2=读不到。
 snap_apps() {
   local out
   if ! command -v "${SNAP[0]}" >/dev/null 2>&1; then return 0; fi
-  out="$(snap list 2>&1)" || true
+  out="$(snap_ list 2>&1)" || true
   if [ -z "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then return 2; fi
   case "$out" in *"No snaps are installed"*|*"no snaps installed"*) return 0 ;; esac
   printf '%s\n' "$out" | awk 'NR>1 && $1 !~ /^Name$/ && NF>0 {print $1}'
@@ -59,7 +59,7 @@ snap_apps() {
 snapd_installed() {
   local out
   command -v "${DPKG[0]}" >/dev/null 2>&1 || return 2
-  out="$(dpkg -l snapd 2>&1)" || true
+  out="$(dpkg_ -l snapd 2>&1)" || true
   if printf '%s\n' "$out" | grep -qE '^ii[[:space:]]+snapd'; then return 1; fi
   return 0
 }
@@ -149,7 +149,7 @@ apply_run() {
   apps="$(snap_apps)" || rc=$?
   if [ "$rc" -eq 1 ]; then
     for name in $apps; do
-      out="$(snap remove --purge "$name" 2>&1)" || { APPLY_FAILS+=("snap remove --purge $name 失败: $(printf '%s' "$out" | tail -n 2 | tr '\n' ' ')"); continue; }
+      out="$(snap_ remove --purge "$name" 2>&1)" || { APPLY_FAILS+=("snap remove --purge $name 失败: $(printf '%s' "$out" | tail -n 2 | tr '\n' ' ')"); continue; }
       dbk_add_action "snap remove --purge $name"; dbk_mark_changed
     done
   fi

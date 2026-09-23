@@ -23,7 +23,7 @@ dbk_log_default "set-time"
 TD_STR="${DBK_TIMEDATECTL:-timedatectl}"
 TD=()
 read -r -a TD <<<"$TD_STR"
-td_run() { "${TD[@]}" "$@"; }
+td_run() { command "${TD[@]}" "$@"; }
 
 RTC_LOCAL=""; SYNC=""; NTP=""; ISSUES=(); MANUAL=()
 

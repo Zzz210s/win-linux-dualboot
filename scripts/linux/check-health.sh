@@ -34,14 +34,15 @@ SNAP=(); DPKG=(); SC=(); DF=(); MO=(); UD=(); AG=(); DQ=()
 read -r -a SNAP <<<"$SNAP_STR"; read -r -a DPKG <<<"$DPKG_STR"; read -r -a SC <<<"$SC_STR"
 read -r -a DF <<<"$DF_STR"; read -r -a MO <<<"$MO_STR"; read -r -a UD <<<"$UD_STR"
 read -r -a AG <<<"$AG_STR"; read -r -a DQ <<<"$DQ_STR"
-snap() { "${SNAP[@]}" "$@"; }
-dpkg() { "${DPKG[@]}" "$@"; }
-sc() { "${SC[@]}" "$@"; }
-dfc() { "${DF[@]}" "$@"; }
-mo() { "${MO[@]}" "$@"; }
-ud() { "${UD[@]}" "$@"; }
-ag() { "${AG[@]}" "$@"; }
-dq() { "${DQ[@]}" "$@"; }
+# 包装函数一律「名字不与外部命令同名 + 体内 command」双保险:函数查找优先于 PATH,同名(snap/dpkg)会无限递归。
+snap_() { command "${SNAP[@]}" "$@"; }
+dpkg_() { command "${DPKG[@]}" "$@"; }
+sc() { command "${SC[@]}" "$@"; }
+dfc() { command "${DF[@]}" "$@"; }
+mo() { command "${MO[@]}" "$@"; }
+ud() { command "${UD[@]}" "$@"; }
+ag() { command "${AG[@]}" "$@"; }
+dq() { command "${DQ[@]}" "$@"; }
 
 ISSUES=(); MANUAL=(); PROBE_OUT=""; PROBE_RC=0
 # 统一探针:stdout+stderr 收进 PROBE_OUT(不吞输出),返回命令自身退出码;PROBE_RC 留给调用方分辨
@@ -65,7 +66,7 @@ check_session() {
 check_snap() {
   local apps=""
   if command -v "${SNAP[0]}" >/dev/null 2>&1; then
-    probe snap list
+    probe snap_ list
     apps="$(printf '%s\n' "$PROBE_OUT" | awk 'NR>1 && $1 !~ /^Name$/ && NF>0 {print $1}' | tr '\n' ' ')"
     case "$PROBE_OUT" in
       *"No snaps are installed"*|*"no snaps installed"*) apps="" ;;
@@ -75,7 +76,7 @@ check_snap() {
   else
     dbk_add_check "②snap 命令不存在(设计 04 第 3 节 S1/S2 的期望态)"
   fi
-  probe dpkg -l snapd
+  probe dpkg_ -l snapd
   if printf '%s\n' "$PROBE_OUT" | grep -qE '^ii[[:space:]]+snapd'; then
     ISSUES+=("②snapd 已安装(dpkg -l 有 ii 行);按 05-14 清除并写 pin")
   elif [ "$PROBE_RC" -eq 127 ]; then
@@ -112,7 +113,7 @@ check_record() {
   local src="" UP=0
   if command -v "${UD[0]}" >/dev/null 2>&1; then
     probe ud devices
-    src="$(printf '%s\n' "$PROBE_OUT" | grep -iE 'recommended|driver' | head -n 2 | tr '\n' ';' | sed 's/;$//')"
+    src="$(printf '%s\n' "$PROBE_OUT" | grep -iE 'recommended|driver' | head -n 2 | tr '\n' ';' | sed 's/;$//' || true)"
   fi
   if [ -z "$src" ]; then MANUAL+=("显卡驱动来源:取不到 ubuntu-drivers devices 的推荐行($UD_STR)"); fi
   if command -v "${MO[0]}" >/dev/null 2>&1; then

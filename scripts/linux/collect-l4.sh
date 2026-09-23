@@ -134,7 +134,7 @@ robustness_body() {
   oomd="$(one systemctl is-active systemd-oomd)"; sshd="$(one systemctl is-active sshd)"
   smart="$(one systemctl is-active smartd)"; tm="$(one systemctl is-enabled unattended-upgrades)"
   pol="$(one grep -h Automatic-Reboot /etc/apt/apt.conf.d/52-dbk-unattended.conf)"
-  kern="$(ls -1 "$BOOT_DIR"/vmlinuz-* 2>/dev/null | wc -l | tr -d ' ')"
+  kern="$(ls -1 "$BOOT_DIR"/vmlinuz-* 2>/dev/null | wc -l | tr -d ' ' || true)"
   cat <<EOF
 # baseline/04-robustness.md (L4 产物;卡 05-12,设计 04 第 7 节 R1-R9)
 

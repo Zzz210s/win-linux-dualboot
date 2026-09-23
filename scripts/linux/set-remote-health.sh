@@ -37,8 +37,8 @@ read -r -a SC <<<"$SC_STR"
 read -r -a SM <<<"$SM_STR"
 read -r -a LS <<<"$LS_STR"
 read -r -a SS <<<"$SS_STR"
-sc() { "${SC[@]}" "$@"; }
-sm() { "${SM[@]}" "$@"; }
+sc() { command "${SC[@]}" "$@"; }
+sm() { command "${SM[@]}" "$@"; }
 ISSUES=(); MANUAL=(); APPLY_FAILS=()
 PROBE_RC=0
 

@@ -28,7 +28,7 @@ dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
 dbk_assert_step
 dbk_log_default "reboot-to-windows"
 dbk_enable_errtrap
-efi_run() { "${EFI[@]}" "$@"; }
+efi_run() { command "${EFI[@]}" "$@"; }
 efi_available() { command -v "${EFI[0]}" >/dev/null 2>&1; }
 read_order() { efi_run 2>/dev/null | sed -n 's/^BootOrder:[[:space:]]*//p' | head -n 1; }
 read_next() { efi_run 2>/dev/null | sed -n 's/^BootNext:[[:space:]]*//p' | head -n 1; }
