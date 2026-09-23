@@ -1,0 +1,6 @@
+// 由 dbk 脚本生成(卡 05-7):只装安全更新,不自动重启
+// 依据:docs/design/04-kubuntu-variant-design.md 第 2 节 D2 与第 7 节 R8
+Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+};
+Unattended-Upgrade::Automatic-Reboot "false";

@@ -8,7 +8,7 @@
 |---|---|---|---|
 | **共用底座** | §1 L0 + §2 分盘 | 约 3 + 4 步 | 三条轨道都要:固件设置、两个安装介质、核对目标盘、按轨道分盘 |
 | **W**(只 Windows) | 共用底座 + §3 | 约 9 步 | 装 Windows、关快速启动与休眠、重定向、激活、L2 闸门 |
-| **L**(只 Silverblue) | 共用底座 + §4 + §5 | 约 10 步 | 装 Silverblue、首启收敛(Fedora 占用整盘) |
+| **L**(只 Kubuntu) | 共用底座 + §4 + §5 | 约 10 步 | 装 Kubuntu、首启收敛(Linux 占用整盘) |
 | **D**(双系统) | 共用底座 + §3 + §4 + §5 | 约 19 步 | W 与 L 的并集 + 共存增量 4 步:115GiB 预留、引导不变量核查、`ntfs3` 共享盘、退役与救援 |
 
 用法:执行到哪一项就把该行的 `[ ]` 改成 `[x]`,带 `____` 的地方填实测值;每一行都要能给出证据(命令输出、脚本退出码、产物文件路径)。**判据不成立就不要往下走**,先按对应卡的 `出错时:` 处置。脚本一律默认只读:Ubuntu 侧给 `--check`(改系统才加 `--apply` 且需 root 与 `--yes`),Windows 侧给 `-Check`,只有明确写 `-Apply` / 不带 `-Check` 的那一行才动手。
@@ -35,16 +35,16 @@
 
 **本阶段产物**:分区记录进 `baseline/`(W 与 D 落 `01-partitions.txt`;L 落 `03-efi-layout.txt` 的分区段)—— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` 分盘-1 认下本机轨道的目标布局(8 项分区表 + "Fedora 侧三块分区建在预留的 115GiB 未分配区内") | 脚本:`scripts/windows/check-partition-layout.ps1 -Track <W|L|D> -Check` | 判据:8 个数值已抄进分区记录,核对脚本对本轨道判 PASS | 卡:[02-partitioning.md](../docs/02-partitioning.md) 的 `02-1`
+- `[ ]` 分盘-1 认下本机轨道的目标布局(8 项分区表 + "Ubuntu 侧三块分区建在预留的 115GiB 未分配区内") | 脚本:`scripts/windows/check-partition-layout.ps1 -Track <W|L|D> -Check` | 判据:8 个数值已抄进分区记录,核对脚本对本轨道判 PASS | 卡:[02-partitioning.md](../docs/02-partitioning.md) 的 `02-1`
 - `[ ]` 分盘-2 轨道 **W**:只建 Windows 侧四块,不给 Linux 预留空间 | 脚本:`scripts/windows/check-partition-layout.ps1 -Track W -Check` | 判据:ESP 2048MB + MSR 16MB + 系统 204800MB,顺序正确 | 卡:`02-2`
-- `[ ]` 分盘-3 轨道 **L**:整盘只建 Fedora 三块(ESP-Fedora 1024MB / `/boot` 1024MB ext4 / root btrfs) | 脚本:`scripts/linux/check-partition-plan.sh --track L --check` | 判据:分区列表只有这三块,没动到任何 Windows 分区 | 卡:`02-3`
+- `[ ]` 分盘-3 轨道 **L**:整盘只建 Ubuntu 三块(ESP-Ubuntu 1024MB / `/boot` 1024MB ext4 / root ext4) | 脚本:`scripts/linux/check-partition-plan.sh --track L --check` | 判据:分区列表只有这三块,没动到任何 Windows 分区 | 卡:`02-3`
 - `[ ]` 分盘-4 轨道 **D**:装 Windows 前用 diskpart 预建四区并留出约 115GiB 未分配 | 脚本:`scripts/windows/create-partitions.ps1 -Check`(执行时才 `-Apply -Yes`);核对用 `scripts/windows/check-partition-layout.ps1 -Track D -Check` | 判据:四区尺寸与表一致,`D:` 之后仍有约 115GiB 未分配 | 卡:`02-4`
 
 ## 3. 轨道 W:L1 Windows 全新安装 + L2 闸门
 
 **本阶段产物**:`baseline/01-partitions.txt`、`baseline/01-activation.md`、`baseline/02-preflight-report.md`、`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` W-1 只在 200GiB 分区上安装 Windows 11 专业版,并记录 WinRE 落点 | 脚本:`scripts/windows/verify-windows-baseline.ps1 -Check -Track D` | 判据:两块 ESP 尺寸未被削减、Fedora root 与预留空间不少于 115GiB;偏差据实记入产物 | 卡:[03-windows.md](../docs/03-windows.md) 的 `03-1`
+- `[ ]` W-1 只在 200GiB 分区上安装 Windows 11 专业版,并记录 WinRE 落点 | 脚本:`scripts/windows/verify-windows-baseline.ps1 -Check -Track D` | 判据:两块 ESP 尺寸未被削减、Ubuntu root 与预留空间不少于 115GiB;偏差据实记入产物 | 卡:[03-windows.md](../docs/03-windows.md) 的 `03-1`
 - `[ ]` W-2 首次进桌面:关闭 Fast Startup 与休眠 | 脚本:`scripts/windows/disable-faststartup.ps1 -Check`(执行时加 `-Apply -Yes`) | 判据:`powercfg /a` 显示休眠不可用;两项均已关闭 | 卡:`03-2`
 - `[ ]` W-3 系统盘隔离:六个已知文件夹(桌面/文档/下载/图片/视频/音乐)与游戏库、容器镜像全部重定向到 `D:` | 脚本:`scripts/windows/redirect-known-folders.ps1 -Check`(执行时加 `-Apply -Yes`) | 判据:六个已知文件夹的路径值全部以 `D:\` 开头,`D:\Shared\` 存在 | 卡:`03-3`
 - `[ ]` W-4 完成激活并落盘状态 | 脚本:`scripts/windows/check-activation.ps1 -Check` | 判据:状态已记录(激活失败不阻塞,但必须记下报错) | 卡:`03-4`
@@ -54,14 +54,14 @@
 - `[ ]` W-8 跑基线备份(ESP 文件树 + 清单 + 固件启动项 + 分区快照) | 脚本:`scripts/windows/backup-esp.ps1 -OutDir baseline`(复验用 `-Check`) | 判据:`baseline/02-esp-backup/manifest.sha256` 与三份快照在位 | 卡:`03-8`
 - `[ ]` W-9 落 L2 产物并核对四件齐备(**与 L1 同一次会话内连续完成**,中途若 Windows 更新则基线失效须重做) | 脚本:`scripts/windows/collect-l2.ps1 -Check` | 判据:四件齐备且结论行为"允许进入 L3" | 卡:`03-9`
 
-## 4. 轨道 L:L3 Silverblue 安装(不侵犯 Windows 引导)
+## 4. 轨道 L:L3 Kubuntu 安装(不侵犯 Windows 引导)
 
 **本阶段产物**:`baseline/03-efi-layout.txt`(六节) —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L3-1 一次性从安装 U 盘启动进 live(先确认 `/sys/firmware/efi` 存在) | 脚本:`scripts/windows/set-bootnext.ps1 -Device USB -WhatIf`(去掉 `-WhatIf` 才执行) | 判据:进 live 桌面,`lsblk` 能看到目标盘 | 卡:[04-silverblue.md](../docs/04-silverblue.md) 的 `04-1`
-- `[ ]` L3-2 手动分区:三块建在预留区内,Anaconda 只指定挂载点 | 脚本:`scripts/linux/check-partition-plan.sh --track D --check` | 判据:分区列表新增三行且 Windows 各分区原值不变,没有任何 Windows 分区被标成"格式化" | 卡:`04-2`
-- `[ ]` L3-3 装完重启验证(默认仍进 Windows;进 Fedora 后逐项核对) | 脚本:`scripts/linux/verify-l3.sh --check` | 判据:ostree 部署在位、`/boot` 独立且为 ext4、两块 ESP 内容齐全、`BootOrder` 首位仍是 Windows Boot Manager | 卡:`04-3`
-- `[ ]` L3-4 落 L3 产物(六节) | 脚本:`scripts/linux/collect-l3.sh --check`(落盘加 `--apply`) | 判据:两棵 `\EFI\` 树 + `efibootmgr -v` + `BootOrder` + `lsblk` + `findmnt` + `rpm-ostree status` 摘要齐全 | 卡:`04-4`
+- `[ ]` L3-1 一次性从安装 U 盘启动进 live(先确认 `/sys/firmware/efi` 存在) | 脚本:`scripts/windows/set-bootnext.ps1 -Device USB -WhatIf`(去掉 `-WhatIf` 才执行) | 判据:进 live 桌面,`lsblk` 能看到目标盘 | 卡:[04-kubuntu.md](../docs/04-kubuntu.md) 的 `04-1`
+- `[ ]` L3-2 手动分区:三块建在预留区内,Calamares 只指定挂载点 | 脚本:`scripts/linux/check-partition-plan.sh --track D --check` | 判据:分区列表新增三行且 Windows 各分区原值不变,没有任何 Windows 分区被标成"格式化" | 卡:`04-2`
+- `[ ]` L3-3 装完重启验证(默认仍进 Windows;进 Kubuntu 后逐项核对) | 脚本:`scripts/linux/verify-l3.sh --check` | 判据:`grub-efi-amd64-signed` 与 `shim-signed` 在位、GRUB 落 `\EFI\ubuntu\`、`/boot` 独立且为 ext4、两块 ESP 内容齐全、`BootOrder` 首位仍是 Windows Boot Manager | 卡:`04-3`
+- `[ ]` L3-4 落 L3 产物(六节) | 脚本:`scripts/linux/collect-l3.sh --check`(落盘加 `--apply`) | 判据:两棵 `\EFI\` 树 + `efibootmgr -v` + `BootOrder` + `lsblk` + `findmnt` + 引导包与内核版本摘要齐全 | 卡:`04-4`
 
 ## 5. 轨道 L/D:L4 首启收敛
 
@@ -69,17 +69,18 @@
 
 - `[ ]` L4-1 挂载共享数据盘 `D:`:`ntfs3` 读写 + 固定 `uid`/`gid`/`umask` + `windows_names` + `nofail` + `noatime` | 脚本:`scripts/linux/mount-shared.sh --check`(动手加 `--apply --yes`) | 判据:挂载成功且跨系统双向可见(Windows 写入 -> Linux 读到,反向再测一次) | 卡:[05-first-boot.md](../docs/05-first-boot.md) 的 `05-1`
 - `[ ]` L4-2 家目录数据重定向:只重定向文档类目录;`~/.config`、`~/.ssh`、代码仓库留在本地 root | 脚本:`scripts/linux/xdg-redirect.sh --check` | 判据:`xdg-user-dir` 六项都指向共享盘对应目录 | 卡:`05-2`
-- `[ ]` L4-3 显卡:rebase 到 ublue 的 NVIDIA 变体(镜像内已预签名)+ 一次性 MOK 注册,保留 nouveau 兜底 | 脚本:`scripts/linux/graphics.sh --check`;`scripts/linux/graphics-mok.sh --check` | 判据:会话为 `wayland`、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空、`mokutil --list-enrolled` 含上游密钥 | 卡:`05-3`
+- `[ ]` L4-3 显卡:用 `ubuntu-drivers` 装 Ubuntu 官方**预签名** nvidia 包(不关 Secure Boot、不自签密钥),保留 nouveau 兜底 | 脚本:`scripts/linux/graphics.sh --check` | 判据:会话为 `wayland`、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空、`xrandr --listproviders` 有 ≥2 个 provider | 卡:`05-3`
 - `[ ]` L4-4 时间:`RTC in local TZ: no`(Linux 用 UTC,Windows 侧按需配 `RealTimeIsUniversal=1`) | 脚本:`scripts/linux/set-time.sh --check` | 判据:`timedatectl` 输出与目标一致 | 卡:`05-4`
 - `[ ]` L4-5 蓝牙配对密钥同步(以 Windows 侧为权威来源) | 脚本:`scripts/linux/bt-keys-sync-wrapper.sh`(默认空跑,动手加 `--apply`) | 判据:切换系统后不需重新配对 | 卡:`05-5`
 - `[ ]` L4-6 交换空间:zram 只核对 + 4GiB swapfile(fstab 行带 `nofail`) | 脚本:`scripts/linux/storage.sh --check` | 判据:`zramctl` 列出 `zram0`;`swapon` 列出 swapfile 且 fstab 行在位 | 卡:`05-6`
-- `[ ]` L4-7 日志持久化与更新策略(journald 落盘;`rpm-ostreed-automatic` 只 check / download) | 脚本:`scripts/linux/set-journald.sh --check`;`scripts/linux/set-updates.sh --check` | 判据:`/var/log/journal` 存在;`/etc/rpm-ostreed.conf` 不含 `stage` | 卡:`05-7`
-- `[ ]` L4-8 SSH 救援通道与磁盘健康(分层装 `smartmontools`,`sshd` 与 `smartd` 启用) | 脚本:`scripts/linux/set-remote-health.sh --check` | 判据:两项 `systemctl is-active` 为 `active`;`smartctl -H` 报 PASSED | 卡:`05-8`
-- `[ ]` L4-9 **部署回滚**(变更前固定当前部署;回退时开机菜单选旧部署或 `rollback`) | 脚本:`scripts/linux/dbk-rollback.sh --list`;`scripts/linux/dbk-rollback.sh --check` | 判据:能列出部署数与 pin 标记;参考设备真做一次回滚并确认 `/var/home` 数据仍在 | 卡:`05-9`
-- `[ ]` L4-10 **发行版升级**(rebase 到新分支,**前置 pin**) | 脚本:`scripts/linux/upgrade-release.sh --check`(执行加 `--apply --yes --branch <目标分支>`) | 判据:未 pin 时脚本拒绝 rebase;重启后来源是新分支且会话仍 `wayland` | 卡:`05-10`
+- `[ ]` L4-7 日志持久化与更新策略(journald 落盘;`unattended-upgrades` 只装安全更新、不自动重启) | 脚本:`scripts/linux/set-journald.sh --check`;`scripts/linux/set-updates.sh --check` | 判据:`/var/log/journal` 存在;apt 片段含 `Automatic-Reboot "false"` 且 `Allowed-Origins` 只列 `-security` | 卡:`05-7`
+- `[ ]` L4-8 SSH 救援通道与磁盘健康(apt 装 `smartmontools`,`sshd` 与 `smartd` 启用) | 脚本:`scripts/linux/set-remote-health.sh --check` | 判据:两项 `systemctl is-active` 为 `active`;`smartctl -H` 报 PASSED | 卡:`05-8`
+- `[ ]` L4-9 **包级回退与变更前备份**(降级 + `apt-mark hold`;本轨道没有一条命令回退整个系统) | 脚本:`scripts/linux/rollback-pkg.sh --check` | 判据:`--list` 能列出包的可用版本、`--check` 能读出已 hold 清单与 apt 历史;参考设备真做一次降级并 `--unhold` 还原 | 卡:`05-9`
+- `[ ]` L4-10 **发行版升级**(约 3 年一次:`do-release-upgrade`,前置备份与留档) | 脚本:`scripts/linux/upgrade-release.sh --check`(执行加 `--apply --yes`) | 判据:pin 或 Mozilla 源文件缺失时脚本拒绝升级;重启后版本已更新、会话仍 `wayland`、snap 四条判据全过 | 卡:`05-10`
 - `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -WhatIf` | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
 - `[ ]` L4-12 落 L4 两份产物 | 脚本:`scripts/linux/collect-l4.sh --check`(落盘加 `--apply`) | 判据:`baseline/04-first-boot.md` 与 `baseline/04-robustness.md` 在位 | 卡:`05-12`
 - `[ ]` L4-13 (可选)按顺序汇总跑一遍 L4 各模块 | 脚本:`scripts/linux/first-boot.sh --check`;`scripts/linux/hardening.sh --check` | 判据:单项失败不改整体退出码,只在摘要里标出失败项 | 卡:`05-13`
+- `[ ]` L4-14 **snap 零残留**(四条判据 + apt pin 压制 + Mozilla 官方源) | 脚本:`scripts/linux/step-snap-free.sh --check`(清除加 `--apply --yes`) | 判据:`snap list` 空、`dpkg -l snapd` 无输出、`apt-cache policy snapd` 无候选、`apt-get install -s firefox` 不含 snapd | 卡:`05-14`
 
 ## 6. 完成判据
 

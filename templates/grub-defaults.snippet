@@ -1,10 +1,10 @@
 # GRUB 片段 —— 由 scripts/linux/hardening.sh 合并进 /etc/default/grub
 #   (合并前先备份为 /etc/default/grub.dbk.bak),合并后执行 update-grub。
 # 合并规则:只取下面未注释的 KEY=VALUE 行;已存在的同名键就地替换,不存在则追加。
-# 设计依据:措施 R3(部署级回滚 + 多部署保留)与决策 3.19(引导菜单阶段黑屏的处置)。
-# 说明:原子版下每个 deployment 自带内核与 initrd(`/boot` 独立),旧部署本身就是回滚点,
-#      不需要额外保留内核包,也不用任何文件系统快照工具;
+# 设计依据:措施 R3(保留旧内核,给"升级后起不来"留一条退路)与决策 3.19(引导菜单阶段黑屏的处置)。
+# 说明:/boot 是独立分区,旧内核包由 apt 保留(不要用 autoremove 清掉全部旧内核);
 #      默认条目取"上次选中的条目"(saved),与固件层 BootNext 互补(不改 BootOrder,I2)。
+#      系统级恢复在本方案里是"包级回退 + 原地重装两法"(设计 04 第 7 节),不引入任何快照工具。
 GRUB_DEFAULT=saved
 GRUB_SAVEDEFAULT=true
 GRUB_TIMEOUT=5

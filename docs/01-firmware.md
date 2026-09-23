@@ -7,7 +7,7 @@
 ## 开始前
 
 - 前提:单块 1TB 级 NVMe 的 Windows 机器;固件为 UEFI(CSM 关闭)、`Secure Boot` 可用,且存储控制器模式可以改。
-- 需要的东西:厂商 Setup 键与一次性启动菜单键(见入口页参数表 `VENDOR` / `BOOT_MENU_KEY`)、两个官方安装 ISO、一个 ≥8GB 的 U 盘(先备份其中数据)。
+- 需要的东西:厂商 Setup 键与一次性启动菜单键(见入口页参数表 `VENDOR` / `BOOT_MENU_KEY`)、两个官方安装 ISO(Windows 11 + Kubuntu 26.04)、一个 ≥8GB 的 U 盘(先备份其中数据)。
 - 产物落点:`baseline/00-firmware.md`(字段清单与写法见 `01-4`;多设备放 `baseline/<设备别名>/`)。
 
 ### 01-1 改固件设置(先抄原值,再把三组开关改到目标状态)
@@ -25,20 +25,20 @@
 坑:VMD / RAID On 必须在装 Windows 之前关闭(设计 4.1);装好系统后再改会无法启动。不要为绕过介质报错而关闭 `Secure Boot`。
 出错时:固件里没有 AHCI / NVMe 选项或该项置灰 -> 按 `00-overview.md` 的偏离项处置表处理;开机报 `INACCESSIBLE_BOOT_DEVICE` -> 走文末的 RAID On 附录分支。
 
-### 01-2 做两个安装介质(Fedora Silverblue 安装镜像 + Windows 11 ISO)
+### 01-2 做两个安装介质(Kubuntu 26.04 ISO + Windows 11 ISO)
 
 做:从官方渠道下载两个 ISO,校验后写入 U 盘(GPT + UEFI);国内镜像站只作下载加速,不作信任源。
-  1. 从 Fedora 官方发布页的 Silverblue `iso/` 目录下载安装镜像,连同同目录的官方 `CHECKSUM` 与它的签名文件(`.asc` / `.gpg`)一起下载
-     看到:`CHECKSUM` 里有 `SHA256 (Fedora-Silverblue-<版本>-<构建>-x86_64.iso) = <64 位十六进制>` 一行
+  1. 从 Kubuntu 官方发布页(或 Ubuntu 的 `releases.ubuntu.com` 镜像目录)下载 Kubuntu 26.04 LTS 安装 ISO,连同同目录的官方 `SHA256SUMS` 与它的签名文件(`.gpg`)一起下载
+     看到:`SHA256SUMS` 里有 `<64 位十六进制>  *kubuntu-26.04-desktop-amd64.iso` 一行
   2. 从微软官方下载页 https://www.microsoft.com/software-download/windows11 取 Windows 11 ISO,记录来源与实测 SHA256 留档(微软不发布该镜像哈希,设计 5.3)
      看到:ISO 取自微软官方下载域、未经第三方盘中转;它的 SHA256 已记下
-  3. 校验:ISO 与官方 `CHECKSUM` 放同一目录后跑脚本
-     看到:Fedora ISO 的 SHA256 与官方值逐字符一致、`gpg --verify` 签名通过;Windows ISO 只按"官方下载域 + 官方安装器校验"两条确认
+  3. 校验:ISO 与官方 `SHA256SUMS` 放同一目录后跑脚本(`-FedoraChecksum` 是旧发行版遗留的参数名,这里指向官方校验值文件)
+     看到:Kubuntu ISO 的 SHA256 与官方值逐字符一致、`gpg --verify` 签名通过;Windows ISO 只按"官方下载域 + 官方安装器校验"两条确认
   4. 写入 U 盘:分盘写用 Rufus(https://rufus.ie/,分区类型 GPT、目标系统 UEFI);一盘多 ISO 用 Ventoy(https://www.ventoy.net/)
      看到:一次性启动菜单里出现带 `UEFI:` 前缀的 U 盘条目
 
-脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
-坑:`CHECKSUM` 与签名必须取自官方发布页,镜像站的文件可能滞后;Ventoy 在 `Secure Boot` 下须先完成一次 MOK 密钥注册,否则报 `Verification failed`。
+脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -FedoraChecksum <SHA256SUMS 路径>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
+坑:`SHA256SUMS` 与签名必须取自官方发布页,镜像站的文件可能滞后;Ventoy 在 `Secure Boot` 下须先完成一次密钥注册,否则报 `Verification failed`。
 出错时:哈希不一致 -> 重新下载或换镜像站重下;U 盘引导被 `Secure Boot` 拒绝 -> 先确认是不是 Ventoy,不要关闭 `Secure Boot`(见 `01-1`)。
 
 ### 01-3 核对目标磁盘(只核对型号与容量,防选错盘)

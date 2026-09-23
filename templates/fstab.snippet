@@ -3,7 +3,7 @@
 #       scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --apply(它会做备份 + 校验 + 写测试)。
 # 两行都带"分区缺失也不阻断启动"的挂载选项:万一分区缺失或写坏,启动过程不会被卡住(设计文档第 7 节 L4 fstab 行)。
 # 交换空间的 swapfile 行由 `scripts/linux/storage.sh` 追加(判据同为带 `nofail`,设计 3.8);
-# zram 由发行版自带的 systemd-zram-generator 承担,本文件不涉及。
+# zram 优先由 systemd-zram-generator 承担(退化 zram-tools),本文件不涉及。
 #
 # 前置条件(缺一不可,设计文档 5.3):
 #   1) Windows 已关闭 Fast Startup 与休眠(HiberbootEnabled=0,powercfg /a 里"休眠/快速启动"不可用),
