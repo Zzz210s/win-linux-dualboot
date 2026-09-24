@@ -45,5 +45,23 @@ while IFS= read -r f; do
   esac
 done < <(find "$ROOT/scripts" -type f \( -name '*.sh' -o -name '*.ps1' \) -not -path '*/tests/*' | sort)
 
+# PSScriptAnalyzer(可选,高信号规则集):只跑能指真实缺陷的规则,不跑命名/风格类。
+#   环境缺失(无 pwsh / 未装模块 / 调用失败)一律显式 SKIP,不影响退出码。
+PSA="$(command -v pwsh || command -v pwsh.exe || true)"
+if [ -z "$PSA" ] && [ -x "$HOME/scoop/apps/pwsh/current/pwsh.exe" ]; then PSA="$HOME/scoop/apps/pwsh/current/pwsh.exe"; fi
+if [ -z "$PSA" ]; then echo "SKIP PSScriptAnalyzer (no pwsh)"
+else
+  if ! "$PSA" -NoProfile -Command "if (Get-Module -ListAvailable PSScriptAnalyzer) { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
+    echo "SKIP PSScriptAnalyzer (module not installed)"
+  else
+    wdir="$(pwd)"; command -v cygpath >/dev/null && wdir="$(cygpath -w "$(pwd)")"
+    psout="$("$PSA" -NoProfile -Command "Invoke-ScriptAnalyzer -Path '${wdir}\scripts\windows' -IncludeRule @('PSAvoidUsingEmptyCatchBlock','PSAvoidAssignmentToAutomaticVariable','PSAvoidUsingInvokeExpression','PSPossibleIncorrectComparisonWithNull','PSUseCmdletCorrectly') -Severity Error,Warning | ForEach-Object { \$_.ScriptPath + ':' + \$_.Line + '  [' + \$_.RuleName + '] ' + \$_.Message }" 2>&1)"; prc=$?
+    if [ "$prc" -ne 0 ]; then echo "SKIP PSScriptAnalyzer (调用失败输出: rc=$prc)"
+    elif [ -n "$(printf '%s' "$psout" | tr -d '[:space:]')" ]; then
+      printf '%s\n' "$psout" | sed 's/^/  /'; echo "PS_ANALYZER(高信号规则集:见上)"; fail=1
+    fi
+  fi
+fi
+
 if [ "$fail" -eq 0 ]; then echo "check-scripts: OK"; else echo "check-scripts: FAIL"; fi
 exit "$fail"

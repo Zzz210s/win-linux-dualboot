@@ -79,14 +79,16 @@ function Get-ExpectedSha256 {
 
 function Get-RemovableDiskList {
   if ($env:DBK_MEDIA_DRIVES) { return @($env:DBK_MEDIA_DRIVES -split ';' | Where-Object { $_ }) }
-  $out = @()
+  $out = @(); $e1 = ''; $e2 = ''
   try { $out += @(Get-Disk -ErrorAction Stop | Where-Object { $_.BusType -eq 'USB' } |
-    ForEach-Object { $_.FriendlyName + '|' + [math]::Round($_.Size / 1GB, 1) + 'GiB|BusType=USB' }) } catch { }
+    ForEach-Object { $_.FriendlyName + '|' + [math]::Round($_.Size / 1GB, 1) + 'GiB|BusType=USB' }) } catch { $e1 = $_.Exception.Message }
   if ($out.Count -eq 0) {
     try { $out += @(Get-CimInstance -ClassName Win32_DiskDrive -ErrorAction Stop |
       Where-Object { $_.InterfaceType -eq 'USB' -or $_.MediaType -match 'Removable' } |
-      ForEach-Object { $_.Model + '|' + [math]::Round([int64]$_.Size / 1GB, 1) + 'GiB|InterfaceType=' + $_.InterfaceType }) } catch { }
+      ForEach-Object { $_.Model + '|' + [math]::Round([int64]$_.Size / 1GB, 1) + 'GiB|InterfaceType=' + $_.InterfaceType }) } catch { $e2 = $_.Exception.Message }
   }
+  # 两条探测路径都失败时把原因留在脚本级变量里,供调用方的「需人工」文案引用(不再静默吞掉)。
+  $script:DriveProbeErr = (@($e1, $e2) | Where-Object { $_ }) -join ' / '
   return @($out | Where-Object { $_ })
 }
 
@@ -132,7 +134,7 @@ $drives = @(Get-RemovableDiskList)
 if ($drives.Count -gt 0) { Add-DbkCheck ('可移动盘:' + ($drives -join '; ')) }
 else {
   $manualN++
-  Add-DbkCheck '需人工:没看到可移动盘(插上 U 盘后重跑;或本机 USB 总线读不到)'
+  Add-DbkCheck ('需人工:没看到可移动盘(插上 U 盘后重跑;或本机 USB 总线读不到)' + $(if ($script:DriveProbeErr) { ';底层错误:' + $script:DriveProbeErr } else { '' }))
 }
 Add-DbkAction '人工写盘:Windows 用 Rufus(分区类型 GPT、目标系统 UEFI);一盘多 ISO 用 Ventoy(Secure Boot 下先在 MOK 界面完成密钥注册)'
 Add-DbkAction '人工:写好后在一次性启动菜单里确认出现带 UEFI: 前缀的 U 盘条目(固件的 Fast Boot 必须为 Disabled)'

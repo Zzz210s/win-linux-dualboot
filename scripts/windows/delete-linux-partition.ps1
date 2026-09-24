@@ -8,21 +8,19 @@
   只认显式目标:-Partition <int[]> 与/或 -PartitionGuid <string[]>(GUID 先在当前分区表里解析成分区号;都没给 -> 64 零写)。
   绝不做"删除所有 Linux 分区"这类模糊操作,也绝不用 diskpart clean / delete volume。**Windows ESP / C: / D: / MSR /
   WinRE 永远不是目标**:逐个校验(MSR/WinRE 按分区类型,C:/D: 按盘符,Windows ESP 用挂载探测 \EFI\Microsoft\ ——
-  ESP-Ubuntu 与 Windows ESP 同为 EFI System 类型,必须靠显式分区号/GUID + 探测才能分开;真机若无法把挂载的 ESP 映射到
-  分区号,先用 -WinEspNumber 声明 Windows ESP 分区号)。目标非法 -> 64 零写;目标不存在 -> 1 零写。
+  ESP-Ubuntu 与 Windows ESP 同为 EFI System 类型,必须靠显式分区号/GUID + 探测才能分开;无法映射时先用 -WinEspNumber 声明。目标非法 -> 64 零写;目标不存在 -> 1 零写。
   -Check(缺省)只打印分区表 diff(执行前 / 计划执行后);-Apply -Yes:生成 diskpart 脚本(select partition <N> +
   delete partition override)-> 执行 -> 复读断言:目标分区消失、其它分区 offset/size 逐项未变、最大连续未分配空间新增,
   且 BootOrder 首位仍是 Windows Boot Manager、{bootmgr} path 未变;任一不符 -> FAIL(1)并打印复读结果。
   前置断言(任一不满足 -> 64 零写):-BaselineDir(缺省 baseline)下 02-partitions.txt 与 02-firmware-entries.txt 都在;
   BootOrder 首位是 Windows Boot Manager;显式目标已确认。非管理员 -> 2(需人工);非 Windows -> 9(跳过)。
   用法示例(仓库根、管理员 Windows PowerShell;分区号按 baseline\02-partitions.txt 实测;5 = ESP-Ubuntu,6 = /boot,7 = Ubuntu root):
-    ... -Check -Partition 5,6        # 两块 Ubuntu 分区一并删
+    ... -Check -Partition 5,6
     ... -Apply -Yes -Partition 5,6 -WinEspNumber 1    # 或 -PartitionGuid <GPT 分区 GUID>
   夹具钩子(仅离线验证,真机留空):DBK_PART_LAYOUT / DBK_PART_LAYOUT_AFTER(前/后分区表 JSON,结构同
   check-partition-layout.ps1,可带 guid 字段)、DBK_PROTECT_NUMBERS(注入 Windows 分区号,逗号分隔)、DBK_ESP_ROOT_<N>
   (分区 N 的 ESP 内容根)与 DBK_WIN_ESP_NUMBER(声明哪个分区号是 Windows ESP)、DBK_DISKPART_EXE(假 diskpart)、
-  DBK_DISKPART_SCRIPT(diskpart 脚本落盘路径)、DBK_FW_TEXT[_AFTER] / DBK_BM_TEXT[_AFTER] / DBK_BCEDIT_EXE /
-  DBK_IS_ADMIN=1、DBK_CALLS。
+  DBK_DISKPART_SCRIPT(diskpart 脚本落盘路径)、DBK_FW_TEXT[_AFTER] / DBK_BM_TEXT[_AFTER] / DBK_BCEDIT_EXE / DBK_IS_ADMIN=1、DBK_CALLS。
   未在真机验证的命令标「# 待核实(以官方文档为准)」:diskpart 的 select partition <N> 与 delete partition override。
   本文件 UTF-8 with BOM;夹具级验证,真机未跑。固件解析与断言在库 scripts/windows/dbk-win-probe.ps1 里。
   退出码:0 通过 / 1 失败(目标不存在或后置复读不符) / 2 需人工(非管理员或分区表读不到) / 9 跳过(非 Windows) / 64 用法错误
@@ -126,7 +124,10 @@ if (-not $before.Ok) { Add-DbkCheck ('失败项:' + $before.Error); Write-DbkExi
 $rows = @($before.Rows)
 $protect = @(); foreach ($n in @(([string]$env:DBK_PROTECT_NUMBERS) -split '[,\s]+' | Where-Object { $_ })) { $protect += [int]$n }
 if (-not $env:DBK_PART_LAYOUT) {
-  foreach ($c in @('C', 'D')) { try { $protect += [int](Get-Partition -DriveLetter $c -ErrorAction Stop).PartitionNumber } catch { } }
+  # C:/D: 的分区号是保护名单的一部分;解析不出来时不再静默吞错,改在 -Apply 时升为「需人工」。
+  $protectErr = @()
+  foreach ($c in @('C', 'D')) { try { $protect += [int](Get-Partition -DriveLetter $c -ErrorAction Stop).PartitionNumber } catch { $protectErr += ($c + ': ' + $_.Exception.Message) } }
+  if ($protectErr.Count -gt 0 -and $Apply) { Add-DbkCheck ('需人工:系统盘分区号未能解析(' + ($protectErr -join '; ') + '):C:/D: 未进自动保护名单'); Write-DbkExit -Status 需人工 -Message ('无法解析系统盘分区号(' + ($protectErr -join '; ') + ');拒绝在保护名单不完整时删除分区(--apply 零写)') }
   foreach ($r in $rows) { if ($r.Kind -eq 'msr' -or $r.Kind -eq 'recovery') { $protect += [int]$r.Number } }
 }
 $notFound = @(); $prot = @()

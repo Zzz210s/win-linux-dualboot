@@ -44,10 +44,10 @@ function Get-SecureBootState {
 function Get-ControllerProbe {
   # 控制器推断(与 preflight.ps1 同一口径):类名取自 SCSIAdapter,辅以 Win32_PnPEntity 里含 VMD / RST / RAID 的设备名
   if ($env:DBK_FW_PNP) { return @{ Class = @($env:DBK_FW_PNP -split ';' | Where-Object { $_ }); Pnp = @() } }
-  $cls = @(); $pnp = @()
-  try { $cls = @(Get-PnpDevice -Class SCSIAdapter -ErrorAction Stop | ForEach-Object { $_.FriendlyName }) } catch { }
-  try { $pnp = @(Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction Stop | Where-Object { $_.Name -match 'VMD|RST|RAID' } | ForEach-Object { $_.Name }) } catch { }
-  return @{ Class = @($cls | Where-Object { $_ } | Sort-Object -Unique); Pnp = @($pnp | Where-Object { $_ } | Sort-Object -Unique) }
+  $cls = @(); $pnp = @(); $e1 = ''; $e2 = ''
+  try { $cls = @(Get-PnpDevice -Class SCSIAdapter -ErrorAction Stop | ForEach-Object { $_.FriendlyName }) } catch { $e1 = $_.Exception.Message }
+  try { $pnp = @(Get-CimInstance -ClassName Win32_PnPEntity -ErrorAction Stop | Where-Object { $_.Name -match 'VMD|RST|RAID' } | ForEach-Object { $_.Name }) } catch { $e2 = $_.Exception.Message }
+  return @{ Class = @($cls | Where-Object { $_ } | Sort-Object -Unique); Pnp = @($pnp | Where-Object { $_ } | Sort-Object -Unique); Err = (@($e1, $e2) | Where-Object { $_ }) -join ' / ' }
 }
 
 # 固件界面里的开关:操作系统内读不到,只能人工核对(永远列出来,不参与自动判定)
@@ -80,7 +80,7 @@ if ($badCls.Count -gt 0) {
   Add-DbkCheck ('失败项:存储控制器仍在 VMD / RAID 模式:' + ($badCls -join '; ') + ';装 Windows 之前必须改成 AHCI / NVMe(设计 4.1)')
 } elseif ($probe.Class.Count -eq 0) {
   $manualN++
-  Add-DbkCheck '需人工:控制器类名读不到(SCSIAdapter 无结果);请在固件界面核对控制器模式'
+  Add-DbkCheck ('需人工:控制器类名读不到(SCSIAdapter 无结果);请在固件界面核对控制器模式' + $(if ($probe.Err) { ';底层错误:' + $probe.Err } else { '' }))
 } elseif ($badPnp.Count -gt 0) {
   $manualN++
   Add-DbkCheck ('需人工:控制器类名里未见 VMD / RAID(' + ($probe.Class -join '; ') + '),但设备名里出现 VMD / RST(' + ($badPnp -join '; ') + ');推断不确定,请在固件界面确认 VMD 是否已关闭')

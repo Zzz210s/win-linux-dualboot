@@ -70,8 +70,8 @@ function Get-DbkLayout {
     }
     return @{ Exists = $true; SizeMB = [double]$o.disk.sizeMB; Style = ([string]$o.disk.partitionStyle).ToUpper(); Model = [string]$o.disk.model; Parts = $list; Error = '' }
   }
-  $d = $null; try { $d = Get-Disk -Number $DiskNumber -ErrorAction Stop } catch { }
-  if (-not $d) { return @{ Exists = $false; Error = ('读不到磁盘 ' + $DiskNumber + '(不存在,或会话没有管理员权限)'); Parts = @(); SizeMB = 0; Style = ''; Model = '' } }
+  $d = $null; $dErr = ''; try { $d = Get-Disk -Number $DiskNumber -ErrorAction Stop } catch { $dErr = $_.Exception.Message }
+  if (-not $d) { return @{ Exists = $false; Error = ('读不到磁盘 ' + $DiskNumber + '(不存在,或会话没有管理员权限)' + $(if ($dErr) { ';底层错误:' + $dErr } else { '' })); Parts = @(); SizeMB = 0; Style = ''; Model = '' } }
   $parts = @(); $err = ''
   try { $parts = @(Get-Partition -DiskNumber $DiskNumber -ErrorAction Stop) } catch { $err = $_.Exception.Message }
   $map = @{ 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' = 'efi'; 'e3c9e316-0b5c-4db8-817d-f92df00215ae' = 'msr'
