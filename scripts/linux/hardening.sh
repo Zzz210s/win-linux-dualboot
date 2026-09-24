@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # 对应卡:05-13
+# 破坏性:1(会写 fstab/user-dirs.dirs、装包、起服务:--apply 必须显式 --yes)
 # L4:健壮性配置落地(R1-R9;Kubuntu / apt 语义)。九项逐项执行,单项失败不中断,末尾汇总。
 #
-# 用法:bash scripts/linux/hardening.sh [--check|--dry-run] [--apply] [--log <path>]
-#   缺省(或 --check/--dry-run)是 dry-run:只打印九项的动作与判据,不改动系统;--apply(需要 root)才真正改系统。
-#   --yes 是全仓契约的统一选项,由 first-boot.sh 在 apply 模式下透传;本脚本以 --apply 为唯一执行门槛。
+# 用法:bash scripts/linux/hardening.sh [--check|--dry-run] [--apply --yes] [--log <path>]
+#   缺省(或 --check/--dry-run)是 dry-run:只打印九项的动作与判据,不改动系统;--apply(需要 root)才真正改系统,
+#   且必须同时给 --yes(全仓契约:声明「# 破坏性:1」的脚本,--apply 缺 --yes 一律 64 且零写)。
 #   九项:R1 变更前备份 baseline/、R2 包级回退(rollback-pkg.sh)、R3 旧内核保留、R4 救援 U 盘(人工)、
 #     R5 journald 持久化、R6 OOM/zram(storage.sh)、R7 SSH 通道、R8 保守更新(set-updates.sh)、R9 SMART。
 #   设计依据:docs/design/04-kubuntu-variant-design.md 第 7 节(回滚与恢复策略降级后的替代方案)。
@@ -26,20 +27,27 @@ TPL="$ROOT/templates"
 JOURNALD_CONF="${DBK_JOURNALD_CONF:-/etc/systemd/journald.conf.d/99-dbk-persistent.conf}"
 BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"; BAKDIR="${DBK_BACKUP_DIR:-/var/backups/dbk}"
 BOOT_DIR="${DBK_BOOT_DIR:-/boot}"; HIST="${DBK_APT_HISTORY:-/var/log/apt/history.log}"
-APPLY=0; NAMES=(); STATES=(); KEYS=()
+APPLY=0; YES=0; NAMES=(); STATES=(); KEYS=()
 
-usage() { sed -n '2,12p' "$0"; }
+usage() { sed -n '2,13p' "$0"; }
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
     --check|--dry-run) APPLY=0; shift ;;
-    --yes) shift ;;                       # 契约统一选项:first-boot.sh 在 apply 模式透传;执行门槛仍是 --apply
+    --yes|-y) YES=1; shift ;;
     --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
     --log=*) LOG="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;
   esac
 done
+
+# 破坏性门槛(与 dbk-cli.sh 同口径):带 --apply 必须显式 --yes,否则 64 且零写。
+if [ "$APPLY" -eq 1 ] && [ "$YES" -ne 1 ]; then
+  usage
+  echo "用法错误: 脚本头声明了「# 破坏性:1」,--apply 必须显式给 --yes(本脚本会写 fstab/user-dirs.dirs、装包、起服务)" >&2
+  exit 64
+fi
 
 # 记一项结果(同时落 DBK-RESULT 行,first-boot.sh 摘要据此提取)
 record() { NAMES+=("$1"); STATES+=("$2"); KEYS+=("$3"); log "DBK-RESULT ${2} ${1} | ${3}"; }

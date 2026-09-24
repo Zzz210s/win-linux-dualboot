@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # 对应卡:05-13
+# 破坏性:1(会逐模块写 fstab/user-dirs.dirs、装包、起服务、装驱动:--apply 必须显式 --yes)
 # L4 首启编排器:依次调用 storage.sh、hardening.sh、mount-shared.sh、graphics.sh,
 # 每模块单独落日志,末尾生成 /var/log/dbk/first-boot-summary.txt(模块 / 状态 / 关键输出)。
 #
-# 用法:bash scripts/linux/first-boot.sh [--check|--apply] [--uuid <SHARED_PART_UUID>] [--user <name>] [--log-dir <dir>]
+# 用法:bash scripts/linux/first-boot.sh [--check|--apply --yes] [--uuid <SHARED_PART_UUID>] [--user <name>] [--log-dir <dir>]
 #   缺省(或 --check)是 dry-run:各模块以 --check 调用,只判定不改动系统;--apply(需要 root)才真正改系统,
-#   并给模块统一透传 --yes(全仓契约:--apply 的破坏性动作必须显式给 --yes)。
+#   且必须同时给 --yes(全仓契约:声明「# 破坏性:1」的脚本,--apply 缺 --yes 一律 64 且零写),并给模块统一透传 --yes。
 #   模块顺序:storage(交换空间与 zram)-> hardening(健壮性 R1-R9)-> mount-shared(共享盘挂载 + 家目录重定向;
 #   缺 --uuid 时记 skipped)-> graphics(NVIDIA 驱动与 Wayland/PRIME 核对);脚本文件缺失的模块打印提示级消息并记 skipped。
 #   整机目标:能进桌面 + 记录失败项 —— 单模块失败不改变本脚本退出码(始终 0),失败/跳过项在摘要末尾显式列出。
@@ -23,18 +24,19 @@ LOG="${DBK_LOG:-/var/log/dbk/first-boot.log}"
 source "$HERE/dbk-log.sh"
 
 LOG_DIR="${DBK_LOG_DIR:-/var/log/dbk}"
-APPLY=0
+APPLY=0; YES=0
 UUID="${DBK_SHARED_UUID:-}"
 TARGET_USER="${DBK_USER:-${SUDO_USER:-${USER:-}}}"
 MOD_NAMES=(); MOD_STATES=(); MOD_KEYS=()
 F_N=0; S_N=0
 
-usage() { sed -n '2,14p' "$0"; }
+usage() { sed -n '2,15p' "$0"; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --apply) APPLY=1; shift ;;
     --check|--dry-run) APPLY=0; shift ;;
+    --yes|-y) YES=1; shift ;;
     --uuid) need_val "$#" "--uuid" "<SHARED_PART_UUID>"; UUID="$2"; shift 2 ;;
     --uuid=*) UUID="${1#*=}"; shift ;;
     --user) need_val "$#" "--user" "<用户名>"; TARGET_USER="$2"; shift 2 ;;
@@ -45,6 +47,13 @@ while [ "$#" -gt 0 ]; do
     *) usage; die "未知参数: $1" ;;
   esac
 done
+
+# 破坏性门槛(与 dbk-cli.sh 同口径):带 --apply 必须显式 --yes,否则 64 且零写。
+if [ "$APPLY" -eq 1 ] && [ "$YES" -ne 1 ]; then
+  usage
+  echo "用法错误: 脚本头声明了「# 破坏性:1」,--apply 必须显式给 --yes(本脚本会逐模块写 fstab/user-dirs.dirs、装包、起服务)" >&2
+  exit 64
+fi
 
 # 日志目录:默认 /var/log/dbk;不可写时(通常是非 root,或目录曾被 sudo 创建)回落到临时目录,便于离线演练。
 # mkdir -p 在目录已存在时返回 0(即使不可写),所以必须再显式判一次 -w,否则摘要根本写不出去。

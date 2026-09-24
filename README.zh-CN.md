@@ -108,7 +108,7 @@ I3 在本方案里还有**结构**上的保障:Windows 与 Kubuntu 各用一块�
 - 单块 NVMe SSD,**标称 1TB 级**,UEFI + GPT 引导。容量口径要说清:1024GB 型号实际可用约 **953.7GiB**,方案分区表按此制定;1000GB 型号只有约 **931.3GiB**,此时把 `D:` 从约 635GiB 减到约 613GiB,其余七项不动;
 - 混合显卡(集成显卡 + 独立显卡);
 - 允许整盘格式化:两个系统都是全新安装,不存在"保留现有系统"的路径;
-- 目标组合:Windows 11 专业版 + **Kubuntu 26.04 LTS**(Plasma 6.6、**Wayland-only**、**Calamares 安装器**、LTS 窗口 3 年、内核 7.0)。
+- 目标组合:Windows 11 专业版 + **Kubuntu 26.04 LTS**(Plasma 6.6、**Wayland-only**、**Calamares 安装器**、LTS 窗口 3 年(到 2029-04)、内核 7.0)。
 
 偏离项要么给出适配分支(两块及以上磁盘、容量明显偏离 1TB、仅独显、共享盘降级为只读、共用 ESP 回退分支),要么明确**不适用于 v1**:需要磁盘加密、VMD/RAID 模式锁定无法更改、固件只从第一块盘引导的机型,以及需要快照式回滚的方案。吸收厂商差异的设备参数表(`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`DISK_MODEL`、`DISK_SIZE`、`UBUNTU_ESP_SIZE` 等)定义在 [docs/00-overview.md](docs/00-overview.md),每台设备填一份。snap 规避(最小安装 + 清除残留 + apt pin)是契约的一部分,不是可选偏好——见 [docs/design/04-kubuntu-variant-design.md](docs/design/04-kubuntu-variant-design.md) 第 3 节。
 
@@ -139,7 +139,7 @@ I3 在本方案里还有**结构**上的保障:Windows 与 Kubuntu 各用一块�
 Kubuntu 26.04 LTS 是 apt 体系的传统可变系统,方案把它的得与失都写在明处:
 
 - **包装完立即生效**:`sudo apt install` 当场生效,没有只读 `/usr`、没有分层安装、没有"重启才生效"这回事;系统级工具直接从归档装;
-- **LTS 窗口 3 年**只收安全更新,所以大版本升级(`do-release-upgrade`)是一次稀有的、有专门卡片的计划事件,不是反复出现的杂事;
+- **LTS 窗口 3 年(到 2029-04)**只收安全更新,所以大版本升级(`do-release-upgrade`)是一次稀有的、有专门卡片的计划事件,不是反复出现的杂事;
 - **回退是包级 + 原地重装**:单个包降级用 `apt install <包>=<版本>` 并用 `apt-mark hold` 固定([scripts/linux/rollback-pkg.sh](scripts/linux/rollback-pkg.sh) 负责列可用版本、hold/unhold);系统级损坏走原地重装(见 [docs/07-rescue.md](docs/07-rescue.md)),数据盘 `D:` 两种情况都不受影响。**本轨道没有"一条命令回退整个系统"的能力**,这个取舍在选型时就已接受;
 - **snap 是成套规避而不是靠记性**:最小安装(S1)+ 清除残留(S2)+ `Pin-Priority: -1` 的 apt pin(S3),浏览器改用 Mozilla 官方 APT 仓库的 deb。留着 `snapd` 不是选项:归档里的 `firefox` 是过渡包,`do-release-upgrade` 也会自己把 snap 装回来;
 - **明确被否(不使用)**:**`snapd`**;**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照**;**ZFS root 快照**;**自定义 Secure Boot 密钥与自签驱动**——NVIDIA 走 `ubuntu-drivers` 装的官方预签名包,不需要注册任何密钥;

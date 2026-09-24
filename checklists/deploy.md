@@ -79,7 +79,7 @@
 - `[ ]` L4-10 **发行版升级**(约 3 年一次:`do-release-upgrade`,前置备份与留档) | 脚本:`scripts/linux/upgrade-release.sh --check`(执行加 `--apply --yes`) | 判据:pin 或 Mozilla 源文件缺失时脚本拒绝升级;重启后版本已更新、会话仍 `wayland`、snap 四条判据全过 | 卡:`05-10`
 - `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -Check`(执行加 `-Apply -Yes`) | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
 - `[ ]` L4-12 落 L4 两份产物 | 脚本:`scripts/linux/collect-l4.sh --check`(落盘加 `--apply`) | 判据:`baseline/04-first-boot.md` 与 `baseline/04-robustness.md` 在位 | 卡:`05-12`
-- `[ ]` L4-13 (可选)按顺序汇总跑一遍 L4 各模块 | 脚本:`scripts/linux/first-boot.sh --check`;`scripts/linux/hardening.sh --check` | 判据:单项失败不改整体退出码,只在摘要里标出失败项 | 卡:`05-13`
+- `[ ]` L4-13 (可选)按顺序汇总跑一遍 L4 各模块 | 脚本:`scripts/linux/first-boot.sh --check`;`scripts/linux/hardening.sh --check`(执行时 `--apply --yes`,缺 `--yes` 退 64 零写) | 判据:单项失败不改整体退出码,只在摘要里标出失败项 | 卡:`05-13`
 - `[ ]` L4-14 **snap 零残留**(四条判据 + apt pin 压制 + Mozilla 官方源) | 脚本:`scripts/linux/step-snap-free.sh --check`(清除加 `--apply --yes`) | 判据:`snap list` 空、`dpkg -l snapd` 无输出、`apt-cache policy snapd` 无候选、`apt-get install -s firefox` 不含 snapd | 卡:`05-14`
 
 ## 6. 完成判据

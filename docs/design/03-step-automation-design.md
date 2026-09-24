@@ -86,6 +86,8 @@
 | 对应卡(必需) | `# 对应卡:NN-K[,NN-K…]`(也认 `# Card:`) | `dbk_assert_step` / `Assert-DbkStep`;C9b/C9d |
 | 破坏性(可选) | `# 破坏性:1` | `dbk_parse_args` / `Parse-DbkArgs` 的门槛(见硬规则 8) |
 
+**`-Json` 边界(2026-09-22 终审后澄清)**:契约 JSON(`step` / `status` / `checks[]`)只适用于**步骤脚本**与两个验收执行器(`verify-all.sh` / `verify-all.ps1`);**只读探测器类脚本**(如 `scripts/windows/preflight.ps1`、`scripts/windows/dbk-win-probe.ps1`)的 `-Json` 是它们各自的查询 schema,总控**不消费**其 JSON —— 只取退出码与文本输出。因此 `dbk.ps1 <步骤> -Json` 对探测器类步骤给出的是总控合成的记录,而不是探测器原生 JSON;这是有意约束,不是缺陷。
+
 读法细节:行首允许 UTF-8 BOM(`.sh` 允许、`.ps1` 必须带);BOM 不算「#」行,所以 `.ps1` 里 `# 对应卡:` 要写在 `#Requires` 之类文件头指令之后。`dbk_assert_step` 靠 `BASH_SOURCE[1]` 定位调用方,必须由步骤脚本**顶层直接调用**。
 
 errtrap 的退出码与误用防护(与 O3 同级,修复轮 2 补齐):

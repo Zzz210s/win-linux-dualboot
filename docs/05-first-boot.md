@@ -180,12 +180,12 @@ Kubuntu 26.04 LTS 的三条硬事实贯穿全文:系统是**传统可变系统**
 做:用编排脚本按固定顺序一次跑完 L4 各模块——这是**批量便利路径**,单卡仍可独立执行;排障时优先单卡单跑(各脚本幂等)。
   1. 先空跑:`bash scripts/linux/first-boot.sh --uuid <SHARED_PART_UUID>`
      看到:逐模块打印将执行的动作与判据;缺省/`--check` 是 dry-run,不改系统;非 root 时日志落 `<TMPDIR>/dbk-<uid>/` 并打印警告
-  2. 再执行:`sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID>`
+  2. 再执行:`sudo bash scripts/linux/first-boot.sh --apply --yes --uuid <SHARED_PART_UUID>`
      看到:模块顺序为 `storage -> hardening -> mount-shared -> graphics`;末尾写出 `/var/log/dbk/first-boot-summary.txt`(表头 `模块 | 状态 | 关键输出`,统计行含 `失败项: N;跳过项: M`)
   3. 看摘要而不是退出码:`cat /var/log/dbk/first-boot-summary.txt`
      看到:单模块失败不改变退出码(脚本恒为 0,只有用法/权限类错误才非 0),失败与跳过项在摘要里逐条列出;失败模块按对应卡单独重跑(`05-1` 至 `05-10`)
-脚本:bash scripts/linux/first-boot.sh --uuid <SHARED_PART_UUID> / sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID>;bash scripts/linux/hardening.sh --check / sudo bash scripts/linux/hardening.sh --apply
-坑:退出码不能当判据(恒为 0);编排顺序是 `storage -> hardening -> mount-shared -> graphics`,其中 `hardening` 的 R1/R2 是**只读核对**。
+脚本:bash scripts/linux/first-boot.sh --uuid <SHARED_PART_UUID> / sudo bash scripts/linux/first-boot.sh --apply --yes --uuid <SHARED_PART_UUID>;bash scripts/linux/hardening.sh --check / sudo bash scripts/linux/hardening.sh --apply --yes
+坑:退出码不能当判据(恒为 0);编排顺序是 `storage -> hardening -> mount-shared -> graphics`,其中 `hardening` 的 R1/R2 是**只读核对**;**本卡两个脚本都声明了 `# 破坏性:1`,`--apply` 缺 `--yes` 会退 64 且零写**(与其它破坏性脚本同口径)。
 出错时:摘要未写出 -> 核对日志目录写权限后重跑;某模块 fail -> 按摘要的模块名看 `/var/log/dbk/<模块>.log` 定位,再单卡重跑。
 
 ### 05-14 snap 零残留(四条判据 + apt pin 压制)

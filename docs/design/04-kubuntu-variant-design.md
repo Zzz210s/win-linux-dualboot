@@ -15,7 +15,7 @@
 | 场景 | 换 Kubuntu 后的变化 |
 |---|---|
 | 日常装软件 / 驱动 | **变好**:`apt` 一条命令;NVIDIA 走官方预签名包(`ubuntu-drivers`),**不再需要 ublue rebase 与 MOK 注册** |
-| 长期维护 | **变好**:LTS 3 年只收安全更新;Fedora 的"每 13 个月一次大版本升级"消失 |
+| 长期维护 | **变好**:LTS 3 年(到 2029-04)只收安全更新;Fedora 的"每 13 个月一次大版本升级"消失 |
 | 出事之后 | **变差**:失去部署级原子回滚(`rpm-ostree rollback`),降级为"包级回退 + 原地重装" |
 
 **用户已明确接受第三行的代价**(2026-09-22 确认 A 选项)。本设计不再追求原子回滚,并把该取舍登记为已接受的取舍(见第 7 节)。
@@ -25,7 +25,7 @@
 | 事实 | 等级 | 来源 |
 |---|---|---|
 | Kubuntu 26.04 LTS「Resolute Raccoon」:Plasma 6.6.4、Qt 6.10.2、KDE Frameworks 6.24、KDE Gear 25.12.3、内核 7.0、**Wayland-only** | 高 | Kubuntu 官方发布说明 |
-| Kubuntu 是 Ubuntu 官方 flavor,基于 Ubuntu 26.04 LTS 基线;支持窗口由 flavor 自己的支持计划决定(历史上 3 年;Ubuntu 主版 5 年,ESM 只覆盖 main 仓库) | 高 | Ubuntu 官方 release-cycle 与 RecognizedFlavors 文档、Kubuntu 发布说明 |
+| Kubuntu 是 Ubuntu 官方 flavor,基于 Ubuntu 26.04 LTS 基线;**26.04 的 3 年 LTS 已由 Ubuntu Technical Board 批准(2026-03),官方给出终点到 2029-04**(Ubuntu 主版 5 年,ESM 只覆盖 main 仓库) | 高 | kubuntu.org 下载页 + Ubuntu TB 邮件列表 2026-03 + Ubuntu 官方 release-cycle 与 RecognizedFlavors 文档 |
 | Kubuntu 使用 **Calamares** 安装器(不是 Ubuntu 的 Flutter 安装器) | 高 | KDE Discuss 的 Kubuntu 26.04 安装问答、Calamares 官方分区文档 |
 | **最小安装(minimal)不含 snap**;完整安装默认带 snapd,Firefox 以 snap 分发 | 中 | r/Kubuntu 对 26.04 beta 的实测帖("minimal 安装里找不到 snap") |
 | `apt install firefox` 即便已配 Mozilla 仓库,仍可能把 `snapd` 作为依赖拉进来;需要 apt pin 压制 | 中 | r/Kubuntu 报告与 Mozilla 官方安装文档的 pin 步骤 |
@@ -40,7 +40,7 @@
 | 编号 | 决定 | 理由 | 被否方案 |
 |---|---|---|---|
 | **D1** | 基础系统:**Kubuntu 26.04 LTS**(Plasma 6.6,Wayland-only) | 用户选定;Plasma 在 Wayland 下成熟;桌面可深度定制且不影响系统层 | Fedora 44 Silverblue(现状,日常要学 ostree/容器,13 个月升级周期);Fedora 44 Kinoite(Plasma + 原子回滚,但仍是 Fedora 节奏);Ubuntu 主版 GNOME(用户要 KDE 的省心) |
-| **D2** | 生命周期:**LTS 3 年**,期间只收安全更新;大版本升级(`do-release-upgrade`)写成正式卡,前置快照要求改为"前置备份 `baseline/` 与配置文件" | 与"省心"一致:3 年内不动大版本 | 冻结在 26.04 不升级(3 年后无补丁);改用 interim 版本(9 个月寿命) |
+| **D2** | 生命周期:**LTS 3 年(到 2029-04)**,期间只收安全更新;大版本升级(`do-release-upgrade`)写成正式卡,前置快照要求改为"前置备份 `baseline/` 与配置文件" | 与"省心"一致:3 年内不动大版本 | 冻结在 26.04 不升级(2029-04 之后无补丁);改用 interim 版本(9 个月寿命) |
 | **D3** | Secure Boot:**保持开启**;显卡走 Ubuntu 官方**预签名** `nvidia` 包(`ubuntu-drivers` 安装) | 官方签名链现成,**不需要自签、不需要 MOK 注册**;I3 由结构保证(独立 ESP) | 关 Secure Boot;只留 nouveau;自定义 SB 密钥 |
 | **D4** | **回滚策略降级**:不引入任何快照体系;**包级回退**(`apt install <pkg>=<版本>` + `apt-mark hold`)+ **原地重装两法** + 数据隔离(`D:` 共享盘) | 用户已否决 snapper/timeshift/btrfs 快照;接受"坏了就重装,数据不丢" | btrfs + snapper + grub-btrfs;Timeshift;ZFS root 快照(见 2.1) |
 | **D5** | 分区表 **8 项不变**,仅把 `ESP-Fedora` 这一历史名改名 **`ESP-Ubuntu 1GiB`**;`/boot` 1GiB ext4 保留(独立于 ESP);root 仍约 113GiB | 与 Windows 隔离的结构性保证不变;`/boot` 独立让重装 root 时可选择保留 | 复用 Windows ESP(违反 I3 的结构性保证);取消 `/boot`(重装 root 时内核随之丢失,反而更麻烦) |

@@ -110,7 +110,7 @@
 
 | # | 决策 | 选择 | 理由 | 被否方案与原因 |
 |---|---|---|---|---|
-| 3.1 | 系统组合 | Windows 11 专业版 + **Kubuntu 26.04 LTS** | 用户 2026-09-22 选定 A(换 Kubuntu),理由是"日常省心":apt 一条命令装软件、NVIDIA 走官方预签名包、LTS 3 年只收安全更新;**Plasma 6.6 在 Wayland 下成熟** | **Fedora 44 Silverblue(原子版,本方案的上一版)**:日常要学 ostree/容器,13 个月一次大版本升级,已由 04 号设计取代;**Fedora 44 Kinoite**:Plasma + 部署级回滚,但仍是 Fedora 节奏;**Ubuntu 主版 GNOME**:用户要 KDE 的省心,且其 Flutter 安装器的 ESP 行为与本方案的手工分区路径不同;Debian 13(内核与驱动偏旧);CachyOS(滚动更新与"稳定"冲突) |
+| 3.1 | 系统组合 | Windows 11 专业版 + **Kubuntu 26.04 LTS** | 用户 2026-09-22 选定 A(换 Kubuntu),理由是"日常省心":apt 一条命令装软件、NVIDIA 走官方预签名包、LTS 3 年(**到 2029-04**,Ubuntu TB 已批准 3 年 LTS)只收安全更新;**Plasma 6.6 在 Wayland 下成熟** | **Fedora 44 Silverblue(原子版,本方案的上一版)**:日常要学 ostree/容器,13 个月一次大版本升级,已由 04 号设计取代;**Fedora 44 Kinoite**:Plasma + 部署级回滚,但仍是 Fedora 节奏;**Ubuntu 主版 GNOME**:用户要 KDE 的省心,且其 Flutter 安装器的 ESP 行为与本方案的手工分区路径不同;Debian 13(内核与驱动偏旧);CachyOS(滚动更新与"稳定"冲突) |
 | 3.2 | 桌面环境 | **KDE Plasma 6.6**(Kubuntu 旗舰),Wayland-only | 与"省心"一致:桌面可深度定制且不影响系统层;Plasma 在 Wayland 下已成熟;Wayland 是唯一会话类型,不提供 X11 回退 | 非 Plasma 桌面(GNOME 等):等于换 flavor 或换发行版,超出 v1 范围 |
 | 3.3 | 引导栈 | **GRUB2 + shim**,写入 `\EFI\ubuntu\`,**使用 Kubuntu 自己的 ESP** | 上游在 Secure Boot 下原生可用;官方签名链现成(`shim-signed` + `grub-efi-amd64-signed`),**无需自签**;`grub-install` / `update-grub` 的救援路径有官方文档支撑 | **systemd-boot + UKI**:Ubuntu 上非默认,且与救援卡里 `grub-install` + `update-grub` 的口径不一致。**rEFInd**:需改 `{bootmgr}` 路径(违反 I3)或额外引入一层。**自定义 Secure Boot 密钥**:改动签名链会新增风险(见 1.3) |
 | 3.4 | ESP 布局 | **Windows 独占 2GiB + Ubuntu 独立 1GiB(两个 ESP)** | 上游与社区一致要求 Linux 用**自己的** ESP 与 `/boot`;Calamares 会把引导装到 `/boot/efi` 所指的那块 ESP,独立后 I3 由**结构**保证;Windows 侧工具只认第一个 ESP 的习惯也不再被牵动 | **单个 2GiB 共用 ESP**:I3 只能靠纪律,且后续 Windows 更新可能重写共用 ESP 的 `\EFI\BOOT\` |
