@@ -1,22 +1,16 @@
 #!/usr/bin/env bash
-# 库文件:非步骤脚本
-# 用途:步骤脚本的统一 CLI 契约(Linux/Kubuntu 侧):参数解析、卡号断言、破坏性门槛、退出码常量。
-# 契约真源:docs/design/03-step-automation-design.md 第 2 节(CLI、退出码、可观测性)与第 7 节(夹具要求)。
-# 用法(步骤脚本自己 set -euo pipefail 后 source 本文件,再依次调用):
-#   dbk_parse_args "$@" → DBK_MODE/DBK_JSON/DBK_YES/DBK_LOG/DBK_STEP;dbk_assert_step → 与脚本头卡号集合比对(不一致 → 64)
-#   判据与动作:dbk_add_check "…";仅 --apply 分支里:dbk_need_yes "动作" "命令" → 执行 → dbk_add_action/dbk_mark_changed
-#   dbk_exit PASS|FAIL|需人工|跳过 "说明"   →  打印报告并以 0/1/2/9 结束
-# 脚本头声明:「# 对应卡:NN-K[,NN-K…]」(一脚本服务多张卡用逗号列表);破坏性脚本另写「# 破坏性:1」——
-#   声明后 --apply 缺 --yes 由库层直接拒(64),不靠作者记得调 dbk_need_yes。dbk_assert_step 必须由步骤脚本
-#   **顶层直接调用**:它靠 BASH_SOURCE[1] 定位调用方文件头。
-# 输出与 JSON 由 dbk-obs.sh 提供(本文件 source 它);--json 时 stdout 只有 dbk_exit/dbk_on_err 的一行 JSON。
-# 只读保证:本文件只定义函数与常量;参数错误一律打印用法到 stderr 并 exit 64,不落盘、不经 dbk-log.sh 的 die()
-#   (那是 L4 脚本的退 1 语义);只有显式 --log(或调过 dbk_log_default)才记路径,且只在失败路径追加日志。
-# 本文件不设置 shell 选项:失败必须中断的步骤脚本自己 set -e;失败不中断的脚本(hardening.sh/first-boot.sh)不得 set -e。
-# 包装外部命令的函数命名约定(脚本层,强制):① 函数名不得与外部命令同名(用 snap_/dpkg_/lspci_ 这类带后缀名),
-#   因为 bash 函数查找优先于 PATH,同名会让函数体内的 `${CMD[@]}` 又命中自己 —— 无限递归 → 子 shell 段错误(rc=139);
-#   ② 函数体内一律用 `command "${CMD[@]}" "$@"` 调真命令(双保险,即使将来改了名也不会递归)。两条同时做。
-# 夹具级验证,真机未跑。依赖 dbk-log.sh(die/need_val/dbk_json_escape)与 dbk-obs.sh(报告/JSON/errtrap)。
+# shellcheck disable=SC2034  # 契约库:DBK_ERRTRAP/DBK_JSON/DBK_CHECKS/DBK_ACTIONS/DBK_CHECKS_JSON/DBK_CHANGED/LOG/DBK_LAST_STATUS
+#   均由 dbk-obs.sh、dbk-log.sh 与各步骤脚本跨文件消费。
+# 库文件:非步骤脚本。用途:步骤脚本的统一 CLI 契约。契约真源:docs/design/03-step-automation-design.md 第 2/7 节。
+# 用法(步骤脚本 set -euo pipefail 后 source 本文件):dbk_parse_args "$@" → DBK_MODE/DBK_JSON/DBK_YES/DBK_LOG/DBK_STEP;
+#   dbk_assert_step(**顶层直接调用**,靠 BASH_SOURCE[1] 定位调用方文件头);dbk_add_check "…";
+#   --apply 分支里:dbk_need_yes "动作" "命令" → 执行 → dbk_add_action/dbk_mark_changed;dbk_exit PASS|FAIL|需人工|跳过 "说明" → 0/1/2/9。
+# 脚本头声明:「# 对应卡:NN-K[,NN-K…]」;破坏性脚本另写「# 破坏性:1」(声明后 --apply 缺 --yes 由库层拒 64)。
+# 只读保证:本文件只定义函数与常量;参数错误 → 用法到 stderr + exit 64,不落盘;不设置 shell 选项(要不要 set -e 由步骤脚本决定)。
+# 输出/JSON 由 dbk-obs.sh 提供(本文件 source 它);--json 时 stdout 只有 exit 的一行 JSON。
+# 包装外部命令的命名约定(强制):① 函数名不与外部命令同名(用 snap_/dpkg_/lspci_ 后缀),否则 bash 函数优先于 PATH
+#   → 自命中 → 无限递归 → 子 shell 段错误;② 体内一律 `command "${CMD[@]}" "$@"`。两条同时做。
+# 夹具级验证,真机未跑。依赖 dbk-log.sh 与 dbk-obs.sh。
 
 DBK_PASS=0
 DBK_FAIL=1
@@ -108,7 +102,12 @@ dbk_parse_args() {
       --apply) seen_apply=1; shift ;;
       --json) DBK_JSON=1; shift ;;
       --yes|-y) DBK_YES=1; shift ;;
-      --log) dbk_cli_val "--log" "${2:-}"; DBK_LOG="$2"; LOG="$DBK_LOG"; shift 2 ;;
+      --log)
+      dbk_cli_val "--log" "${2:-}"
+      DBK_LOG="$2"
+      # shellcheck disable=SC2034  # LOG 由 dbk-log.sh 的 log() 消费(跨文件)
+      LOG="$DBK_LOG"
+      shift 2 ;;
       --step) dbk_cli_val "--step" "${2:-}"; DBK_STEP="$2"; shift 2 ;;
       -h|--help) dbk_usage; exit "$DBK_PASS" ;;
       *) dbk_usage; dbk_note "用法错误: 未知参数 $1"; exit "$DBK_USAGE" ;;

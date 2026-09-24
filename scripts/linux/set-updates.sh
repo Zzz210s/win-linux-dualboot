@@ -30,6 +30,7 @@ dbk_assert_step
 dbk_log_default "set-updates"
 
 CONF="${DBK_UNATTENDED_CONF:-/etc/apt/apt.conf.d/52-dbk-unattended.conf}"   # 待核实(以官方文档为准)
+APTDIR="${DBK_APT_CONFD:-/etc/apt/apt.conf.d}"                             # 待核实(以官方文档为准);纪律闸门的扫描目录
 UNIT="unattended-upgrades"                                                  # 待核实(以官方文档为准)
 SC_STR="${DBK_SYSTEMCTL:-systemctl}"; DQ_STR="${DBK_DPKG_QUERY:-dpkg-query}"
 SC=(); DQ=(); read -r -a SC <<<"$SC_STR"; read -r -a DQ <<<"$DQ_STR"
@@ -54,9 +55,13 @@ policy_line() { [ -r "$1" ] && grep -m1 -E '^[[:space:]]*Unattended-Upgrade::Aut
 
 # 纪律闸门:片段或目标里出现 Automatic-Reboot "true" → FAIL 且立刻收口(--apply 时不写任何文件)。
 assert_no_autoreboot() {
-  local f found=""
-  for f in "$CONF"; do
+  local f found="" seen=" "
+  # 扫描范围 = $CONF + $APTDIR 下全部文件:发行版默认的 50unattended-upgrades 也在其中。
+  # （2026‑09‑24 终审修正:原先只查 $CONF,会漏掉“默认文件把 Automatic-Reboot 设成 true”的机器。）
+  for f in "$CONF" "$APTDIR"/*; do
     [ -f "$f" ] || continue
+    case "$seen" in *" $f "*) continue;; esac
+    seen="$seen$f "
     if grep -qE '^[[:space:]]*Unattended-Upgrade::Automatic-Reboot[[:space:]]+"?true' "$f"; then found="$f"; break; fi
   done
   [ -n "$found" ] || return 0

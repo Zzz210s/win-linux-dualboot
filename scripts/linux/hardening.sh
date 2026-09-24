@@ -19,6 +19,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 [ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
 [ -r "$HERE/dbk-pkg.sh" ] || { echo "错误: 缺少 $HERE/dbk-pkg.sh" >&2; exit 1; }
+# shellcheck disable=SC2034  # LOG 由 source 进来的 dbk-log.sh 的 log() 消费(跨文件)
 LOG="${DBK_LOG:-/var/log/dbk/hardening.log}"
 source "$HERE/dbk-log.sh"
 source "$HERE/dbk-pkg.sh"
@@ -35,8 +36,15 @@ while [ "$#" -gt 0 ]; do
     --apply) APPLY=1; shift ;;
     --check|--dry-run) APPLY=0; shift ;;
     --yes|-y) YES=1; shift ;;
-    --log) need_val "$#" "--log" "<日志文件路径>"; LOG="$2"; shift 2 ;;
-    --log=*) LOG="${1#*=}"; shift ;;
+    --log)
+      need_val "$#" "--log" "<日志文件路径>"
+      # shellcheck disable=SC2034  # LOG 由 source 进来的 dbk-log.sh 的 log() 消费(跨文件)
+      LOG="$2"
+      shift 2 ;;
+    --log=*)
+      # shellcheck disable=SC2034  # LOG 由 dbk-log.sh 的 log() 消费(跨文件)
+      LOG="${1#*=}"
+      shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; die "未知参数: $1" ;;
   esac

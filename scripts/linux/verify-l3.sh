@@ -30,9 +30,12 @@ TMP_MNT=""; ISSUES=(); MANUAL=()
 to_mib() { awk -v b="${1:-0}" 'BEGIN{printf "%d", b/1048576}'; }
 cleanup() { if [ -n "$TMP_MNT" ]; then umount "$TMP_MNT" 2>/dev/null || true; rmdir "$TMP_MNT" 2>/dev/null || true; fi; }
 trap cleanup EXIT
-# 只读探针:stdout+stderr 收进 PROBE_OUT(不吞输出);PROBE_RC 分辨 127(缺命令)与执行失败
-PROBE_OUT=""; PROBE_RC=0
-probe() { local out; if out="$("$@" 2>&1)"; then PROBE_RC=0; else PROBE_RC=$?; fi; PROBE_OUT="$out"; return 0; }
+# 只读探针:stdout+stderr 收进 PROBE_OUT(不吞输出)。
+# 只读探针:stdout+stderr 收进 PROBE_OUT(不吞输出)。
+# 注:原先还有一个 PROBE_RC 想在探针层区分 127(缺命令)与执行失败,但调用点都先做了 `command -v` 守卫,
+#   它从未被读取 —— 2026-09-24 复查时删除(避免死代码;缺命令一律走各处的「需人工」分支)。
+PROBE_OUT=""
+probe() { local out; out="$("$@" 2>&1)" || true; PROBE_OUT="$out"; return 0; }
 pkg_installed() {   # <包名>:dpkg-query 的 Status 含 install ok installed → 0
   [ -n "${1:-}" ] || return 1
   probe dq -W -f='${Status}' "$1"
@@ -63,7 +66,7 @@ fi
 # 3) /boot 独立且为 ext4(靠 lsblk 的 MOUNTPOINT/FSTYPE;不是独立挂载点即 FAIL)
 LSB_OUT=""
 if command -v "${LSB[0]}" >/dev/null 2>&1; then probe lsb -P -b -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT; LSB_OUT="$PROBE_OUT"; fi
-boot_line="$(printf '%s\n' "$LSB_OUT" | grep -F 'MOUNTPOINT="/boot"' | head -n1 || true)"
+boot_line="$(printf '%s\n' "$LSB_OUT" | grep -F "MOUNTPOINT=\"$BOOT_DIR\"" | head -n1 || true)"
 if [ -z "$boot_line" ]; then
   ISSUES+=("④/boot 未独立挂载(lsblk 里没有 MOUNTPOINT=/boot 的独立分区)")
 else

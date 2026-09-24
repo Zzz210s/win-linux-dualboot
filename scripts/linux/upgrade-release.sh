@@ -50,7 +50,7 @@ dist_upgrade_ok() {   # 模拟升级无异常 → 0;有 E:/错误 → 1;跑不�
   probe ag -s dist-upgrade
   if [ "$PROBE_RC" -ne 0 ] && [ -z "$(printf '%s' "$PROBE_OUT" | tr -d '[:space:]')" ]; then return 2; fi
   case "$PROBE_OUT" in
-    *"E:"*|*"错误"*|*"broken"*|*"held broken"*) return 1 ;;
+    *"E:"*|*"错误"*|*"broken"*) return 1 ;;
   esac
   return 0
 }

@@ -21,9 +21,19 @@ while IFS= read -r f; do
   case "$f" in
     *.sh)
       bash -n "$f" || { echo "SYNTAX $f"; fail=1; }
+      # 工作树 CRLF:只影响本机 lint 与“直接把文件拷到 Linux 执行”的场景(blob 由 .gitattributes 保证 LF)。
+      # 注意:shellcheck 读不进 CRLF 文件(heredoc 会被当成 EOF\r 报解析错),故先剥 \r 到临时文件再 lint。
+      if ! cmp -s <(tr -d '\r' < "$f") "$f"; then
+        echo "WARN CRLF $f(工作树是 CRLF;Linux 上直接执行会坏。转 LF:tr -d '\\r' < f > f.lf && mv f.lf f)"
+        scf="$(mktemp)"; tr -d '\r' < "$f" > "$scf"
+      else
+        scf="$f"
+      fi
       if [ -n "$SC" ]; then
-        shellcheck -S warning "$f" || { echo "SHELLCHECK $f"; fail=1; }
-      fi ;;
+        sc_out="$(shellcheck -S warning -f gcc "$scf" 2>&1)"; sc_rc=$?
+        if [ "$sc_rc" -ne 0 ]; then printf '%s\n' "${sc_out//$scf/$f}" | sed 's/^/  /'; echo "SHELLCHECK $f"; fail=1; fi
+      fi
+      [ "$scf" = "$f" ] || rm -f "$scf" ;;
     *.ps1)
       if [ -n "$PS" ]; then
         # PowerShell 读不懂 MSYS 路径(/f/...),先转成 Windows 形式;无 cygpath 时原样传入

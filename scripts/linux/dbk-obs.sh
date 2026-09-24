@@ -43,7 +43,9 @@ dbk_obs() {
 # 库自身不调它(保证"不给 --log 就不落盘");调用后失败路径(dbk_obs)才会写这个文件。
 dbk_log_default() {
   [ -n "${DBK_LOG:-}" ] && return 0
-  DBK_LOG="/var/log/dbk/${1:-dbk}.log"; LOG="$DBK_LOG"
+  DBK_LOG="/var/log/dbk/${1:-dbk}.log"
+  # shellcheck disable=SC2034  # LOG 是给 dbk-log.sh 的 log() 读的跨文件变量
+  LOG="$DBK_LOG"
   return 0
 }
 
@@ -160,6 +162,7 @@ dbk_on_err() {
   detail="line $ln rc=$rc: $cmd"
   dbk_obs "errtrap: $detail"
   dbk_add_check_raw "{\"id\":\"errtrap\",\"ok\":false,\"detail\":\"$(dbk_json_escape "$detail")\"}"
+  # shellcheck disable=SC2034  # 由 dbk-cli.sh 的 dbk_exit 消费(跨文件)
   DBK_LAST_STATUS=fail
   if [ "${DBK_JSON:-0}" -eq 1 ]; then
     dbk_emit_json "$DBK_STEP" fail "errtrap: $detail"

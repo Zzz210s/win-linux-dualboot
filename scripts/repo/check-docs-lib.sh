@@ -7,6 +7,8 @@ set -uo pipefail
 
 # emoji 字节模式:F0 9F = U+1F000 及以上;E2 98/99/9A/9B = U+2600~U+26FF;E2 9C/9D/9E = U+2700~U+27BF;EF B8 8F = 变体选择符。
 # 本机 grep -P 不支持多字节码点范围,故用 LC_ALL=C 下的字节级匹配。
+# 与 check-docs.sh 共用的命名常量:本文件只定义,由 check-docs.sh source 后使用(故此处看似未使用)。
+# shellcheck disable=SC2034
 EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xef\xb8\x8f')"
 
 # C9 白名单:库文件(dbk-pkg.sh 是 hardening/storage/set-updates 等 source 的 apt/dpkg 包助手;它取代了已废弃的 dbk-ostree.sh / dbk-apt.sh;
@@ -23,6 +25,7 @@ CARDRE="^(${BOM})?#[[:space:]]*(对应卡|Card):[[:space:]]*[0-9][0-9]-[0-9]+([,
 # 读脚本头声明的全部卡号(空格分隔;取不到则空)。
 
 # 卡内脚本路径:正斜杠与反斜杠都接受(Windows 侧卡会写 scripts\windows\x.ps1);判存在/比对前先用 norm_path 归一成 /
+# shellcheck disable=SC2034  # 与 check-docs.sh 共用(由它 source 后使用)
 PATHRE='scripts[\\/][A-Za-z0-9_./\\-]+\.(sh|ps1)'
 norm_path() { LC_ALL=C tr '\\' '/'; }
 

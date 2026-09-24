@@ -37,6 +37,7 @@ if ! command -v lsblk >/dev/null 2>&1; then
   dbk_add_check "缺少 lsblk"
   dbk_exit FAIL "缺少 lsblk,无法读取磁盘布局;请在 Kubuntu live 环境里运行本脚本"
 fi
+# shellcheck disable=SC2054  # 逗号是 lsblk -o 的列分隔符(有意为之,不是数组元素分隔符)
 LSB_ARGS=(-P -b -o NAME,SIZE,TYPE,FSTYPE,PARTTYPENAME,PARTUUID,MOUNTPOINT)
 if [ -n "$DISK" ]; then
   LAYOUT="$(lsblk "${LSB_ARGS[@]}" "$DISK" 2>&1)" || { dbk_add_check "lsblk 读取失败"; dbk_exit FAIL "lsblk 读取失败: $LAYOUT"; }

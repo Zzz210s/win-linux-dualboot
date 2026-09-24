@@ -43,6 +43,9 @@ fi
 
 sec() { printf '%s\n' "$1"; printf '\n'; }
 BODY="$(sec "# baseline/03-efi-layout.txt (L3 产物)"
+  sec "## $BOOT_DIR 是否独立挂载(设计 3.4 / 卡 04-3 判据 ④)"
+  if command -v findmnt >/dev/null 2>&1; then findmnt -no SOURCE,FSTYPE,TARGET "$BOOT_DIR" 2>&1 || printf '%s\n' "(读不到 $BOOT_DIR 的挂载信息:可能未独立挂载)"; else printf '%s\n' "(未安装 findmnt)"; fi
+  printf '\n'
   sec "## \\EFI\\ 目录树(Ubuntu ESP:$ESP_DIR)"
   if [ -d "$ESP_DIR/EFI" ]; then find "$ESP_DIR/EFI" -maxdepth 3 2>/dev/null | sort; else printf '%s\n' "(读不到 $ESP_DIR/EFI)"; fi
   printf '\n'

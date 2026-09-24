@@ -19,6 +19,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck disable=SC2034  # LOG 由 source 进来的 dbk-log.sh 的 log() 消费(跨文件)
 LOG="${DBK_LOG:-/var/log/dbk/first-boot.log}"
 [ -r "$HERE/dbk-log.sh" ] || { echo "错误: 缺少 $HERE/dbk-log.sh" >&2; exit 1; }
 source "$HERE/dbk-log.sh"
@@ -63,6 +64,7 @@ if ! mkdir -p "$LOG_DIR" 2>/dev/null || [ ! -w "$LOG_DIR" ]; then
   if [ ! -w "$LOG_DIR" ]; then echo "错误: 无法创建可写日志目录 $LOG_DIR" >&2; exit 1; fi
   echo "警告: 原日志目录不可写(通常因为非 root,或该目录曾由 sudo 创建),日志改落 $LOG_DIR" >&2
 fi
+# shellcheck disable=SC2034  # LOG 由 dbk-log.sh 消费(跨文件)
 LOG="$LOG_DIR/first-boot.log"
 SUMMARY="$LOG_DIR/first-boot-summary.txt"
 if [ "$APPLY" -eq 1 ] && [ "$(id -u)" -ne 0 ]; then die "--apply 需要 root:sudo bash $0 --apply"; fi

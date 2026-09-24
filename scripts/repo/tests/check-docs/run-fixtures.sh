@@ -13,7 +13,8 @@ pass=0; bad=0
 check() { # 样例名 / 目标(样例 md 相对 FIX 的路径,或 tmp-repo/<样例仓库名>)/ 期望规则(OK=零问题)/ 期望条数
   local name="$1" tgt="$2" rule="$3" want="$4" out code errs cnt verdict cmd
   if [ -d "$FIX/tmp-repo/$tgt" ]; then
-    local d="$FIX/.tmp/run/$(basename "$tgt")"
+    local d
+    d="$FIX/.tmp/run/$(basename "$tgt")"
     rm -rf "$d"; mkdir -p "$d/scripts/repo"
     cp -r "$FIX/tmp-repo/$tgt/." "$d/"
     cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$d/scripts/repo/"

@@ -22,9 +22,9 @@ P_STEPS=(); P_PATHS=()
 
 # 索引里的全部步骤号(用法信息用)。
 dbk_index_ids() {
-  local id path dest desc
+  local id path dest _desc
   [ -r "$DBK_INDEX" ] || return 0
-  while IFS=$'\t' read -r id path dest desc || [ -n "${id:-}" ]; do
+  while IFS=$'\t' read -r id path dest _desc || [ -n "${id:-}" ]; do
     case "$id" in [0-9][0-9]-[0-9]*) printf '%s ' "$id" ;; esac
   done <"$DBK_INDEX"
 }
@@ -46,7 +46,12 @@ dbk_parse_master_args() {
       --apply) seen_apply=1; shift ;;
       --json) DBK_MASTER_JSON=1; shift ;;
       --yes|-y) DBK_MASTER_YES=1; shift ;;
-      --log) dbk_cli_val "--log" "${2:-}"; DBK_MASTER_LOG="$2"; DBK_LOG="$2"; shift 2 ;;
+      --log)
+        dbk_cli_val "--log" "${2:-}"
+        DBK_MASTER_LOG="$2"
+        # shellcheck disable=SC2034  # DBK_LOG 由 source 进来的 dbk-obs.sh 消费(跨文件)
+        DBK_LOG="$2"
+        shift 2 ;;
       -h|--help) dbk_usage_master; exit "$DBK_PASS" ;;
       --*) dbk_usage_master; dbk_note "用法错误: 未知参数 $1"; exit "$DBK_USAGE" ;;
       *) S_IDS+=("$1"); shift ;;
@@ -61,8 +66,8 @@ dbk_parse_master_args() {
 # dbk_index_rows <步骤号>:打印该步骤号在索引里的**全部**「<脚本路径>|<破坏性>」行(按文件顺序,一行一对)。
 # 一张卡可以对应多个脚本,故同一步骤号允许多行;一行也没取到时返回非零。
 dbk_index_rows() {
-  local want="$1" id path dest desc found=1
-  while IFS=$'\t' read -r id path dest desc || [ -n "${id:-}" ]; do
+  local want="$1" id path dest _desc found=1
+  while IFS=$'\t' read -r id path dest _desc || [ -n "${id:-}" ]; do
     case "$id" in
       [0-9][0-9]-[0-9]*) if [ "$id" = "$want" ]; then printf '%s|%s\n' "$path" "$dest"; found=0; fi ;;
     esac

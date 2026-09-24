@@ -36,11 +36,11 @@ SHA_HOOK="${DBK_SHA256SUM:-sha256sum}"
 MANUAL=()
 
 # 钩子:文件路径 → 回放该文件;否则按命令行执行(stderr 并入输出,不吞错);始终返回 0。
-hook_avail() { local spec="${1:-}" p=(); [ -e "$spec" ] && return 0; read -r -a p <<<"$spec"; command -v "${p[0]}" >/dev/null 2>&1; }
+hook_avail() { local spec="${1:-}" _cmd=(); [ -e "$spec" ] && return 0; read -r -a _cmd <<<"$spec"; command -v "${_cmd[0]}" >/dev/null 2>&1; }
 hook_out() {
   local spec="${1:-}"; shift || true
   if [ -e "$spec" ]; then cat -- "$spec" 2>&1 || true; return 0; fi
-  local p=(); read -r -a p <<<"$spec"; "${p[@]}" "$@" 2>&1 || true; return 0
+  local _cmd=(); read -r -a _cmd <<<"$spec"; "${_cmd[@]}" "$@" 2>&1 || true; return 0
 }
 count_of() { printf '%s\n' "${1:-}" | grep -cE "${2:-}" || true; }
 note_manual() { dbk_add_check "需人工: $1"; MANUAL+=("$1"); }

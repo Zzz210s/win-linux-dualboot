@@ -110,6 +110,7 @@ judge "F9 scripts/repo 下未白名单脚本受检" C9b 1 "$out" "$rc"
 has "F9 报错指向 scripts/repo/loose.sh" "scripts/repo/loose.sh:1 C9b"
 
 # ==== F7:白名单与设计文档 §4 C9d 名单一致,且 dbk-apt.sh 不再报红 ============
+# shellcheck disable=SC2097,SC2098  # 前缀赋值 ROOT= 只给被 fork 的 bash;`$ROOT/...` 参数由父 shell 展开,两者同值
 WLLIB="$(ROOT="$ROOT" bash -c '. "$1"; printf "%s\n" $WL' _ "$ROOT/scripts/repo/check-docs-lib.sh" | grep -v '^$' | sort)"
 DOCWL="$(sed -n '/^| C9d /p' "$ROOT/docs/design/03-step-automation-design.md" | grep -oE '`scripts/[^`]+\.(sh|ps1)`' | tr -d '`' | sort)"
 d="$(diff <(printf '%s\n' "$WLLIB") <(printf '%s\n' "$DOCWL") 2>&1)"
