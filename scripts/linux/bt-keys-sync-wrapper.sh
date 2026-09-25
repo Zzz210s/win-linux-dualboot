@@ -8,7 +8,9 @@
 #   ② Windows 注册表 hive 可读(<win-mnt>/Windows/System32/config/SYSTEM,只读挂载即可);
 #   ③ 上游脚本已就位(--script 指定,或已下载到 DEST)。三项齐 → PASS(上游运行与两系统直连复测属卡内人工步骤)。
 # --apply(需要 root,且必须 --yes):经 dbk-pkg.sh 的 pkg_ensure 分层安装 chntpw(原子版:装完写进下一部署、**重启后才生效**,
-#   输出显式提示;装完未重启就--apply 会把「未生效」当失败)→ 下载上游脚本到 DEST(文件名/参数以仓库 README 为准)
+#   输出显式提示;装完未重启就--apply 会把「未生效」当失败)→ 下载上游脚本到 DEST(文件名/参数以仓库 README 为准)。
+#   pkg_needs_reboot 按三态收口(见 dbk-pkg.sh 文件头「返回值纪律」):0 = 已提交但需重启 / 1 = 当前系统已生效 /
+#   2 = 读不到分层状态 —— 2 记「需人工」,绝不写「当前系统已生效」这种未经核实的结论。
 #   → bash <脚本> --windows-keys --path <hive> [-- 透传]。
 # 环境开关:DBK_SKIP_PKG=1(兼容 DBK_SKIP_APT)跳过分层安装。注入:DBK_WIN_MNT / DBK_BT_SCRIPT / DBK_BT_DIR / DBK_BT_REPO。
 # 夹具级验证,真机未跑。用法:bt-keys-sync-wrapper.sh [--win-mnt <挂载点>] [--script <上游脚本>] [--repo-url <地址>]
@@ -121,7 +123,7 @@ finish() {
 }
 
 apply_run() {
-  local pkg_st=0 sha
+  local pkg_st=0 pkg_rc=0 sha
   [ "$(id -u)" -eq 0 ] || { dbk_add_check "--apply 需要 root(当前 uid=$(id -u))"; dbk_exit FAIL "--apply 需要 root:sudo bash $0 --apply --yes"; }
   resolve_win_mnt
   if [ "$HIVE_OK" != 1 ]; then
@@ -136,7 +138,11 @@ apply_run() {
     1) ISSUES+=("分层安装 chntpw 失败")
        dbk_exit FAIL "分层安装 chntpw 失败(见上面日志);硬前置:按上面库层给出的硬前置命令安装 chntpw 后重跑" ;;
   esac
-  if pkg_needs_reboot; then dbk_exit 需人工 "chntpw 已提交分层安装但尚未重启生效;重启后重跑本脚本(本地判据仍按当前系统判定)"; fi
+  pkg_needs_reboot || pkg_rc=$?
+  case "$pkg_rc" in
+    0) dbk_exit 需人工 "chntpw 分层安装已提交,需重启后才生效;重启后重跑本脚本(本地判据仍按当前系统判定)" ;;
+    2) dbk_exit 需人工 "读不到分层安装状态(chntpw 是否已生效不可判):重启后重跑本脚本;仍读不到就按上面库层给出的硬前置命令手工核对" ;;
+  esac
   dbk_add_action "chntpw 已就位(分层安装;当前系统已生效)"
   mkdir -p "$DEST" || { ISSUES+=("无法创建 $DEST"); dbk_exit FAIL "无法创建 $DEST"; }
   if [ -z "$SCRIPT_PATH" ]; then
