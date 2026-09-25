@@ -3,6 +3,8 @@
 # 覆盖范围:仅 scripts/ 下的 *.sh 与 *.ps1;templates/ 下的文件(.snippet/.conf/partitions.txt 等)不在自动检查范围内,靠人工复核(扩展名/格式各不相同,无通用解析器)。
 # 豁免:路径中含 /tests/ 的文件是测试夹具数据(如 scripts/repo/tests/check-docs/ 下的样例与运行时副本),
 #   不参与本脚本扫描——夹具是靠 run-fixtures.sh 实际执行验证的,且夹具里允许故意不合法的对照样本。
+# S-1(脚本层:发行版薄接口)只扫 scripts/linux/*.sh,豁免四个薄接口文件;
+# S-2(仓库卫生)只查仓库根的追踪文件名,不查子目录布局与内容。
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fail=0
@@ -14,6 +16,21 @@ SC="$(command -v shellcheck || true)"
 echo "NOTE 覆盖范围:仅 scripts/**.sh|ps1(豁免 /tests/);templates/ 需人工复核"
 [ -n "$SC" ] || echo "SKIP shellcheck (not installed)"
 [ -n "$PS" ] || echo "SKIP powershell syntax (no pwsh)"
+
+# S-2:仓库卫生 —— 根目录的追踪文件只允许这份白名单;任何追踪文件名不得含空格。
+#   背景:2026-09-25 有子代理把夹具残留文件写到仓库根并误提交、误推(已 force-with-lease 清除)。
+#   非 git 工作树(如夹具里的临时副本)下静默跳过;不可达即不报错。
+if git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  allowed_root="README.md README.zh-CN.md LICENSE .gitignore .gitattributes"
+  while IFS= read -r f; do
+    case "$f" in */*) continue ;; esac                 # 只看根目录文件
+    ok=0; for a in $allowed_root; do [ "$f" = "$a" ] && ok=1; done
+    if [ "$ok" -eq 0 ]; then echo "S2_STRAY_ROOT $f"; fail=1; fi
+  done < <(git -C "$ROOT" ls-files)
+  if git -C "$ROOT" ls-files | LC_ALL=C grep -q ' '; then
+    echo "S2_SPACE_NAME $(git -C "$ROOT" ls-files | LC_ALL=C grep ' ' | head -n 3 | tr '\n' ' ')"; fail=1
+  fi
+fi
 
 while IFS= read -r f; do
   n=$(wc -l < "$f")
@@ -41,6 +58,16 @@ while IFS= read -r f; do
         if command -v cygpath >/dev/null; then pf="$(cygpath -w "$f")"; fi
         "$PS" -NoProfile -Command "\$e=\$null; [void][System.Management.Automation.Language.Parser]::ParseFile('$pf',[ref]\$null,[ref]\$e); if (\$e -and \$e.Count) { \$e | ForEach-Object { Write-Output \$_.Message }; exit 1 }" \
           || { echo "PS_SYNTAX $f"; fail=1; }
+      fi ;;
+  esac
+  # S-1:除四个发行版薄接口外,步骤脚本不得直呼包管理器(发行版差异必须收敛在接口层)。
+  #   范围只有 scripts/linux/*.sh;scripts/repo/** 的仓库自检不在扫描范围内(它们只做模式匹配,不装包)。
+  case "$f" in
+    "$ROOT"/scripts/linux/dbk-pkg.sh|"$ROOT"/scripts/linux/dbk-update.sh|"$ROOT"/scripts/linux/dbk-rollback.sh|"$ROOT"/scripts/linux/dbk-driver.sh) ;;
+    "$ROOT"/scripts/linux/*.sh)
+      if hits="$(grep -nE '\b(apt-get|apt|dpkg|dnf|snap|rpm-ostree)\b' "$f" 2>/dev/null)"; then
+        rel="${f#"$ROOT"/}"
+        printf '%s\n' "$hits" | sed 's/^/  /'; echo "S1_PKG_LEAK $rel"; fail=1
       fi ;;
   esac
 done < <(find "$ROOT/scripts" -type f \( -name '*.sh' -o -name '*.ps1' \) -not -path '*/tests/*' | sort)

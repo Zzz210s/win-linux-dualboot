@@ -11,10 +11,11 @@ set -uo pipefail
 # shellcheck disable=SC2034
 EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xef\xb8\x8f')"
 
-# C9 白名单:库文件(dbk-pkg.sh 是 hardening/storage/set-updates 等 source 的 apt/dpkg 包助手;它取代了已废弃的 dbk-ostree.sh / dbk-apt.sh;
+# C9 白名单:库文件(dbk-pkg.sh 是 hardening/storage/set-updates 等 source 的包助手;它取代了已废弃的 dbk-ostree.sh / dbk-apt.sh;
+# 另三个发行版薄接口 dbk-update.sh / dbk-rollback.sh / dbk-driver.sh 与它并称四个接口,是唯一允许出现包管理器/驱动命令的地方,见 docs/design/06,
 # verify-all.sh / verify-all.ps1 是验收总控执行器,按 08 的 A-F 只读判定并汇总,不绑卡、不进步骤索引,故与库文件同列,
 # 与 docs/design/03-step-automation-design.md 的 C9d 名单逐行一致,夹具 F7 断言两处相等)与仓库自检脚本。
-WL=" scripts/linux/dbk-log.sh scripts/linux/dbk-cli.sh scripts/linux/dbk-obs.sh scripts/linux/dbk-pkg.sh scripts/linux/dbk.sh scripts/linux/verify-all.sh scripts/repo/check-docs.sh scripts/repo/check-docs-lib.sh scripts/repo/check-docs-repo.sh scripts/repo/check-scripts.sh scripts/windows/dbk-cli.ps1 scripts/windows/dbk-obs.ps1 scripts/windows/dbk-win-probe.ps1 scripts/windows/dbk.ps1 scripts/windows/verify-all.ps1 "
+WL=" scripts/linux/dbk-log.sh scripts/linux/dbk-cli.sh scripts/linux/dbk-obs.sh scripts/linux/dbk-pkg.sh scripts/linux/dbk.sh scripts/linux/verify-all.sh scripts/repo/check-docs.sh scripts/repo/check-docs-lib.sh scripts/repo/check-docs-repo.sh scripts/repo/check-scripts.sh scripts/windows/dbk-cli.ps1 scripts/windows/dbk-obs.ps1 scripts/windows/dbk-win-probe.ps1 scripts/windows/dbk.ps1 scripts/windows/verify-all.ps1 scripts/linux/dbk-update.sh scripts/linux/dbk-rollback.sh scripts/linux/dbk-driver.sh "
 is_wl() { case "$WL" in *" $1 "*) return 0;; *) return 1;; esac; }
 
 # 脚本头「# 对应卡:NN-K[,NN-K…]」:# 前允许 UTF-8 BOM(.ps1 必须带;.sh 允许),支持一脚本服务多张卡的逗号列表。
