@@ -140,7 +140,7 @@ Kubuntu 26.04 LTS 是 apt 体系的传统可变系统,方案把它的得与失�
 
 - **包装完立即生效**:`sudo apt install` 当场生效,没有只读 `/usr`、没有分层安装、没有"重启才生效"这回事;系统级工具直接从归档装;
 - **LTS 窗口 3 年(到 2029-04)**只收安全更新,所以大版本升级(`do-release-upgrade`)是一次稀有的、有专门卡片的计划事件,不是反复出现的杂事;
-- **回退是包级 + 原地重装**:单个包降级用 `apt install <包>=<版本>` 并用 `apt-mark hold` 固定([scripts/linux/rollback-pkg.sh](scripts/linux/rollback-pkg.sh) 负责列可用版本、hold/unhold);系统级损坏走原地重装(见 [docs/07-rescue.md](docs/07-rescue.md)),数据盘 `D:` 两种情况都不受影响。**本轨道没有"一条命令回退整个系统"的能力**,这个取舍在选型时就已接受;
+- **回退是部署级**:`rpm-ostree rollback` 把整个系统退回上一部署,`rpm-ostree pin` 保护某个部署不被垃圾回收([scripts/linux/rollback-deploy.sh](scripts/linux/rollback-deploy.sh) 报部署列表与是否存在回滚候选);系统级损坏走原地重装(见 [docs/07-rescue.md](docs/07-rescue.md)),数据盘 `D:` 两种情况都不受影响。
 - **snap 是成套规避而不是靠记性**:最小安装(S1)+ 清除残留(S2)+ `Pin-Priority: -1` 的 apt pin(S3),浏览器改用 Mozilla 官方 APT 仓库的 deb。留着 `snapd` 不是选项:归档里的 `firefox` 是过渡包,`do-release-upgrade` 也会自己把 snap 装回来;
 - **明确被否(不使用)**:**`snapd`**;**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照**;**ZFS root 快照**;**自定义 Secure Boot 密钥与自签驱动**——NVIDIA 走 `ubuntu-drivers` 装的官方预签名包,不需要注册任何密钥;
 - **四级回退粒度**:单包 <-> `rollback-pkg.sh`;配置 <-> 各脚本留下的 `.dbk.bak` 备份;基线级 <-> ESP 备份 + 固件启动项快照;阶段级 <-> L5 退役流程。

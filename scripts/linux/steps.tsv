@@ -12,7 +12,7 @@
 05-7	scripts/linux/set-journald.sh	0	journald 持久化
 05-7	scripts/linux/set-updates.sh	0	更新策略:unattended-upgrades 只装安全更新、不自动重启
 05-8	scripts/linux/set-remote-health.sh	0	SSH 与 SMART:apt 装 smartmontools + enable --now sshd smartd
-05-9	scripts/linux/rollback-pkg.sh	1	包级回退与变更前备份:--list/--check/--apply(降级 + apt-mark hold)/--unhold(需 --yes)
+05-9	scripts/linux/rollback-deploy.sh	1	部署级回滚
 05-10	scripts/linux/upgrade-release.sh	1	发行版升级:前置备份 baseline/ + 留档 pin/Mozilla 源 -> do-release-upgrade -> 后置与 S5 复核(需 --yes)
 05-11	scripts/linux/reboot-to-windows.sh	0	一次性重启进 Windows(不改 BootOrder)
 05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md(发行版/驱动来源/snap 四条判据/待升级包数)
