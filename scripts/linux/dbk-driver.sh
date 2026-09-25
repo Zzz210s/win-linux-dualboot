@@ -20,11 +20,12 @@
 # 判据口径(设计 02 第 3 节 D2):① `modinfo -F signer nvidia` 非空(模块已签名);② `mokutil --list-enrolled` 含
 #   ublue 密钥(签名者非空且已注册 ublue 密钥);③ `lsmod` 有 nvidia(模块已加载)。三条全绿 = 本地这三条读得到且成立。
 # 判据作用域(契约,不可外推):driver_check 的 0 只证明「签名者非空 + 已注册密钥里出现 ublue + nvidia 已加载」这三件事,
-#   既不证明镜像来源与版本,也不证明 Secure Boot 链整体有效 —— 这两点分别由 07-7 巡检(check-signature.sh)与卡 07-7
-#   承担,本步不判也不降级,只如实标注「不由本步判定」。「是否已 rebase」同理不单独判:本步判结果,不读 status 的镜像 ref。
+#   既不证明镜像来源与版本,也不证明 Secure Boot 链整体有效 —— 这两点由 07-7 周期巡检承担
+#   (镜像来源与版本由卡 07-7 判定;签名与 Secure Boot 状态部分见 check-signature.sh)。本步不判也不降级,只如实标注「不由本步判定」。
+#   「是否已 rebase」同理不单独判:本步判结果,不读 status 的镜像 ref。
 # 本文件只定义函数与常量:不设置 shell 选项、不执行任何动作(调用方自己 set -euo pipefail 或逐项汇总)。
 # 夹具级验证,真机未跑。环境注入(夹具用):DBK_RPM_OSTREE / DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_UBLUE_IMAGE。
-# 待核实(以官方文档为准):本步不判镜像来源与版本(由 07-7 巡检承担,见上面作用域段);目标镜像名与分支(上游会改
+# 待核实(以官方文档为准):本步不判镜像来源与版本(由 07-7 周期巡检承担,见上面作用域段);目标镜像名与分支(上游会改
 #   品牌名/通道名);MOK 注册任务名 enroll-secure-boot-key 与密码 universalblue;modinfo -F signer 与 mokutil --list-enrolled
 #   的输出格式;rebase 到 ostree-image-signed:docker://… 的参数形态与返回码 —— 均未在真机验证。
 

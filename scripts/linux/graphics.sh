@@ -10,13 +10,17 @@
 #   逐条证据另用同源只读函数 driver_signer / mok_check / driver_module_state 亮出来给人看(只读,不参与判定)。
 #   口径(与 set-updates.sh 一致):② 未注册 → 失败(1);①②③ 任一条读不到 → 需人工(2),绝不当作没问题;④ 取不到 → 需人工,非 wayland → 失败。
 #   作用域(契约,不可外推):以上四条只判本地驱动栈与会话类型;镜像来源与版本、Secure Boot 链整体有效**不由本步判定**
-#   (见卡 07-7);本步不判镜像来源与版本,由 07-7 巡检(check-signature.sh)承担。
+#   (见卡 07-7);由 07-7 周期巡检承担(镜像来源与版本由卡 07-7 判定;签名与 Secure Boot 状态部分见 check-signature.sh)。
 # 与旧(Kubuntu)口径的差别(不可改):驱动走 ublue 镜像内**已预签名**的模块(Ubuntu 官方的 ubuntu-drivers 预签名包路径已废弃);
-#   本步不关 Secure Boot、不自签密钥(自签反而会破坏上游的预签名路径)。签名细查见 07-7 的 check-signature.sh。
+#   本步不关 Secure Boot、不自签密钥(自签反而会破坏上游的预签名路径)。签名与 Secure Boot 状态细查见 07-7 的 check-signature.sh
+#   (镜像来源与版本由卡 07-7 判定)。
 # MOK 注册必须人工完成(接口不代跑):--apply 只提交 rebase;重启进 MOK 界面完成一次性注册(密码见下),会话内执行
 #   `ujust enroll-secure-boot-key`,再次重启后重跑本脚本复核。
 # nouveau 兜底(设计 02 第 7 节):桌面起不来时不要长按电源 —— 用 07-2 从 GRUB 提示符回 Windows,或按 05-9 回滚到 stock 部署
 #   (回滚后由 nouveau 起桌面);接口 driver_fallback_nouveau 打印同一套步骤。
+# --apply 的终局与动作结果一致,且不吞掉当下可判的失败(计划 Task 5 修订版四种):rebase 失败 → 1;rebase 成功且只余
+#   ①②③(重启后才可能成立)未达成 → 0 PASS + 需重启提示;当下可判的 ④ 未达成 → 1;判据读不到(driver_check=2)→ 2 需人工。
+#   三种未达成明细都逐条列进 checks(不静默),且都经汇总函数选退出码,不绕过。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误(脚本头声明了破坏性,--apply 缺 --yes 由库层拒且零写)。
 # 用法: graphics.sh [--check|--apply] [--json] [--log <路径>] [--yes] [--step 05-3] [-h]
 # 注入(夹具用):DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_RPM_OSTREE / DBK_UBLUE_IMAGE 与 XDG_SESSION_TYPE,
@@ -36,7 +40,9 @@ dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "graphics"
 
-ISSUES=(); MANUAL=()
+# 未达成项分三类:ISSUES_RESTART 是"重启后才可能成立"的 ①②③;ISSUES 是当下就能判定的失败(④ 非 wayland、未知状态码);
+# MANUAL 是读不到/判不了。--check 一律按失败计;--apply 要靠这个分类选终局退出码。
+ISSUES_RESTART=(); ISSUES=(); MANUAL=()
 # 待核实(以官方文档为准):MOK 注册任务名 enroll-secure-boot-key 与 MOK 密码 universalblue(设计 02 第 3 节 D2)。
 MOK_HOWTO="重启进 MOK 界面完成一次性密钥注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实)"
 
@@ -64,7 +70,7 @@ evidence_lines() {
     *) dbk_add_check "③模块加载状态(lsmod):返回未知状态码 $rc" ;;
   esac
   dbk_add_check "判据作用域:镜像来源与版本、Secure Boot 链整体有效不由本步判定(见卡 07-7)"
-  dbk_add_check "判据作用域:本步不判镜像来源与版本,由 07-7 巡检(check-signature.sh)承担"
+  dbk_add_check "判据作用域:由 07-7 周期巡检承担(镜像来源与版本由卡 07-7 判定;签名与 Secure Boot 状态部分见 check-signature.sh)"
 }
 
 # ④ 会话类型:wayland 是设计 01/00 的收敛目标;取不到 → 需人工(可在桌面会话内重跑),其它值 → 失败。
@@ -78,13 +84,13 @@ check_session() {
 
 check_all() {
   local rc=0
-  ISSUES=(); MANUAL=()
+  ISSUES_RESTART=(); ISSUES=(); MANUAL=()
   # ①-③ 一次聚合判定(接口 driver_check);逐条原因由接口写 stderr 与 --log。
   driver_check || rc=$?
   evidence_lines
   case "$rc" in
     0) dbk_add_check "①-③显卡栈总判定:modinfo -F signer nvidia 非空 + mokutil --list-enrolled 含 ublue 密钥 + lsmod 有 nvidia" ;;
-    1) ISSUES+=("①-③显卡栈未完成:nvidia 模块未加载或 ublue 密钥未注册;按上面逐条原因(未 rebase / 未重启 / 未注册 MOK)收敛后重跑") ;;
+    1) ISSUES_RESTART+=("①-③显卡栈未完成(重启后才可能成立):nvidia 模块未加载或 ublue 密钥未注册;按上面逐条原因(未 rebase / 未重启 / 未注册 MOK)收敛后重跑") ;;
     2) MANUAL+=("①-③读不到显卡栈状态:modinfo / mokutil / lsmod 有一个取不到或输出判不了;请人工核对驱动来源与 Secure Boot 状态") ;;
     *) ISSUES+=("①-③显卡栈判定返回未知状态码 $rc") ;;
   esac
@@ -93,11 +99,13 @@ check_all() {
   return 0
 }
 
+# --check 的汇总:三个类别的未达成项一律按失败/需人工计(重启类在 --check 下同样是没达成)。
 finish() {
-  local msg="${1:-}" m
-  for m in ${ISSUES[@]+"${ISSUES[@]}"}; do dbk_add_check "失败项: $m"; done
-  if [ "${#ISSUES[@]}" -gt 0 ]; then
-    dbk_exit FAIL "$msg:有 ${#ISSUES[@]} 项未达成;逐条见 checks,修好后重跑本脚本(幂等)"
+  local msg="${1:-}" m n=0
+  for m in ${ISSUES_RESTART[@]+"${ISSUES_RESTART[@]}"}; do dbk_add_check "失败项: $m"; n=$((n + 1)); done
+  for m in ${ISSUES[@]+"${ISSUES[@]}"}; do dbk_add_check "失败项: $m"; n=$((n + 1)); done
+  if [ "$n" -gt 0 ]; then
+    dbk_exit FAIL "$msg:有 $n 项未达成;逐条见 checks,修好后重跑本脚本(幂等)"
   fi
   if [ "${#MANUAL[@]}" -gt 0 ]; then
     for m in ${MANUAL[@]+"${MANUAL[@]}"}; do dbk_add_check "需人工: $m"; done
@@ -106,13 +114,33 @@ finish() {
   dbk_exit PASS "$msg:驱动栈已就绪(签名者非空且已注册 ublue 密钥 + nvidia 已加载 + 会话为 wayland)"
 }
 
+# --apply 的汇总(四终局):rebase 命令失败在调用点直接退 1;这里处理"已提交 rebase"之后的三种 ——
+#   ④当下可判的失败 → 1;判据读不到 → 2 需人工;只剩 ①②③ 这类重启后才成立的 → 0 PASS + 需重启。
+#   顺序与 finish() 一致:先已判定的失败,再判不了的,最后才是等人重启;明细一律逐条列出,不静默。
+finish_apply() {
+  local m n=0
+  for m in ${ISSUES[@]+"${ISSUES[@]}"}; do dbk_add_check "失败项: $m"; done
+  for m in ${MANUAL[@]+"${MANUAL[@]}"}; do dbk_add_check "需人工: $m"; done
+  for m in ${ISSUES_RESTART[@]+"${ISSUES_RESTART[@]}"}; do dbk_add_check "未达成(需重启后复核): $m"; n=$((n + 1)); done
+  if [ "${#ISSUES[@]}" -gt 0 ]; then
+    dbk_exit FAIL "rebase 已提交,但当下可判的判据有 ${#ISSUES[@]} 项未达成(不是等重启能解释的);逐条见 checks,修好后重跑本脚本"
+  fi
+  if [ "${#MANUAL[@]}" -gt 0 ]; then
+    dbk_exit 需人工 "rebase 已提交,但有 ${#MANUAL[@]} 项判据读不到;逐条见 checks,请人工核对驱动来源与 Secure Boot 状态后重跑本脚本复核"
+  fi
+  if [ "$n" -gt 0 ]; then
+    dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后在 MOK 界面完成注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实),完成后再重跑本脚本复核"
+  fi
+  dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后重跑本脚本复核"
+}
+
 if [ "$DBK_MODE" = apply ]; then
   if [ "$(id -u)" -ne 0 ]; then
     dbk_add_check "--apply 需要 root(当前 uid=$(id -u))"
     dbk_exit FAIL "--apply 需要 root:sudo bash $0 --apply --yes(只想看结论就只跑 --check)"
   fi
   check_all
-  if [ "${#ISSUES[@]}" -eq 0 ] && [ "${#MANUAL[@]}" -eq 0 ]; then
+  if [ "${#ISSUES[@]}" -eq 0 ] && [ "${#ISSUES_RESTART[@]}" -eq 0 ] && [ "${#MANUAL[@]}" -eq 0 ]; then
     dbk_exit PASS "显卡栈已就绪:无需再 rebase(--apply 幂等);要复核对齐请只跑 --check"
   fi
   dbk_need_yes "rebase 到 ublue 的 NVIDIA 变体(镜像内模块已预签名;重启后生效)" "$REBASE_CMD rebase $UBLUE_IMAGE"
@@ -124,7 +152,7 @@ if [ "$DBK_MODE" = apply ]; then
     dbk_exit FAIL "rebase 未执行成功:按上面原因处理后重跑(幂等);要退回 stock 部署按 driver_fallback_nouveau 的步骤走"
   fi
   dbk_add_check "下一步(必须人工): $MOK_HOWTO"
-  dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后在 MOK 界面完成注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实),完成后再重跑本脚本复核"
+  finish_apply
 fi
 
 check_all
