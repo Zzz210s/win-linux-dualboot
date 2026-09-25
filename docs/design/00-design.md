@@ -64,7 +64,7 @@
 
 ### 1.3 非目标(v1 明确不做)
 
-用户数据与浏览器凭据迁移 / 磁盘加密与 TPM-FDE / 休眠 / **`snapper`、`timeshift`、`grub-btrfs` 与一切 btrfs 快照回滚** / **ZFS root 快照**(见 02 号设计第 3 节,明确被否)/ 自定义 Secure Boot 密钥(走 ublue 预签名镜像 + 一次性 MOK 注册)/ 自研图形化安装器(用 Anaconda)/ 多发行版模板 / `kickstart` / 无人值守安装。
+用户数据与浏览器凭据迁移 / 磁盘加密与 TPM-FDE / 休眠 / **`snapper`、`timeshift`、`grub-btrfs` 与一切 btrfs 快照回滚** / **ZFS root 快照**(见 `04-kubuntu-variant-design.md` 2.1,明确被否;04 号设计已标废止,该被否结论仍有效)/ 自定义 Secure Boot 密钥(走 ublue 预签名镜像 + 一次性 MOK 注册)/ 自研图形化安装器(用 Anaconda)/ 多发行版模板 / `kickstart` / 无人值守安装。
 
 砍掉这些不是省事,而是它们的失败模式(凭据泄露、TPM 与引导链测量冲突、休眠与 NVIDIA + Wayland 冲突、自签密钥触发 BitLocker 恢复、无人值守写错分区即毁 Windows)会把方案从"可复现"拖成"每次都得现场救火"。
 
@@ -116,7 +116,7 @@
 | 3.4 | ESP 布局 | **Windows 独占 2GiB + Fedora 独立 1GiB(两个 ESP)** | 上游与社区一致要求 Linux 用**自己的** ESP 与 `/boot`,并明确"不要让 Anaconda 使用 Windows 的 EFI 分区";独立后 I3 由**结构**保证;Windows 侧工具只认第一个 ESP 的习惯也不再被牵动 | **单个 2GiB 共用 ESP**:I3 只能靠纪律,且后续 Windows 更新可能重写共用 ESP 的 `\EFI\BOOT\` |
 | 3.5 | 分区策略 | **整盘重排,一次分好** | 消除"缩容"这一整类事故(不可移动文件挡路、BitLocker 触发恢复、缩容上限不足) | 被否:已有系统上缩容(本方案不提供该分支;需要改尺寸就整盘重排) |
 | 3.6 | Linux 容量 | 合计 **115GiB**:ESP-Fedora **1GiB** + `/boot` **1GiB**(ext4)+ root **≈113GiB**(btrfs) | 定位是"轻量远程 AI 开发 + 办公":文档类数据全部落在共享数据盘(3.16 / 5.3),不占 root;**`/boot` 独立**是原子版硬要求(每个 deployment 的内核与 initrd 在此) | 不单独分 `/boot`(原子版下不可行:部署的内核必须有独立挂载点);root 140GiB 级(共享盘被压缩,收益不足);保留更早方案的"独立 15GiB 快照分区"(快照体系已被否决,见 3.7 与 3.14) |
-| 3.7 | 根文件系统 | **btrfs**(Silverblue 默认) | 原子版需要 ostree 部署与 `var` 子卷;`/home` 是 `/var/home` 的符号链接、不属于部署,回滚不回退用户数据;文件系统层快照仍不需要(回滚由部署级 `rpm-ostree rollback` 承担,见 3.14) | **btrfs + snapper + grub-btrfs**(用户明确否决:额外维护一套快照工具链);**ZFS root 快照**(实验性选项,内存开销与调优门槛高,见 02 号设计第 3 节);**ext4**:不支持 ostree 部署体系 |
+| 3.7 | 根文件系统 | **btrfs**(Silverblue 默认) | 原子版需要 ostree 部署与 `var` 子卷;`/home` 是 `/var/home` 的符号链接、不属于部署,回滚不回退用户数据;文件系统层快照仍不需要(回滚由部署级 `rpm-ostree rollback` 承担,见 3.14) | **btrfs + snapper + grub-btrfs**(用户明确否决:额外维护一套快照工具链);**ZFS root 快照**(实验性选项,内存开销与调优门槛高,见 `04-kubuntu-variant-design.md` 2.1;04 号设计已标废止,该被否结论仍有效);**ext4**:不支持 ostree 部署体系 |
 | 3.8 | 交换空间 | **无 swap 分区**:zram + swapfile 4GiB | 可随时调整、不动分区表、兼容任意文件系统 | swap 分区(尺寸一旦定死);休眠(需 swap ≥ RAM,且 NVIDIA + Wayland 下风险高) |
 | 3.9 | 磁盘加密 | **不做** | TPM-FDE 需整盘且与双系统引导链测量冲突,官方仍标实验性质 | LUKS 口令(留给第 10 节变体) |
 | 3.10 | Windows 激活 | **成熟 KMS 激活**:采用上游项目的 **Online KMS**(180 天周期 + 每 7 天自动续期任务),**不引入任何自建 KMS 服务** | 按需求定调(采用成熟 KMS,而非购买密钥或 HWID);KMS 走的是微软官方激活协议,可重复、可验证、可续期;自建 KMS 已放弃,因为它需要一台常态在线的主机,收益(离线自主)不抵维护成本 | **KMS38**:微软在 build 26100.7019 起彻底废弃该机制,且已被上游项目移除,对 Windows 11 24H2+ 无效。**自建 KMS 服务**:已彻底放弃,需求中已删除。**HWID / TSforge**:虽为上游推荐,但按需求不使用(仅作文档中的回退说明) |
@@ -292,7 +292,7 @@
 | R8 | **保守更新策略** | `rpm-ostreed-automatic` 只 `check`/`download`、**不自动应用与重启**(见 3.18);内核/驱动变更前先按 R1 备份并记录部署号与版本 | 回滚到固定部署 |
 | R9 | **磁盘健康监控** | 安装 `smartmontools`(`smartd`)并确认日志告警生效;共享盘 `fstab` 行带 `nofail` | 无(提前发现硬件故障) |
 
-**明确不做的**,以及原因:休眠(需 swap ≥ RAM,且 NVIDIA + Wayland 下易翻车)、**`snapper` / `grub-btrfs` / btrfs 快照回滚 / ZFS root 快照**(用户明确否决,见 3.7 与 02 号设计第 3 节)、自定义 Secure Boot 密钥(改动签名链会新增风险)。
+**明确不做的**,以及原因:休眠(需 swap ≥ RAM,且 NVIDIA + Wayland 下易翻车)、**`snapper` / `grub-btrfs` / btrfs 快照回滚 / ZFS root 快照**(用户明确否决,见 3.7 与 `04-kubuntu-variant-design.md` 2.1;04 号设计已标废止,该被否结论仍有效)、自定义 Secure Boot 密钥(改动签名链会新增风险)。
 
 ### 4.8 L5 附加:崩溃后**在原系统盘重装**的两法
 
@@ -477,7 +477,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 
 **已恢复的能力(登记在案)**:**"一条命令回到上一个可用系统"回来了** —— 开机菜单选旧部署或 `rpm-ostree rollback`,且 `/var`(含 `/home`)不属于部署,**回滚不丢用户数据**。代价是每 6 个月一次 `rebase` 与分层安装需重启(02 号设计 D3 / 第 4 节)。
 
-**明确不引入**:snapper、timeshift、grub-btrfs、btrfs 快照、ZFS root 快照(见 3.7 与 02 号设计第 3 节)。
+**明确不引入**:snapper、timeshift、grub-btrfs、btrfs 快照、ZFS root 快照(见 3.7 与 `04-kubuntu-variant-design.md` 2.1;04 号设计已标废止,该被否结论仍有效)。
 
 ---
 
@@ -643,5 +643,5 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 2026-09-17 | 修订五:依据 B 站实战评论区证据(新增 11.1 节)补齐坑位——新增决策 3.17 **显卡模式(MUX)排障分支**、3.18 **内核/驱动更新收紧**、3.19 **引导菜单黑屏处置**;故障矩阵新增 8 行、风险表新增 9 条、参数表新增 `DISK_MODEL`/`DISK_SIZE`、偏离项新增"固件只认第一块盘"、未决项新增 HWE 内核与外置盘分支 |
 | 2026-09-19 | **修订七:改用 Fedora 44 Silverblue 原子版**(已被修订八取代,保留为历史)。基础系统由 Ubuntu 26.04 LTS 改为 Fedora 44 Silverblue;回滚由快照级改为部署级(`rpm-ostree rollback`);NVIDIA 路径改为 `rpm-ostree rebase` 到第三方预签名 NVIDIA 变体 + 一次性 MOK 注册;分区改为"Windows 独占 2GiB ESP + Linux 独立 1GiB ESP + 独立 `/boot` 1GiB + root ≈113GiB btrfs";新增 1.4 轨道结构、决策 3.21 生命周期与升级、3.22 原子版语义、3.23 三轨道。该版的设计依据与取舍已归档到 `02-fedora-atomic-variant-design.md` |
 | 2026-09-21 | 消除最后一处不和谐:I1 举例路径由 `\EFI\ubuntu\grubx64.efi` 改为原子版时代的 `\EFI\fedora\grubx64.efi`(仅举例路径,不变量语义未变),并同步 `docs/00-overview.md` 的同一处与说明句。**该行已废弃,保留为历史记录**(修订八已把举例路径改回 `\EFI\ubuntu\`) |
-| 2026-09-22 | **修订八:Kubuntu 26.04 LTS 修订**(见 `04-kubuntu-variant-design.md`;该版已被修订九回切)。按"逐节核对"重写全文:第 1 节补回滚降级目标与非目标(新增 **ZFS root 快照**为被否项);第 3 节决策表改 Kubuntu 口径(基础系统 Kubuntu 26.04 LTS / Plasma 6.6 Wayland-only / Calamares / flavor 支持窗口按 LTS 计划计;回滚改**包级回退 + 原地重装**;Secure Boot 走 Ubuntu 官方预签名包、**不需要自签与 MOK**;根文件系统 **ext4**;新增 **snap 规避 S1–S6** 决策 3.22);第 4 节 L4 卡清单改 **14 张**(含 snap 卡)、4.7 的 R1–R9 改为新策略(变更前备份 / 包级回退 / 旧内核保留 / 救援 U 盘 / journald / OOM-zram / SSH / 保守更新 / SMART)、4.8 原地重装两法改 Ubuntu 口径(`grub-install` + `update-grub`、`grub-efi-amd64-signed`/`shim-signed`);第 5 节改 `ESP-Ubuntu 1GiB` 与 `UBUNTU_ESP_SIZE`、删除第三方镜像参数(**分区数值一律未变**);第 7 节回滚粒度表改按新策略重写(单包 / 配置 / 系统级 / 引导级);第 8 节 B 组新增"无 snap 残留"与"驱动来源为 Ubuntu 官方包"、去掉 `rpm-ostree status` 项,F 组把"部署回滚演练"换成 **包级回退演练 + 原地重装演练**;第 9 节删掉原子版专属风险(第三方镜像/MOK/分层安装/部署回滚),新增 Kubuntu 时代风险(第三方 PPA、失去原子回滚、安装器误选 ESP、snap 被静默装回),**总条数仍为 34**;第 11 节把第三方镜像相关条目替换为 Kubuntu/Ubuntu 侧证据(官方发布说明、Calamares 文档、Mozilla 官方安装文档与社区实测) |
-| 2026-09-25 | **修订九:回切 Fedora 44 Silverblue(原子版)+ 发行版薄接口层**(见 `06-atomic-restore-design.md`;`02-fedora-atomic-variant-design.md` 恢复为现行内容真源)。逐节同步:标题与第 1 节改系统组合(GNOME 50 / Wayland)与"恢复部署级回滚"目标;第 3 节决策表改原子版口径(3.1–3.7 / 3.14 / 3.16–3.19;3.20 事实表换 Fedora 原子版事实;3.21 生命周期改约 13 个月与 `rpm-ostree rebase`;3.22 由 snap 规避改为"原子版语义");第 4 节 L3/L4 改 Anaconda 与 13 张 L4 卡、映射表改 `\EFI\fedora\`、部署级回滚演练;第 5 节 ESP-Fedora 与 root **btrfs**(**分区数值一律未变**);第 7/8 节回滚粒度与验收改部署级回滚;第 9 节风险表换原子版条目;第 11 节证据来源换 Fedora/ublue 侧。分区数值一字未动 |
+| 2026-09-22 | **修订八:基础系统由 Fedora 44 Silverblue 改为 Kubuntu 26.04 LTS**(见 `04-kubuntu-variant-design.md`)。按"逐节核对"重写全文:第 1 节补回滚降级目标与非目标(新增 **ZFS root 快照**为被否项);第 3 节决策表改 Kubuntu 口径(基础系统 Kubuntu 26.04 LTS / Plasma 6.6 Wayland-only / Calamares / LTS 3 年;回滚改**包级回退 + 原地重装**;Secure Boot 走 Ubuntu 官方预签名包、**不需要自签与 MOK**;根文件系统 **ext4**;新增 **snap 规避 S1–S6** 决策 3.22);第 4 节 L4 卡清单改 **14 张**(`05-1` … `05-14`)、4.7 的 R1–R9 改为新策略(变更前备份 / 包级回退 / 旧内核保留 / 救援 U 盘 / journald / OOM-zram / SSH / 保守更新 / SMART)、4.8 原地重装两法改 Ubuntu 口径(`grub-install` + `update-grub`、`grub-efi-amd64-signed`/`shim-signed`);第 5 节改 `ESP-Ubuntu 1GiB` 与 `UBUNTU_ESP_SIZE`、删除第三方镜像参数(**分区数值一律未变**);第 7 节回滚粒度表改按新策略重写(单包 / 配置 / 系统级 / 引导级);第 8 节 B 组新增 **snap 零残留**与**驱动来源为 Ubuntu 官方包**、去掉 `rpm-ostree status` 项,F 组把"部署回滚演练"换成 **包级回退演练 + 原地重装演练**;第 9 节删掉原子版专属风险(第三方镜像/MOK/分层安装/部署回滚),新增 Kubuntu 时代风险(第三方 PPA、失去原子回滚、安装器误选 ESP、snap 被静默装回),**总条数仍为 34**;第 11 节把第三方镜像相关条目替换为 Kubuntu/Ubuntu 侧证据(官方发布说明、Calamares 文档、Mozilla 官方安装文档与社区实测) |
+| 2026-09-25 | **修订九:回切 Fedora 44 Silverblue(原子版)+ 发行版薄接口层**(见 `06-atomic-restore-design.md`;`02-fedora-atomic-variant-design.md` 恢复为现行内容真源)。逐节同步:标题与第 1 节改系统组合(GNOME 50 / Wayland)与"恢复部署级回滚"目标;第 3 节决策表改原子版口径(3.1–3.7 / 3.14 / 3.16–3.19;3.20 事实表换 Fedora 原子版事实;3.21 生命周期改约 13 个月与 `rpm-ostree rebase`;3.22 由 snap 规避改为"原子版语义");第 4 节 L3/L4 改 Anaconda 与 13 张 L4 卡、映射表改 `\EFI\fedora\`、部署级回滚演练;第 5 节 ESP-Fedora 与 root **btrfs**(**分区数值一律未变**);第 7/8 节回滚粒度与验收改部署级回滚;第 9 节风险表换原子版条目;第 11 节证据来源换 Fedora/ublue 侧。第 2 节仅替换 I1 举例路径(`\EFI\ubuntu\` → `\EFI\fedora\`),不变量语义未变。分区数值一字未动 |
