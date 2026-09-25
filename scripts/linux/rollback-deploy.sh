@@ -3,7 +3,10 @@
 # 破坏性:1
 # L4:部署级回滚(设计依据:docs/design/06-atomic-restore-design.md 第 2 节 D4 与第 3 节 dbk-rollback.sh 行)。
 # 用途:--check 只读判定"回滚这一路现在通不通"(列部署 + 是否有回滚候选 + 是否有已排入下次启动的部署改动);
-#   --apply --yes 调接口的 rollback_to_previous,把上一部署排为下次启动(重启后生效)。
+#   --apply --yes 调接口的 rollback_to_previous,把上一部署排为下次启动(重启后生效);
+#   --pin <索引> --yes / --unpin <索引> --yes 分别调 rollback_pin / rollback_unpin(变更前固定/事后解除固定)。
+# 索引口径:0 = 当前启动、1 = 上一部署(回滚候选);索引会随重启与新部署变化,要「即读即用」
+#   (先跑 --check 看行首序号,再把同一批序号喂给 --pin/--unpin)。
 # 判据(--check,零写):① 部署列表可读(人读 status 的 Version: 行与 --json 两侧都能解析且部署数一致);
 #   ② 存在回滚候选(部署数 ≥ 2,索引 1 = 上一部署);③ 待重启状态可判定。①③ 读不到或两侧不一致 → 需人工(2);
 #   ② 不成立 → 失败(1:先完成一次更新或分层安装,再回来复核)。
@@ -11,7 +14,9 @@
 # 与本步有关的纪律:回滚只是把上一部署排为下次启动,重启前当前系统照常可用、也未被改动(想反悔重启前再跑一次);
 #   回滚前若想保住当前部署不被垃圾回收,先按索引 0 固定它(接口 rollback_pin,索引口径见 dbk-rollback.sh 头部)。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误(脚本头声明了破坏性,--apply 缺 --yes 由库层拒且零写)。
-# 用法: rollback-deploy.sh [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
+# 用法: rollback-deploy.sh [--check|--apply|--pin <索引>|--unpin <索引>] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
+#   三种动作互斥:--check(缺省,零写) / --apply --yes(回滚到上一部署) / --pin N --yes 与 --unpin N --yes(固定/解除固定)。
+#   pin 属人工执行:总控 verify-all.sh 的 chk_step 只传 --check/--list,不接受 --pin,卡片里的「变更前 pin」靠人手动跑。
 # 注入(夹具用):DBK_RPM_OSTREE 由环境透传给 dbk-rollback.sh;本脚本不写发行版命令字面量(规则 S-1)。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,7 +27,24 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # dbk-log.sh 的 log() 打 stdout(会破坏 --json 的单行输出);这里统一改走 dbk_obs(stderr + --log 日志)。
 log() { dbk_obs "$*"; }
 dbk_enable_errtrap
-dbk_parse_args "$@"
+# --pin / --unpin 不在 dbk-cli.sh 的通用参数表里(且是 05-9 的独立动作),先在本脚本摘出来——纯内存,零写;
+# 其余参数原样交给 dbk_parse_args。索引合法性不在这里判:交给 rollback_pin/rollback_unpin 的 1(调用方给错)。
+PIN_ACT=""; PIN_IDX=""; MODE_GIVEN=0; DBK_ARGV=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --pin|--unpin)
+      if [ -n "$PIN_ACT" ]; then dbk_note "用法错误: --pin 与 --unpin 只能给一个(已给 --$PIN_ACT)"; exit "$DBK_USAGE"; fi
+      if [ "$#" -lt 2 ]; then dbk_note "用法错误: $1 后面要给部署索引(0 = 当前启动,1 = 上一部署)"; exit "$DBK_USAGE"; fi
+      PIN_ACT="${1#--}"; PIN_IDX="$2"; shift 2 ;;
+    --check|--apply) MODE_GIVEN=1; DBK_ARGV+=("$1"); shift ;;
+    *) DBK_ARGV+=("$1"); shift ;;
+  esac
+done
+dbk_parse_args ${DBK_ARGV[@]+"${DBK_ARGV[@]}"}
+if [ -n "$PIN_ACT" ] && [ "$MODE_GIVEN" -eq 1 ]; then
+  dbk_note "用法错误: pin/unpin 是独立动作,不能与 --check/--apply 混用"
+  exit "$DBK_USAGE"
+fi
 dbk_assert_step
 dbk_log_default "rollback-deploy"
 
@@ -77,6 +99,23 @@ finish() {
   if [ "$REBOOT" = 0 ]; then hint=";已有排入下次启动的部署改动,请重启使其生效"; fi
   dbk_exit PASS "$msg:部署级回滚这一路可用$hint"
 }
+
+if [ -n "$PIN_ACT" ]; then
+  if [ "$PIN_ACT" = pin ]; then
+    what="固定部署 $PIN_IDX(不被垃圾回收)"; want="$ROLLBACK_CMD pin $PIN_IDX"
+    done_msg="部署 $PIN_IDX 已固定(变更前 pin 完成;要解除用 --unpin $PIN_IDX --yes)"
+  else
+    what="解除部署 $PIN_IDX 的固定(它可被垃圾回收)"; want="$ROLLBACK_CMD pin --unpin $PIN_IDX"
+    done_msg="部署 $PIN_IDX 的固定已解除"
+  fi
+  dbk_need_yes "$what" "$want"
+  if "rollback_$PIN_ACT" "$PIN_IDX"; then prc=0; else prc=$?; fi
+  case "$prc" in   # 接口返回值直传:1 = 失败,2 = 需人工(不把「需人工」记成 FAIL)
+    0) dbk_add_action "rollback_$PIN_ACT $PIN_IDX"; dbk_mark_changed; dbk_exit PASS "$done_msg" ;;
+    2) dbk_exit 需人工 "rollback_$PIN_ACT $PIN_IDX 判不了(接口返回 2 需人工);原因见上面库层输出" ;;
+    *) dbk_exit FAIL "rollback_$PIN_ACT $PIN_IDX 失败(接口返回 $prc);按上面原因处理后重跑(幂等)" ;;
+  esac
+fi
 
 if [ "$DBK_MODE" = apply ]; then
   if [ "$(id -u)" -ne 0 ]; then

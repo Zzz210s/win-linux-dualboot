@@ -8,12 +8,14 @@
 #   然后使用:
 #   deployments_list      打印部署列表(每行「索引 版本 标记…」);0 = 可读 / 2 = 取不到或解析不了(需人工)。
 #     版本取人读 status 的 Version: 行(JSON 字段名更易漂移),标记取 --json 的 pinned/booted/staged;
-#     两个来源的部署数必须一致,不一致 → 2 需人工(不猜哪个对)。
+#     两个来源的部署数必须一致,不一致 → 2 需人工(不猜哪个对);整段 JSON 里一个 "pinned": 键都没有 → 2
+#     需人工(pinned 标记不可信,不能当「没有固定部署」照旧返 0)。
 #   deployments_count     打印部署数量(整数,≥1);0 = 可读 / 2 = 取不到或解析不了(需人工)
 #   rollback_pin <索引>   0 = 已固定 / 1 = 失败(索引非法也走 1;原因已落日志)
 #   rollback_unpin <索引> 0 = 已解除固定 / 1 = 失败
 #   rollback_to_previous  0 = 已把上一部署排为下次启动(重启后生效)/ 1 = 失败
 #   rollback_needs_reboot 0 = 有已排入下次启动的部署改动(staged,需重启)/ 1 = 无 / 2 = 读不到状态(需人工)
+#     护栏:JSON 读到了但整段没有 "staged": 键(字段名漂移)→ 2 需人工;键在且为 false → 1。
 # 索引口径:与 ostree 的部署索引一致 —— 0 = 当前启动,1 = 上一部署(回滚候选),依次递增;就是 deployments_list
 #   每行行首打印的序号(官方文档口径:ostree admin pin 的 INDEX,0 = booted、1 = rollback)。索引会随重启与
 #   新部署变化,调用方要「即读即用」(先 deployments_list,再把同一批序号喂给 rollback_pin/rollback_unpin)。
@@ -26,7 +28,8 @@
 # 待核实(以官方文档为准):rpm-ostree status --json 的 deployments[].version / .pinned / .booted / .staged
 #   字段名;人读 status 的 Version: 行顺序与 --json 的 deployments[] 顺序一致(本库靠它把两个来源对上);
 #   deployments[] 数组顺序与 ostree 部署索引的对应;rpm-ostree pin <索引> / pin --unpin <索引> / rollback 的
-#   参数形态与返回码 —— 均未在真机验证。
+#   参数形态与返回码 —— 均未在真机验证。字段名若与官方输出不符(缺 pinned / staged 键),deployments_list
+#   与 rollback_needs_reboot 会走 2(需人工),而不是静默给结论(这就是两处键存在性护栏的意义)。
 
 ROLLBACK_CMD="${DBK_RPM_OSTREE:-rpm-ostree}"   # 夹具注入用
 
@@ -94,7 +97,7 @@ _rb_text_versions() {
 
 # 部署列表:一行一个「索引 版本 标记…」(标记有 当前启动 / pinned / staged:待重启)。0 = 可读 / 2 = 需人工。
 deployments_list() {
-  local json vers ntext i=0 blk ver line
+  local json vers ntext i=0 blk ver line pk=0
   json="$(_rb_status_json)" || return 2
   vers="$(_rb_text_versions)" || return 2
   ntext="$(printf '%s\n' "$vers" | grep -c . || true)"
@@ -103,6 +106,7 @@ deployments_list() {
     ver="$(printf '%s\n' "$vers" | sed -n "$((i + 1))p")"
     line="$i ${ver:-未知版本}"
     case "$blk" in *'"booted":true'*) line="$line [当前启动]" ;; esac
+    case "$blk" in *'"pinned":'*) pk=1 ;; esac
     case "$blk" in *'"pinned":true'*) line="$line [pinned]" ;; esac
     case "$blk" in *'"staged":true'*) line="$line [staged:待重启]" ;; esac
     printf '%s\n' "$line"
@@ -113,6 +117,11 @@ deployments_list() {
   fi
   if [ "$i" -ne "${ntext:-0}" ]; then
     _rb_note "错误: 两个来源的部署数不一致(文本 status 有 $ntext 行 Version:,JSON 有 $i 个部署),拒绝猜(需人工)"
+    return 2
+  fi
+  # 键存在性护栏:整段 JSON 一个 "pinned": 键都没有 = 字段名漂移,标记不可信 → 2(不能照旧返 0 说「没有固定部署」)。
+  if [ "$pk" -ne 1 ]; then
+    _rb_note "错误: $ROLLBACK_CMD status --json 里没有任何 pinned 键(字段名可能与官方输出不一致),固定标记不可信(需人工)"
     return 2
   fi
   return 0
@@ -174,6 +183,9 @@ rollback_needs_reboot() {
   flat="${json//[[:space:]]/}"
   case "$flat" in
     *'"staged":true'*) return 0 ;;
+    *'"staged":'*) return 1 ;;
   esac
-  return 1
+  # 键存在性护栏:没有 "staged": 键 = 字段名漂移,不能当「无待重启」→ 2(它是这条风险的唯一安全网)。
+  _rb_note "错误: $ROLLBACK_CMD status --json 里没有 staged 键(字段名可能与官方输出不一致),无法判断是否有待重启部署(需人工)"
+  return 2
 }
