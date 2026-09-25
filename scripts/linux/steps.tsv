@@ -1,5 +1,5 @@
 步骤号	脚本路径	破坏性(0/1)	说明
-02-3	scripts/linux/check-partition-plan.sh	0	轨道 L 的分盘核对(live):ESP-Ubuntu 1GiB + /boot 1GiB ext4 + root 约 113GiB ext4
+02-3	scripts/linux/check-partition-plan.sh	0	轨道 L 的分盘核对(live):ESP-Fedora 1GiB + /boot 1GiB ext4 + root 约 113GiB btrfs
 04-2	scripts/linux/check-partition-plan.sh	0	手动分区前核对:Windows ESP 未被挂载/未被改动 + 输出下一步该建什么(Calamares 里只指定挂载点)
 04-3	scripts/linux/verify-l3.sh	0	装完重启验证:grub-efi-amd64/shim-signed 在位 / GRUB 落 \EFI\ubuntu\ / /boot 独立 ext4 / 两块 ESP 互不干扰 / BootOrder 首位
 04-4	scripts/linux/collect-l3.sh	0	落 L3 产物:baseline/03-efi-layout.txt

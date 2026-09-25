@@ -6,7 +6,7 @@
 .DESCRIPTION
   判据(数值即定稿值,一字不改):
     W 只 Windows:ESP-Windows 2048MB(EFI System)、MSR 16MB、C: 204800MB、WinRE;不要求预留 Linux 空间。
-    L 只 Kubuntu:ESP-Ubuntu 1024MB(EFI System)、/boot 1024MB(Linux filesystem)、root >= 115712MB(约 113GiB)。
+    L 只 Kubuntu:ESP-Fedora 1024MB(EFI System)、/boot 1024MB(Linux filesystem)、root >= 115712MB(约 113GiB)。
     D 双系统:ESP-Windows 2048MB + MSR 16MB + C: 204800MB + D: 650240MB + D: 之后连续未分配 >= 117760MB(115GiB)+ WinRE
       (WinRE 未建时只提示:它由 Windows 安装程序在 03-1 阶段建,不作为失败项)。
   口径:尺寸按 MB 比对(容差 +-2MB);角色按 GPT 类型识别;/boot 与 root 的 ext4 在 Windows 侧读不到,
@@ -132,7 +132,7 @@ if ($Track -eq 'W' -or $Track -eq 'D') {
     $best = Get-MaxGapMB -Gaps @($gaps | Where-Object { $_.StartMB -ge ($dataEnd - $TOL) })
     if ($best -lt ($TR.ReserveMB - $TOL)) {
       $failN++; $failItems += '预留段'
-      Add-DbkCheck ('失败项:D: 之后的预留段期望 >= ' + $TR.ReserveMB + 'MB(115GiB)连续未分配,实际 ' + (ConvertTo-GiB $best) + ';L3 的 ESP-Ubuntu 1GiB + /boot 1GiB + root 约 113GiB 都要落在这段里')
+      Add-DbkCheck ('失败项:D: 之后的预留段期望 >= ' + $TR.ReserveMB + 'MB(115GiB)连续未分配,实际 ' + (ConvertTo-GiB $best) + ';L3 的 ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB 都要落在这段里')
     } else { Add-DbkCheck ('D: 之后的预留段:' + (ConvertTo-GiB $best) + ' 连续未分配(期望 >= ' + (ConvertTo-GiB $TR.ReserveMB) + ')') }
   } else {
     if ($data.Count -gt 0) { Add-DbkCheck ('数据分区 D::' + (Format-Part $data[0]) + '(轨道 W 不要求,只作提示)') }
@@ -142,8 +142,8 @@ if ($Track -eq 'W' -or $Track -eq 'D') {
 
 if ($Track -eq 'L') {
   $esp = @(Select-KindMB -Parts $parts -Kind 'efi' -MB $TR.UbuntuEspMB)
-  if ($esp.Count -eq 0) { $failN++; $failItems += 'ESP-Ubuntu'; Add-DbkCheck ('失败项:ESP-Ubuntu 期望 ' + $TR.UbuntuEspMB + 'MB(EFI System),实际 ' + (Show-Parts (Select-Kind -Parts $parts -Kind 'efi'))) }
-  else { Add-DbkCheck ('ESP-Ubuntu:' + (Format-Part $esp[0]) + '(期望 ' + $TR.UbuntuEspMB + 'MB)') }
+  if ($esp.Count -eq 0) { $failN++; $failItems += 'ESP-Fedora'; Add-DbkCheck ('失败项:ESP-Fedora 期望 ' + $TR.UbuntuEspMB + 'MB(EFI System),实际 ' + (Show-Parts (Select-Kind -Parts $parts -Kind 'efi'))) }
+  else { Add-DbkCheck ('ESP-Fedora:' + (Format-Part $esp[0]) + '(期望 ' + $TR.UbuntuEspMB + 'MB)') }
   $linux = @(Select-Kind -Parts $parts -Kind 'linux')
   if ($linux.Count -gt 2) { $manualN++; Add-DbkCheck ('需人工:盘上有 ' + $linux.Count + ' 块 Linux filesystem 分区,超出目标布局(只有 /boot 与 root 两块):' + (Show-Parts $linux)) }
   $boot = @($linux | Where-Object { Test-MB $_.SizeMB $TR.BootMB })

@@ -4,12 +4,13 @@
 # L4 卡 05-5:蓝牙配对密钥同步包装(上游 KeyofBlueS/bt-keys-sync;本仓库不内置其代码)。
 # 方向(上游建议,以 Windows 侧密钥为权威):1) Ubuntu 配对目标设备 -> 2) 回 Windows 对同一设备再配对
 #   -> 3) 回 Ubuntu 用 --windows-keys 导入 -> 4) 复测两系统都能直连。**反向写 Windows 注册表有风险,本脚本不做**。
-# 判据(--check,零写):① chntpw 已安装(dpkg-query 查询;DBK_SKIP_PKG=1 时记需人工);
+# 判据(--check,零写):① chntpw 已安装(经 dbk-pkg.sh 的 pkg_installed 判定;DBK_SKIP_PKG=1 时记需人工);
 #   ② Windows 注册表 hive 可读(<win-mnt>/Windows/System32/config/SYSTEM,只读挂载即可);
 #   ③ 上游脚本已就位(--script 指定,或已下载到 DEST)。三项齐 → PASS(上游运行与两系统直连复测属卡内人工步骤)。
-# --apply(需要 root,且必须 --yes):pkg_ensure chntpw 走 apt(Ubuntu 的 chntpw 在 universe 仓库,apt 装包**立即生效**,
-#   不需要重启)→ 下载上游脚本到 DEST(文件名/参数以仓库 README 为准)→ bash <脚本> --windows-keys --path <hive> [-- 透传]。
-# 环境开关:DBK_SKIP_PKG=1(兼容 DBK_SKIP_APT)跳过 apt 动作。注入:DBK_WIN_MNT / DBK_BT_SCRIPT / DBK_BT_DIR / DBK_BT_REPO。
+# --apply(需要 root,且必须 --yes):经 dbk-pkg.sh 的 pkg_ensure 分层安装 chntpw(原子版:装完写进下一部署、**重启后才生效**,
+#   输出显式提示;装完未重启就--apply 会把「未生效」当失败)→ 下载上游脚本到 DEST(文件名/参数以仓库 README 为准)
+#   → bash <脚本> --windows-keys --path <hive> [-- 透传]。
+# 环境开关:DBK_SKIP_PKG=1(兼容 DBK_SKIP_APT)跳过分层安装。注入:DBK_WIN_MNT / DBK_BT_SCRIPT / DBK_BT_DIR / DBK_BT_REPO。
 # 夹具级验证,真机未跑。用法:bt-keys-sync-wrapper.sh [--win-mnt <挂载点>] [--script <上游脚本>] [--repo-url <地址>]
 #   [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-- <上游额外参数>] [-h]
 # 待核实(以官方文档为准):chntpw 的包名与所在仓库、上游脚本的文件名与 --windows-keys 参数均未在真机验证。
@@ -94,9 +95,9 @@ ISSUES=(); MANUAL=(); EXTRA_MANUAL=()
 judge() {
   ISSUES=(); MANUAL=()
   resolve_win_mnt; resolve_script
-  if [ "$SKIP" = 1 ]; then MANUAL+=("DBK_SKIP_PKG=1:跳过 apt 安装,chntpw 是否已装需人工确认")
+  if [ "$SKIP" = 1 ]; then MANUAL+=("DBK_SKIP_PKG=1:跳过分层安装,chntpw 是否已装需人工确认")
   elif pkg_installed chntpw; then dbk_add_check "依赖 chntpw:已安装"
-  else ISSUES+=("依赖 chntpw 未安装(--apply 会 apt-get install -y chntpw,装完立即生效)"); fi
+  else ISSUES+=("依赖 chntpw 未安装(--apply 会分层安装 chntpw,原子版:重启后生效)"); fi
   if [ "$HIVE_OK" = 1 ]; then dbk_add_check "Windows hive 可读:$WIN_MNT/$HIVE_REL"
   elif [ -n "$WIN_MNT" ]; then ISSUES+=("$WIN_MNT/$HIVE_REL 读不到:确认该挂载点就是 Windows 系统分区,并以**只读**方式挂载")
   else ISSUES+=("未找到已挂载的 Windows 分区:先 sudo mkdir -p /mnt/win && sudo mount -o ro <Windows 系统分区> /mnt/win,再带 --win-mnt /mnt/win 重跑"); fi
@@ -127,15 +128,16 @@ apply_run() {
     ISSUES+=("读不到 Windows 注册表 hive($WIN_MNT/$HIVE_REL)")
     dbk_exit FAIL "读不到 Windows 注册表 hive:先只读挂载 Windows 系统分区并带 --win-mnt <挂载点> 重跑"
   fi
-  pkg_ensure chntpw "sudo apt-get install -y chntpw" || pkg_st=$?
-  if [ "$pkg_st" -eq 9 ]; then
-    ISSUES+=("DBK_SKIP_PKG=1:无法安装 chntpw")
-    dbk_exit FAIL "DBK_SKIP_PKG=1:跳过 apt 安装,但 --apply 需要 chntpw 读取 hive;去掉该开关后重跑"
-  elif [ "$pkg_st" -eq 1 ]; then
-    ISSUES+=("chntpw 安装失败")
-    dbk_exit FAIL "chntpw 安装失败(见上面日志);硬前置:sudo apt-get install -y chntpw 后重跑"
-  fi
-  dbk_add_action "chntpw 已就位(apt-get install -y chntpw;立即生效)"
+  pkg_st=0; pkg_ensure chntpw || pkg_st=$?
+  case "$pkg_st" in
+    9) ISSUES+=("DBK_SKIP_PKG=1:无法分层安装 chntpw")
+       dbk_exit FAIL "DBK_SKIP_PKG=1:跳过分层安装,但 --apply 需要 chntpw 读取 hive;去掉该开关后重跑" ;;
+    2) dbk_exit 需人工 "分层安装无法立即生效(--now 不可用):chntpw 装完需重启;重启后重跑 --apply 复核" ;;
+    1) ISSUES+=("分层安装 chntpw 失败")
+       dbk_exit FAIL "分层安装 chntpw 失败(见上面日志);硬前置:按上面库层给出的硬前置命令安装 chntpw 后重跑" ;;
+  esac
+  if pkg_needs_reboot; then dbk_exit 需人工 "chntpw 已提交分层安装但尚未重启生效;重启后重跑本脚本(本地判据仍按当前系统判定)"; fi
+  dbk_add_action "chntpw 已就位(分层安装;当前系统已生效)"
   mkdir -p "$DEST" || { ISSUES+=("无法创建 $DEST"); dbk_exit FAIL "无法创建 $DEST"; }
   if [ -z "$SCRIPT_PATH" ]; then
     SCRIPT_PATH="$(download_upstream "$REPO_URL" "$DEST" || true)"

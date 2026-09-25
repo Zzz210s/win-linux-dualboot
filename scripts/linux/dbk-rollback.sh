@@ -10,7 +10,9 @@
 #     版本取人读 status 的 Version: 行(JSON 字段名更易漂移),标记取 --json 的 pinned/booted/staged;
 #     两个来源的部署数必须一致,不一致 → 2 需人工(不猜哪个对);整段 JSON 里一个 "pinned": 键都没有 → 2
 #     需人工(pinned 标记不可信,不能当「没有固定部署」照旧返 0)。
-#   deployments_count     打印部署数量(整数,≥1);0 = 可读 / 2 = 取不到或解析不了(需人工)
+#   deployments_count     打印部署数量(整数,≥1);0 = 可读 / 2 = 取不到或解析不了(需人工)。
+#     实现口径:先取 deployments_list 的退出码,再数行 —— 不得用 `deployments_list | grep -c` 吞掉子函数退出码
+#     (list 因缺 pinned 键或两来源计数不一致而返回 2 时,管道版会反手打印一个数 = fail-open)。
 #   rollback_pin <索引>   0 = 已固定 / 1 = 失败(索引非法也走 1;原因已落日志)
 #   rollback_unpin <索引> 0 = 已解除固定 / 1 = 失败
 #   rollback_to_previous  0 = 已把上一部署排为下次启动(重启后生效)/ 1 = 失败
@@ -128,9 +130,11 @@ deployments_list() {
 }
 
 # 部署数量:0 = 可读(打印整数,≥1)/ 2 = 取不到或解析不了(需人工)。
+# 必须先看 deployments_list 的退出码再数行:管道里的 grep -c 会吞掉子函数退出码(旧实现即 fail-open)。
 deployments_count() {
-  local n
-  n="$(deployments_list | grep -c . || true)"
+  local list n
+  list="$(deployments_list)" || return 2
+  n="$(printf '%s\n' "$list" | grep -c . || true)"
   case "${n:-0}" in ''|0) return 2 ;; esac
   printf '%s\n' "$n"
   return 0

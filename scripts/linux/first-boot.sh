@@ -10,11 +10,11 @@
 #   模块顺序:storage(交换空间与 zram)-> hardening(健壮性 R1-R9)-> mount-shared(共享盘挂载 + 家目录重定向;
 #   缺 --uuid 时记 skipped)-> graphics(NVIDIA 驱动与 Wayland/PRIME 核对);脚本文件缺失的模块打印提示级消息并记 skipped。
 #   整机目标:能进桌面 + 记录失败项 —— 单模块失败不改变本脚本退出码(始终 0),失败/跳过项在摘要末尾显式列出。
-#   注意:R1/R2(备份 baseline 与包级回退)在 hardening 里只读核对;mount-shared 失败不阻塞登录。
+#   注意:R1/R2(备份 baseline 与部署级回滚)在 hardening 里只读核对;mount-shared 失败不阻塞登录。
 # 日志:/var/log/dbk/first-boot.log(编排)、/var/log/dbk/<模块>.log(本脚本重定向的模块输出)、first-boot-summary.txt;
 #   日志目录不可写时(非 root,或该目录曾由 sudo 创建)回落 <TMPDIR>/dbk-<uid>/ 并打印警告。
-# 设计依据:docs/design/04-kubuntu-variant-design.md 第 2 节(D4 回滚降级为包级回退 + 原地重装、D5 分区表 8 项)
-#   与第 7 节(R1-R9 的替代方案);docs/design/00-design.md 4.7 的 R1-R9。
+# 设计依据:docs/design/06-atomic-restore-design.md 第 2 节 D4(回滚 = 部署级)与第 4 节(first-boot.sh 行)
+#   及 docs/design/00-design.md 4.7 的 R1-R9。
 # 本脚本是逐项汇总型,不得 set -e。夹具级验证,真机未跑。
 set -uo pipefail
 
@@ -134,7 +134,7 @@ write_summary() {
     for i in "${!MOD_NAMES[@]}"; do
       if [ "${MOD_STATES[$i]}" = fail ]; then printf '%s ' "${MOD_NAMES[$i]}"; fi
     done
-    printf '\n结论: 单模块失败不改变整体退出码(本脚本退出码固定 0);R1/R2(备份与包级回退)由 hardening 只读核对;'
+    printf '\n结论: 单模块失败不改变整体退出码(本脚本退出码固定 0);R1/R2(备份与部署级回滚)由 hardening 只读核对;'
     printf '失败项见上表,按各模块日志修正后可单独重跑。\n'
   } >"$SUMMARY.new" 2>/dev/null; then
     log "错误: 摘要未写出(无法创建 $SUMMARY.new,检查 $LOG_DIR 是否可写)"

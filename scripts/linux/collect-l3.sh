@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # 对应卡:04-4
-# 落 L3 产物:--apply 写 baseline/03-efi-layout.txt,六节固定——\EFI\ 两棵树(Windows ESP + Ubuntu ESP)、
-# efibootmgr -v、BootOrder、lsblk、findmnt、引导包与内核版本摘要(dpkg-query + uname -r);--check(缺省)只打印,零写。
+# 落 L3 产物:--apply 写 baseline/03-efi-layout.txt,六节固定——\EFI\ 两棵树(Windows ESP + Fedora ESP)、
+# efibootmgr -v、BootOrder、lsblk、findmnt、部署与内核摘要(部署列表经接口 dbk-rollback.sh + /boot 独立挂载 + uname -r);
+# --check(缺省)只打印,零写。
 # 产物不入库(baseline/* 被 .gitignore 排除,仅 baseline/README.md 例外);多设备落 baseline/<设备别名>/。
 # 夹具级验证,真机未跑。用法: collect-l3.sh [--check|--apply] [--out <文件>] [--json] [--log <路径>] [--step NN-K]
-# 夹具注入(真机不需要设置):BOOT_DIR、ESP_DIR、WIN_ESP_MNT、OUT。
+# 夹具注入(真机不需要设置):BOOT_DIR、ESP_DIR、WIN_ESP_MNT、OUT;部署列表另读 DBK_RPM_OSTREE。
+# 本脚本不写发行版命令字面量(规则 S-1):部署数与部署列表一律走 dbk-rollback.sh 的接口。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$HERE/dbk-cli.sh"
+# shellcheck source=scripts/linux/dbk-rollback.sh disable=SC1091
+. "$HERE/dbk-rollback.sh"
 
 OUT="${DBK_OUT:-$ROOT/baseline/03-efi-layout.txt}"; ARGS=()
 while [ "$#" -gt 0 ]; do
@@ -26,6 +30,17 @@ BOOT_DIR="${DBK_BOOT_DIR:-/boot}"; ESP_DIR="${DBK_ESP_DIR:-/boot/efi}"; WIN_MNT=
 to_mib() { awk -v b="${1:-0}" 'BEGIN{printf "%d", b/1048576}'; }
 cleanup() { if [ -n "$TMP_MNT" ]; then umount "$TMP_MNT" 2>/dev/null || true; rmdir "$TMP_MNT" 2>/dev/null || true; fi; }
 trap cleanup EXIT
+# 部署列表接口渲染:0 = 原样打印;2 = 未取到(需人工);其它 = 异常状态码。绝不把 2 渲染成结论。
+deploy_lines() {
+  local out rc=0
+  out="$(deployments_list 2>/dev/null)" || rc=$?
+  case "$rc" in
+    0) printf '%s\n' "$out" ;;
+    2) printf '%s\n' "(部署列表未取到:需人工;原因见 stderr 与 --log)" ;;
+    *) printf '%s\n' "(部署列表异常:接口返回码 $rc)" ;;
+  esac
+  return 0
+}
 
 # Windows ESP 树:优先用注入的挂载点;否则按"目标盘上 ≈2048MiB 的 vfat 分区"只读挂载
 if [ -z "$WIN_MNT" ] && command -v lsblk >/dev/null 2>&1; then
@@ -46,7 +61,7 @@ BODY="$(sec "# baseline/03-efi-layout.txt (L3 产物)"
   sec "## $BOOT_DIR 是否独立挂载(设计 3.4 / 卡 04-3 判据 ④)"
   if command -v findmnt >/dev/null 2>&1; then findmnt -no SOURCE,FSTYPE,TARGET "$BOOT_DIR" 2>&1 || printf '%s\n' "(读不到 $BOOT_DIR 的挂载信息:可能未独立挂载)"; else printf '%s\n' "(未安装 findmnt)"; fi
   printf '\n'
-  sec "## \\EFI\\ 目录树(Ubuntu ESP:$ESP_DIR)"
+  sec "## \\EFI\\ 目录树(Fedora ESP:$ESP_DIR)"
   if [ -d "$ESP_DIR/EFI" ]; then find "$ESP_DIR/EFI" -maxdepth 3 2>/dev/null | sort; else printf '%s\n' "(读不到 $ESP_DIR/EFI)"; fi
   printf '\n'
   sec "## \\EFI\\ 目录树(Windows ESP:${WIN_MNT:-读不到})"
@@ -64,10 +79,10 @@ BODY="$(sec "# baseline/03-efi-layout.txt (L3 产物)"
   sec "## findmnt"
   if command -v findmnt >/dev/null 2>&1; then findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS 2>&1 || true; else printf '%s\n' "(未安装 findmnt)"; fi
   printf '\n'
-  sec "## 引导包与内核版本(dpkg-query + uname -r)"
-  if command -v dpkg-query >/dev/null 2>&1; then
-    dpkg-query -W -f='${Package} ${Version}\n' grub-efi-amd64 grub-efi-amd64-signed shim-signed 2>&1 | head -n 10 || true
-  else printf '%s\n' "(未安装 dpkg-query)"; fi
+  sec "## 部署与内核摘要(接口 dbk-rollback.sh + $BOOT_DIR/ostree + uname -r)"
+  deploy_lines
+  if [ -d "$BOOT_DIR/ostree" ]; then printf '%s\n' "$BOOT_DIR/ostree 存在(原子版独立 /boot:各部署的内核与 initrd 在此)"
+  else printf '%s\n' "$BOOT_DIR/ostree 不存在(独立 /boot 的部署目录未就绪;先跑 04-3 核对)"; fi
   uname -r 2>&1 || true
 )"
 

@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # 对应卡:05-8
-# L4:远程与磁盘健康(Kubuntu / apt 语义;设计依据:docs/design/04-kubuntu-variant-design.md 第 7 节 R7「常开 SSH
-#   救援通道」与 R9「磁盘健康监控」)—— sshd 常开(桌面挂死时从另一台机器登录排障)+ smartd 监控磁盘健康。
-# 用途:--check 只读判定;--apply 用 apt 安装 smartmontools(走 dbk-pkg.sh)并 `systemctl enable --now sshd smartd`。
+# L4:远程与磁盘健康(Fedora 44 Silverblue / 原子版语义;设计依据:docs/design/06-atomic-restore-design.md 第 4 节
+#   set-remote-health.sh 行;02 号设计 R7/R9)—— sshd 常开(桌面挂死时从另一台机器登录排障)+ smartd 监控磁盘健康。
+# 用途:--check 只读判定;--apply 经 dbk-pkg.sh 分层安装 smartmontools 并 `systemctl enable --now sshd smartd`。
 # 判据(--check,零写):① `systemctl is-active sshd` = active;
 #   ② 逐盘 `smartctl -H /dev/<disk>` 输出含 `SMART overall-health self-assessment test result: PASSED`
 #      或 `SMART Health Status: OK`(盘列表来自 `lsblk -dn -o NAME,TYPE` 的 disk 行);未安装 smartctl → 需人工(2);
 #   ③ 附加证据(不作为失败项):`ss -tlnp | grep :22` 能看到 22 端口监听。
-# 安装语义:apt 装包**立即生效**(与原子版(已废弃)的 rpm-ostree 分层安装不同,不需要重启);DBK_SKIP_PKG=1
-#   (兼容 DBK_SKIP_APT)只跳过 apt 动作(判据按现状判定)。
-# 人工边界:本步不声明破坏性(不写 `# 破坏性:1`):装包可用 apt-get purge 撤销,不动分区/引导。
+# 安装语义(原子版):分层安装**写进下一部署、重启后才生效**;输出必须显式提示「分层安装需重启」。DBK_SKIP_PKG=1
+#   (兼容 DBK_SKIP_APT)只跳过分层安装动作(判据按现状判定)。
+# 人工边界:本步不声明破坏性(不写 `# 破坏性:1`):分层安装可逆(去掉分层后回到原始镜像),不动分区/引导。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。
 # 夹具级验证,真机未跑。用法: set-remote-health.sh [--check|--apply] [--json] [--log <路径>] [--step NN-K] [-h]
-# 夹具注入(真机不需要设置):DBK_SYSTEMCTL / DBK_SMARTCTL / DBK_LSBLK / DBK_SS / DBK_APT_GET / DBK_DPKG_QUERY / DBK_SKIP_PKG。
+# 夹具注入(真机不需要设置):DBK_SYSTEMCTL / DBK_SMARTCTL / DBK_LSBLK / DBK_SS / DBK_SKIP_PKG;
+#   装包判定经 dbk-pkg.sh 读取 DBK_RPM_OSTREE(接口内部已随 2026-09-25 回切改为 ostree 口径)。
 # 待核实(以官方文档为准):smartctl 的健康行文本与退出码位掩码语义、smartd 单元名均未在真机验证。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,7 +23,7 @@ dbk_enable_errtrap
 dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "set-remote-health"
-# 包管理助手(库文件:非步骤脚本):pkg_installed / pkg_ensure(apt 装包立即生效,无需重启)。
+# 包管理助手(库文件:非步骤脚本):pkg_installed / pkg_ensure / pkg_needs_reboot(原子版分层安装,重启后生效)。
 # shellcheck source=scripts/linux/dbk-pkg.sh disable=SC1091
 . "$HERE/dbk-pkg.sh"
 # dbk-log.sh 的 log() 打 stdout(会破坏 --json 的单行输出);这里统一改走 dbk_obs(stderr + --log 日志)
@@ -87,7 +88,7 @@ check_sshd() {
 check_smart() {
   local disks d out line
   if ! command -v "${SM[0]}" >/dev/null 2>&1; then
-    MANUAL+=("未安装 smartctl($SM_STR):先 apt-get install -y smartmontools(设计 R9)后重跑,或人工逐盘 smartctl -H")
+    MANUAL+=("未安装 smartctl($SM_STR):先跑本脚本 --apply 分层安装 smartmontools(设计 R9;原子版:重启后生效)后重跑,或人工逐盘 smartctl -H")
     return 0
   fi
   disks="$(lsblk_disks)"
@@ -131,22 +132,24 @@ check_all() {
   return 0
 }
 
-# --apply:apt 安装 smartmontools(返回 9=按 DBK_SKIP_PKG 跳过;返回 1=该判据 FAIL,但继续做 systemd 动作)。
+# --apply:分层安装 smartmontools(返回 9=按 DBK_SKIP_PKG 跳过;返回 2=需人工;返回 1=该判据 FAIL,但继续做 systemd 动作)。
+# 原子版语义:装完写进下一部署,重启后才生效 —— 输出显式提示,并由 pkg_needs_reboot 驱动复核。
 apply_pkg() {
-  local st=0
-  pkg_ensure smartmontools "sudo apt-get install -y smartmontools" >&2 || st=$?
+  local st=0 rc=0
+  pkg_ensure smartmontools >&2 || st=$?
   case "$st" in
-    0)
-      dbk_add_action "确保 smartmontools 已安装(apt-get install -y)"
-      dbk_mark_changed
-      ;;
-    9)
-      dbk_add_check "跳过: DBK_SKIP_PKG=1,未执行 apt-get install smartmontools(判据按现状判定)"
-      ;;
-    *)
-      APPLY_FAILS+=("安装 smartmontools 失败(返回码 $st);按上面库层给出的硬前置命令处理后重跑")
-      ;;
+    0) dbk_add_action "smartmontools 已提交分层安装(重启后生效)"; dbk_mark_changed ;;
+    2) MANUAL+=("分层安装无法立即生效(库层返回 2 需人工):重启后重跑本脚本复核 smartctl/smartd") ;;
+    9) dbk_add_check "跳过: DBK_SKIP_PKG=1,未执行分层安装(判据按现状判定)" ;;
+    *) APPLY_FAILS+=("分层安装 smartmontools 失败(返回码 $st);按上面库层给出的硬前置命令处理后重跑") ;;
   esac
+  if [ "$st" != 1 ]; then
+    pkg_needs_reboot || rc=$?
+    case "$rc" in
+      0) dbk_add_check "提示: 分层安装需重启 —— 已完成分层安装但当前系统尚未生效;先完成其余动作,统一重启后重跑本脚本复核" ;;
+      2) MANUAL+=("读不到分层安装状态(需人工):无法判断 smartmontools 是否已生效;重启后重跑本脚本复核") ;;
+    esac
+  fi
   return 0
 }
 

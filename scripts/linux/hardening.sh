@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # 对应卡:05-13
 # 破坏性:1(会写 fstab/user-dirs.dirs、装包、起服务:--apply 必须显式 --yes)
-# L4:健壮性配置落地(R1-R9;Kubuntu / apt 语义)。九项逐项执行,单项失败不中断,末尾汇总。
+# L4:健壮性配置落地(R1-R9;Fedora 44 Silverblue / 原子版语义)。九项逐项执行,单项失败不中断,末尾汇总。
 #
 # 用法:bash scripts/linux/hardening.sh [--check|--dry-run] [--apply --yes] [--log <path>]
 #   缺省(或 --check/--dry-run)是 dry-run:只打印九项的动作与判据,不改动系统;--apply(需要 root)才真正改系统,
 #   且必须同时给 --yes(全仓契约:声明「# 破坏性:1」的脚本,--apply 缺 --yes 一律 64 且零写)。
-#   九项:R1 变更前备份 baseline/、R2 包级回退(rollback-pkg.sh)、R3 旧内核保留、R4 救援 U 盘(人工)、
+#   九项:R1 变更前备份 baseline/、R2 部署级回滚(rollback-deploy.sh)、R3 旧内核保留、R4 救援 U 盘(人工)、
 #     R5 journald 持久化、R6 OOM/zram(storage.sh)、R7 SSH 通道、R8 保守更新(set-updates.sh)、R9 SMART。
-#   设计依据:docs/design/04-kubuntu-variant-design.md 第 7 节(回滚与恢复策略降级后的替代方案)。
-# 环境开关:DBK_SKIP_PKG=1(兼容 DBK_SKIP_APT)只跳过 apt 动作(文件与 systemd 动作照做)。
-# 注入(离线校验):DBK_BASELINE_DIR / DBK_BACKUP_DIR / DBK_JOURNALD_CONF / DBK_BOOT_DIR / DBK_APT_HISTORY / DBK_LOG。
+#   设计依据:docs/design/06-atomic-restore-design.md 第 2 节 D4 与第 4 节(hardening.sh 行)。
+# 环境开关:DBK_SKIP_PKG=1(兼容 DBK_SKIP_APT)只跳过分层安装动作(文件与 systemd 动作照做)。
+# 注入(离线校验):DBK_BASELINE_DIR / DBK_BACKUP_DIR / DBK_JOURNALD_CONF / DBK_BOOT_DIR / DBK_LOG。
 # 日志追加到 /var/log/dbk/hardening.log;每项结果打成 DBK-RESULT 行(供 first-boot.sh 摘要提取)。
 # 退出码:0=无失败项(跳过不影响),1=有失败项。本脚本是逐项汇总型,不得 set -e。夹具级验证,真机未跑。
 set -uo pipefail
@@ -27,7 +27,7 @@ source "$HERE/dbk-pkg.sh"
 TPL="$ROOT/templates"
 JOURNALD_CONF="${DBK_JOURNALD_CONF:-/etc/systemd/journald.conf.d/99-dbk-persistent.conf}"
 BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"; BAKDIR="${DBK_BACKUP_DIR:-/var/backups/dbk}"
-BOOT_DIR="${DBK_BOOT_DIR:-/boot}"; HIST="${DBK_APT_HISTORY:-/var/log/apt/history.log}"
+BOOT_DIR="${DBK_BOOT_DIR:-/boot}"
 APPLY=0; YES=0; NAMES=(); STATES=(); KEYS=()
 
 usage() { sed -n '2,13p' "$0"; }
@@ -71,14 +71,14 @@ run_step() {   # <脚本文件名> [--apply 附加参数…];输出写调用方�
 if [ "$APPLY" -ne 1 ]; then
   log "=== dry-run:以下九项不会被执行 ==="
   log "R1 变更前备份 baseline/:$BASEDIR -> $BAKDIR/<时间戳>-baseline/;判据备份目录可读"
-  log "R2 包级回退:只读核对 scripts/linux/rollback-pkg.sh 与 apt 历史($HIST);回退命令见该脚本 --list/--apply"
+  log "R2 部署级回滚:只读核对 scripts/linux/rollback-deploy.sh 与接口 dbk-rollback.sh;回滚命令见该脚本 --check/--apply"
   log "R3 旧内核保留:只读核对 $BOOT_DIR 下的 vmlinuz-* 数量(>=2 才算保留了旧内核)"
   log "R4 永久救援介质:人工(确认 U 盘在位并标记已验证可用),本脚本只登记需人工"
   log "R5 journald 持久化:$TPL/journald-persistent.snippet -> $JOURNALD_CONF;restart systemd-journald;判据 /var/log/journal 存在"
   log "R6 OOM/zram:调 scripts/linux/storage.sh(swapfile + zram0);systemd-oomd 由该脚本一并核对"
   log "R7 SSH 救援:enable --now sshd(不装包);判据 ss -tlnp | grep :22"
   log "R8 保守更新:调 scripts/linux/set-updates.sh(只装安全更新、不自动重启)"
-  log "R9 磁盘健康:apt 装 smartmontools;enable --now smartd;判据 smartctl -H 摘要"
+  log "R9 磁盘健康:分层安装 smartmontools(原子版:重启后生效);enable --now smartd;判据 smartctl -H 摘要"
   log "dry-run 结束:未修改任何文件。确认无误后加 --apply 重跑:sudo bash scripts/linux/hardening.sh --apply"
   exit 0
 fi
@@ -102,11 +102,11 @@ item_r1() {   # 变更前备份 baseline/(取代原子版的"变更前固定部�
   if mkdir -p "$BAKDIR" && cp -a "$BASEDIR" "$bak"; then record "$name" ok "已备份 $BASEDIR -> $bak(升级/重装前先跑本项)"
   else record "$name" fail "备份失败:cp -a $BASEDIR $bak(核对 $BAKDIR 的权限与空间)"; fi
 }
-item_r2() {   # 包级回退可用性(只读核对)
-  local name="R2 包级回退(apt install <pkg>=<版本> + apt-mark hold)"
-  if [ ! -r "$HERE/rollback-pkg.sh" ]; then record "$name" fail "缺 $HERE/rollback-pkg.sh,包级回退无脚本可依"; return; fi
-  if [ -r "$HIST" ]; then record "$name" ok "回退入口:bash scripts/linux/rollback-pkg.sh --list <包> / --apply --pkg <包> --version <版本> --yes;apt 历史可读($HIST)"
-  else record "$name" skip "apt 历史 $HIST 读不到;回退入口仍是 rollback-pkg.sh,但无法核对最近一次变更"; fi
+item_r2() {   # 部署级回滚可用性(只读核对;接口 dbk-rollback.sh)
+  local name="R2 部署级回滚(列部署 + 回滚前 pin + 回到上一部署)"
+  if [ ! -r "$HERE/rollback-deploy.sh" ]; then record "$name" fail "缺 $HERE/rollback-deploy.sh,部署级回滚无脚本可依"; return; fi
+  if [ ! -r "$HERE/dbk-rollback.sh" ]; then record "$name" fail "缺 $HERE/dbk-rollback.sh(发行版薄接口),回滚判据无接口可依"; return; fi
+  record "$name" ok "回退入口:bash scripts/linux/rollback-deploy.sh --check / --pin <索引> --yes / --apply --yes(重启后生效);接口:dbk-rollback.sh 的 deployments_list / rollback_to_previous"
 }
 item_r3() {   # 旧内核保留(只读核对 /boot 下的内核数)
   local name="R3 旧内核保留" n
@@ -151,10 +151,16 @@ item_r8() {   # 保守更新策略:委托 set-updates.sh(只装安全更新、�
   esac
 }
 item_r9() {
-  local name="R9 磁盘健康监控(SMART)" dev line summary="smartd 已 enable --now" st
-  pkg_ensure smartmontools "sudo apt-get install -y smartmontools"; st=$?
-  if [ "$st" = 9 ]; then record "$name" skip "DBK_SKIP_PKG=1:跳过 apt 安装与 smartd 启用"; return; fi
-  if [ "$st" != 0 ]; then record "$name" fail "安装 smartmontools 失败(补救命令见上面库层的硬前置提示)"; return; fi
+  local name="R9 磁盘健康监控(SMART)" dev line summary="smartd 已 enable --now" st rc=0
+  pkg_ensure smartmontools; st=$?
+  if [ "$st" = 9 ]; then record "$name" skip "DBK_SKIP_PKG=1:跳过分层安装与 smartd 启用"; return; fi
+  if [ "$st" = 2 ]; then record "$name" skip "需人工:分层安装无法立即生效(--now 不可用);请重启后重跑本项复核"; return; fi
+  if [ "$st" != 0 ]; then record "$name" fail "分层安装 smartmontools 失败(硬前置命令见上面库层提示)"; return; fi
+  pkg_needs_reboot || rc=$?
+  case "$rc" in
+    0) record "$name" skip "需人工:smartmontools 已提交分层安装但尚未重启生效;重启后重跑本项复核"; return ;;
+    2) record "$name" skip "需人工:读不到分层安装状态,无法判断是否已生效;重启后重跑本项复核"; return ;;
+  esac
   if ! systemctl enable --now smartd >/dev/null 2>&1; then record "$name" fail "systemctl enable --now smartd 失败"; return; fi
   while read -r dev; do
     [ -n "$dev" ] || continue
