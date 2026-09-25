@@ -18,7 +18,6 @@
 05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md(发行版/驱动来源/snap 四条判据/待升级包数)
 05-13	scripts/linux/first-boot.sh	1	L4 汇总执行(可选):按顺序跑各模块并聚合结果
 05-13	scripts/linux/hardening.sh	1	L4 汇总执行(可选):R1-R9 九项(被 first-boot.sh 编排,也可单跑)
-05-14	scripts/linux/step-snap-free.sh	1	snap 规避:四条判据核对 + 清除 snapd + apt pin 压制 + Mozilla 官方源(需 --yes)
 07-1	scripts/linux/triage.sh	0	判层:只读采集分区/挂载/固件条目/两块 ESP 内容/包管理与错误日志,给判层结论与建议卡号
 07-2	scripts/linux/gen-grub-rescue-commands.sh	0	从 GRUB 提示符回去:生成两套可复制命令(不执行、不改启动顺序)
 07-5	scripts/linux/check-partition-plan.sh	0	只重装 Kubuntu:装前核对 Ubuntu 三块分区与 Windows 侧不被触碰(安装人工,ESP 绝不格式化)
