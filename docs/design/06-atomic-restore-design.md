@@ -3,7 +3,7 @@
 > **本文档取代 `04-kubuntu-variant-design.md`**(Kubuntu 26.04 变体),并**恢复 `02-fedora-atomic-variant-design.md` 为现行内容真源**。02 号设计仍是"原子版怎么落地"的权威参考;本文档负责"为什么回切、这次回切怎么做、以及把发行版差异收敛成薄接口"。
 
 日期:2026-09-25
-状态:**已获用户逐节确认(第 1–5 节),待 spec 复审 → 转实施计划**
+状态:**已获用户确认(2026-09-25);本文档取代 04 号设计,并恢复 02 号为现行内容真源**
 适用:本仓库(win-linux-dualboot)除 Windows 侧之外的全部文档与 Linux 侧脚本
 相关设计:`00-design.md`(方案本体,本次需同步修订)、`01-playbook-reshape-design.md`(卡格式 R1–R7 与自检 C1–C9,不变)、`02-fedora-atomic-variant-design.md`(原子版内容真源,恢复为现行)、`03-step-automation-design.md`(每卡一脚本与契约,本次需同步)
 

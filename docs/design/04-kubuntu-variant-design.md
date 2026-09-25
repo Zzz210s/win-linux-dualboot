@@ -1,5 +1,7 @@
 # 设计 04:Kubuntu 变体设计(基础系统由 Fedora 44 Silverblue 改为 Kubuntu 26.04 LTS,并规避 snap)
 
+> **已废止(2026-09-25)**:**superseded by `06-atomic-restore-design.md`**。废止动因 = snap 清不干净(设计缺口,见 06 号第 1 节);本文档保留为决策历史,不再作为实施依据。
+
 - 状态:待用户确认后进入实施
 - 取代:`docs/design/02-fedora-atomic-variant-design.md`(该文件保留为历史,不再作为实施依据)
 - 用户决定(2026-09-22):**A —— 换成 Kubuntu 26.04 LTS**,理由是"日常省心"(apt 生态、官方预签名显卡驱动、3 年 LTS 不用频繁大版本升级),并**规避 snap 包**
