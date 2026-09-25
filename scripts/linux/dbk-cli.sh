@@ -8,7 +8,7 @@
 # 脚本头声明:「# 对应卡:NN-K[,NN-K…]」;破坏性脚本另写「# 破坏性:1」(声明后 --apply 缺 --yes 由库层拒 64)。
 # 只读保证:本文件只定义函数与常量;参数错误 → 用法到 stderr + exit 64,不落盘;不设置 shell 选项(要不要 set -e 由步骤脚本决定)。
 # 输出/JSON 由 dbk-obs.sh 提供(本文件 source 它);--json 时 stdout 只有 exit 的一行 JSON。
-# 包装外部命令的命名约定(强制):① 函数名不与外部命令同名(用 snap_/dpkg_/lspci_ 后缀),否则 bash 函数优先于 PATH
+# 包装外部命令的命名约定(强制):① 函数名不与外部命令同名(用 lsblk_/findmnt_/lspci_ 后缀),否则 bash 函数优先于 PATH
 #   → 自命中 → 无限递归 → 子 shell 段错误;② 体内一律 `command "${CMD[@]}" "$@"`。两条同时做。
 # 夹具级验证,真机未跑。依赖 dbk-log.sh 与 dbk-obs.sh。
 

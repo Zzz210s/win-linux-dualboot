@@ -47,7 +47,7 @@ probe() {
   ORDER=""; WIN_LINE=""; WIN_NUM=""; NEXT=""
   if ! efi_available; then
     dbk_add_check "未找到 ${EFI[0]}(本机非 UEFI,或该工具未安装)"
-    dbk_exit 跳过 "跳过:未找到 efibootmgr;若系统以 Legacy/BIOS 方式安装,请改用开机厂商启动菜单键(BOOT_MENU_KEY)选 Windows Boot Manager(sudo apt-get install -y efibootmgr 可装上)"
+    dbk_exit 跳过 "跳过:未找到 efibootmgr;若系统以 Legacy/BIOS 方式安装,请改用开机厂商启动菜单键(BOOT_MENU_KEY)选 Windows Boot Manager(按目标发行版的包管理装上 efibootmgr 即可)"
   fi
   ORDER="$(read_order || true)"
   if [ -z "$ORDER" ]; then
