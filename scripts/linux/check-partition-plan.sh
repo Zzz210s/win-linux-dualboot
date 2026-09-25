@@ -3,7 +3,7 @@
 # L3 前置核对(在 Kubuntu live 环境里跑):读当前磁盘布局(lsblk / blkid / sgdisk -p)与定稿分区计划比对,
 # 输出"下一步该建什么";并硬断言 Windows ESP 未被挂载、未被改动(读不到 → FAIL 并提示停手)。
 # 定稿值(设计 5.1 / 设计 04 第 4 节,一字不改):ESP-Windows 2048MiB / MSR 16MiB / C: 204800MiB / D: 650240MiB /
-#   ESP-Ubuntu 1024MiB(FAT32,挂 /boot/efi)/ /boot 1024MiB(ext4)/ root ≈113GiB(ext4);轨道 D 预留区 115GiB。
+#   ESP-Fedora 1024MiB(FAT32,挂 /boot/efi)/ /boot 1024MiB(ext4)/ root ≈113GiB(ext4);轨道 D 预留区 115GiB。
 # 人工边界:分区与 Calamares 的点击都是人工(设计 S2);本脚本无写动作,--apply 与 --check 输出相同。
 # 轨道:--track D(缺省;双系统,Ubuntu 三块建在 115GiB 预留区内)/ --track L(只装 Kubuntu,整盘三块)。
 # 夹具级验证,真机未跑。用法:
@@ -120,14 +120,14 @@ for i in "${!P_NAME[@]}"; do
   case "$fs" in
     vfat)
       if [ "$m" -ge $((UBU_ESP_MIB - 100)) ] && [ "$m" -le $((UBU_ESP_MIB + 100)) ]; then UBU_ESP="$i"
-      else ISSUES+=("ESP-Ubuntu 尺寸错:期望 ${UBU_ESP_MIB}MiB,实际 ${m}MiB(${P_NAME[$i]})"); fi ;;
+      else ISSUES+=("ESP-Fedora 尺寸错:期望 ${UBU_ESP_MIB}MiB,实际 ${m}MiB(${P_NAME[$i]})"); fi ;;
     ext4)
       if [ "$m" -ge $((BOOT_MIB - 100)) ] && [ "$m" -le $((BOOT_MIB + 100)) ]; then BOOT_P="$i"
       elif [ "$m" -ge "$ROOT_MIN_MIB" ]; then ROOT_P="$i"
       else ISSUES+=("ext4 分区尺寸不匹配:既不是 /boot(${BOOT_MIB}MiB)也不是 root(≥${ROOT_MIN_MIB}MiB),实际 ${m}MiB(${P_NAME[$i]})"); fi ;;
   esac
 done
-if [ "$UBU_ESP" -ge 0 ]; then dbk_add_check "ESP-Ubuntu: /dev/${P_NAME[$UBU_ESP]} ${UBU_ESP_MIB}MiB(vfat)"; fi
+if [ "$UBU_ESP" -ge 0 ]; then dbk_add_check "ESP-Fedora: /dev/${P_NAME[$UBU_ESP]} ${UBU_ESP_MIB}MiB(vfat)"; fi
 if [ "$BOOT_P" -ge 0 ]; then dbk_add_check "/boot: /dev/${P_NAME[$BOOT_P]} ${BOOT_MIB}MiB(ext4)"; fi
 if [ "$ROOT_P" -ge 0 ]; then dbk_add_check "root: /dev/${P_NAME[$ROOT_P]}(ext4,≥${ROOT_MIN_MIB}MiB)"; fi
 
@@ -164,12 +164,12 @@ fi
 
 dbk_note "下一步该建什么(live 里手工建;Calamares 里只指定挂载点,不让它动 Windows ESP):"
 step=1
-if [ "$UBU_ESP" -lt 0 ]; then dbk_note "  $step. ESP-Ubuntu: ${UBU_ESP_MIB}MiB FAT32 -> 挂载点 /boot/efi"; step=$((step + 1)); fi
+if [ "$UBU_ESP" -lt 0 ]; then dbk_note "  $step. ESP-Fedora: ${UBU_ESP_MIB}MiB FAT32 -> 挂载点 /boot/efi"; step=$((step + 1)); fi
 if [ "$BOOT_P" -lt 0 ]; then dbk_note "  $step. /boot: ${BOOT_MIB}MiB ext4 -> 挂载点 /boot"; step=$((step + 1)); fi
 if [ "$ROOT_P" -lt 0 ]; then dbk_note "  $step. root: 约 113GiB ext4 -> 挂载点 /"; step=$((step + 1)); fi
 if [ "$step" -eq 1 ]; then dbk_note "  三块已就绪:Calamares 里只指定挂载点(/boot/efi、/boot、/),不新建、不格式化 Windows 侧"; fi
 dbk_note "  坑(设计 04 第 5 节):Calamares 没有独立的'引导器位置'选项,它把引导装到 /boot/efi 指向的那块 ESP ——"
-dbk_note "    务必确认 /boot/efi 指向 ESP-Ubuntu(${UBU_ESP_MIB}MiB),绝不能指向 Windows 的 ESP(${WIN_ESP_MIB}MiB);装完用 efibootmgr -v 核对。"
+dbk_note "    务必确认 /boot/efi 指向 ESP-Fedora(${UBU_ESP_MIB}MiB),绝不能指向 Windows 的 ESP(${WIN_ESP_MIB}MiB);装完用 efibootmgr -v 核对。"
 if [ "$TRACK" = D ]; then dbk_note "  三块都建在 115GiB 预留区内;Windows 各分区一律不挂载、不格式化、不改尺寸。"; fi
-dbk_add_check "Ubuntu 三块:ESP-Ubuntu=$([ "$UBU_ESP" -ge 0 ] && printf 就绪 || printf 待建) /boot=$([ "$BOOT_P" -ge 0 ] && printf 就绪 || printf 待建) root=$([ "$ROOT_P" -ge 0 ] && printf 就绪 || printf 待建)"
+dbk_add_check "Ubuntu 三块:ESP-Fedora=$([ "$UBU_ESP" -ge 0 ] && printf 就绪 || printf 待建) /boot=$([ "$BOOT_P" -ge 0 ] && printf 就绪 || printf 待建) root=$([ "$ROOT_P" -ge 0 ] && printf 就绪 || printf 待建)"
 dbk_exit PASS "分区计划核对通过:Windows ESP 未被挂载/未被改动;下一步按上面的清单建 Ubuntu 三块(轨道 $TRACK)"
