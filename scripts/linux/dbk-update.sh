@@ -9,7 +9,8 @@
 # 调用约定:调用方先 source 本库(如需落日志,先 source dbk-obs.sh 的 dbk_obs —— dbk-cli.sh 只是替调用方 source 它),
 #   然后使用:
 #   update_policy_check  0 = 已配为「只检查/下载」且自动更新定时器已启用 / 1 = 未配或不符 / 2 = 读不到(需人工)
-#   update_policy_apply  0 = 写入并启用成功 / 1 = 失败(原因已落日志)
+#   update_policy_apply  0 = 写入并启用成功 / 1 = 失败(原因已落日志);覆盖写前按设计 00 的 R1 备份原配置为
+#     <conf>.dbk.bak,并把原 AutomaticUpdatePolicy 行写进日志留档(幂等:已存在备份不再重建)
 #   update_policy_text   打印将写入的两行(供步骤脚本的 --check 展示)
 #   $UPDATE_CONF / $UPDATE_TIMER  解析后的配置路径与定时器单元名(供步骤脚本展示,别在步骤脚本里写发行版字面量)
 # 环境注入:DBK_RPM_OSTREED_CONF(缺省 /etc/rpm-ostreed.conf)、DBK_SYSTEMCTL(缺省 systemctl;可含路径)。
@@ -79,8 +80,32 @@ update_policy_check() {
   fi
 }
 
+# 覆盖写之前的备份(设计 00 R1「脚本内置 .dbk.bak」;3.21 前置要求把 /etc/rpm-ostreed.conf 关键行写进日志留档)。
+# 0 = 无需备份(原文件不存在)或已确认备份落盘 / 1 = 备份失败(调用方必须中止,不得照样覆盖)。
+# 幂等:备份已存在就不再覆盖第一份(重复 --apply 不会用「已被改写的配置」顶掉原始备份)。
+_update_backup_conf() {
+  local line
+  [ -e "$UPDATE_CONF" ] || return 0
+  if [ -e "$UPDATE_CONF.dbk.bak" ]; then
+    _upd_note "提示: 备份已存在,保留不动:$UPDATE_CONF.dbk.bak"
+  elif ! { cp -a "$UPDATE_CONF" "$UPDATE_CONF.dbk.bak" && cmp -s "$UPDATE_CONF" "$UPDATE_CONF.dbk.bak"; }; then
+    rm -f "$UPDATE_CONF.dbk.bak"
+    _upd_note "错误: 备份失败或校验不一致($UPDATE_CONF.dbk.bak);拒绝覆盖原配置"
+    return 1
+  else
+    _upd_note "已备份 $UPDATE_CONF → $UPDATE_CONF.dbk.bak"
+  fi
+  line="$(grep -E '^[[:space:]]*AutomaticUpdatePolicy=' "$UPDATE_CONF" 2>/dev/null | head -n1)"
+  if [ -n "$line" ]; then
+    _upd_note "原配置留档: $line"
+  else
+    _upd_note "原配置留档: $UPDATE_CONF 无 AutomaticUpdatePolicy 行"
+  fi
+  return 0
+}
+
 # 写入配置并启用定时器:0 成功 / 1 失败(原因已落日志)。
-# 只写目标内容(不保留旧文件);回退办法写在步骤脚本的回滚说明里(删配置 + disable 定时器)。
+# 覆盖写之前先备份(备份未成功则中止,绝不「备份失败照样覆盖」);回退办法:还原 .dbk.bak + disable 定时器。
 update_policy_apply() {
   local -a sc
   local dir out st
@@ -88,6 +113,10 @@ update_policy_apply() {
   command -v install >/dev/null 2>&1 || { _upd_note "错误: 未找到 install,无法创建目录 $dir"; return 1; }
   if ! install -d "$dir"; then
     _upd_note "错误: 目录创建失败:$dir"
+    return 1
+  fi
+  if ! _update_backup_conf; then
+    _upd_note "错误: 备份未成功,已中止写入:$UPDATE_CONF"
     return 1
   fi
   if ! update_policy_text >"$UPDATE_CONF"; then
