@@ -9,6 +9,8 @@
 #   ④ `XDG_SESSION_TYPE=wayland`。①②③ 由 dbk-driver.sh 的 driver_check 一次聚合判定(0 就绪 / 1 未完成 / 2 读不到),
 #   逐条证据另用同源只读函数 driver_signer / mok_check / driver_module_state 亮出来给人看(只读,不参与判定)。
 #   口径(与 set-updates.sh 一致):② 未注册 → 失败(1);①②③ 任一条读不到 → 需人工(2),绝不当作没问题;④ 取不到 → 需人工,非 wayland → 失败。
+#   作用域(契约,不可外推):以上四条只判本地驱动栈与会话类型;镜像来源与版本、Secure Boot 链整体有效**不由本步判定**
+#   (见卡 07-7);本步不判镜像来源与版本,由 07-7 巡检(check-signature.sh)承担。
 # 与旧(Kubuntu)口径的差别(不可改):驱动走 ublue 镜像内**已预签名**的模块(Ubuntu 官方的 ubuntu-drivers 预签名包路径已废弃);
 #   本步不关 Secure Boot、不自签密钥(自签反而会破坏上游的预签名路径)。签名细查见 07-7 的 check-signature.sh。
 # MOK 注册必须人工完成(接口不代跑):--apply 只提交 rebase;重启进 MOK 界面完成一次性注册(密码见下),会话内执行
@@ -61,6 +63,8 @@ evidence_lines() {
     2) dbk_add_check "③模块加载状态读不到(lsmod):需人工" ;;
     *) dbk_add_check "③模块加载状态(lsmod):返回未知状态码 $rc" ;;
   esac
+  dbk_add_check "判据作用域:镜像来源与版本、Secure Boot 链整体有效不由本步判定(见卡 07-7)"
+  dbk_add_check "判据作用域:本步不判镜像来源与版本,由 07-7 巡检(check-signature.sh)承担"
 }
 
 # ④ 会话类型:wayland 是设计 01/00 的收敛目标;取不到 → 需人工(可在桌面会话内重跑),其它值 → 失败。
@@ -99,7 +103,7 @@ finish() {
     for m in ${MANUAL[@]+"${MANUAL[@]}"}; do dbk_add_check "需人工: $m"; done
     dbk_exit 需人工 "$msg:有 ${#MANUAL[@]} 项脚本判不了;逐条见 checks,请人工确认"
   fi
-  dbk_exit PASS "$msg:驱动栈已就绪(ublue 预签名模块 + MOK 已注册 + nvidia 已加载 + 会话为 wayland)"
+  dbk_exit PASS "$msg:驱动栈已就绪(签名者非空且已注册 ublue 密钥 + nvidia 已加载 + 会话为 wayland)"
 }
 
 if [ "$DBK_MODE" = apply ]; then
@@ -119,9 +123,8 @@ if [ "$DBK_MODE" = apply ]; then
     dbk_add_check "失败项: driver_rebase 失败(原因见上面接口输出)"
     dbk_exit FAIL "rebase 未执行成功:按上面原因处理后重跑(幂等);要退回 stock 部署按 driver_fallback_nouveau 的步骤走"
   fi
-  dbk_add_check "下一步(必须人工): $MOK_HOWTO;再次重启后重跑本脚本复核"
-  check_all
-  finish "已 rebase 到 ublue 的 NVIDIA 变体(--apply 已提交:重启并完成 MOK 注册后再复核)"
+  dbk_add_check "下一步(必须人工): $MOK_HOWTO"
+  dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后在 MOK 界面完成注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实),完成后再重跑本脚本复核"
 fi
 
 check_all
