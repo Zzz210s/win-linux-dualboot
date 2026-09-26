@@ -3,7 +3,7 @@
 日期:2026-09-18
 状态:待实施(实施前需用户复审)
 适用:本仓库(win-linux-dualboot)全部手册与清单(本次修订后:**手册 8 份 + 1 份入口页**,按"三轨道 + 分盘前置章节"组织)
-前置设计:`00-design.md`(方案本体;已随其"修订七:改用 Kubuntu 26.04 LTS"同步修订)、`04-kubuntu-variant-design.md`(基础系统变体,本次文档结构调整的依据;它取代原原子版设计,历史叙述仍留在 `02-fedora-atomic-variant-design.md`)
+前置设计:`00-design.md`(方案本体;已随其"修订九:回切 Fedora 44 原子版"同步修订)、`02-fedora-atomic-variant-design.md`(现行系统内容真源)与 `06-atomic-restore-design.md`(回切决策与发行版薄接口);旧口径的 `04-kubuntu-variant-design.md` 已标废止、只留作决策记录
 
 本文件描述手册的**结构规范**(卡格式与自检规则),基础系统口径以 `04-kubuntu-variant-design.md` 与 `00-design.md` 为准。
 
@@ -45,15 +45,15 @@
 ### 3.1 卡本体
 
 ```
-### 04-2 手动分区:三块建在 115GiB 预留区内,Calamares 只指定挂载点
-做:在 live 里手工建 Ubuntu 三块(ESP-Ubuntu 1GiB FAT32 / `/boot` 1GiB ext4 / root ≈113GiB ext4),三块都落在 115GiB 未分配区内。
+### 04-2 手动分区:三块建在 115GiB 预留区内,Anaconda 只指定挂载点
+做:在 live 里手工建 Fedora 三块(ESP-Fedora 1GiB FAT32 / `/boot` 1GiB ext4 / root ≈113GiB btrfs),三块都落在 115GiB 未分配区内。
   1. 先用核对脚本读现状,按输出的"下一步该建什么"建这三块
      看到:脚本报 PASS 且列出待建项,同时断言 Windows ESP 未被挂载、尺寸仍是 2048MB
-  2. Calamares 手动分区页里只把三块指定挂载点:`/boot/efi`(ESP-Ubuntu)、`/boot`、`/`(ext4)
+  2. Anaconda 手动分区页里把三块指定挂载点并勾格式化:`/boot/efi`(ESP-Fedora)、`/boot`、`/`(btrfs)
      看到:分区列表新增三行,Windows 各分区原值不变
   3. 检查 Windows 各分区一律未挂载、未标成"格式化"
      看到:点"下一步"前没有任何 Windows 分区被标成"格式化"
-坑:Calamares 把引导装到 `/boot/efi` 所指的那块 ESP,设成 Windows 的 2GiB ESP 就等于当场毁掉 Windows 引导(设计 I3)。
+坑:Anaconda 把引导装到 `/boot/efi` 所指的那块 ESP,设成 Windows 的 2GiB ESP 就等于当场毁掉 Windows 引导(设计 I3)。
 出错时:看不到磁盘 -> 01-3;ESP-Windows 已被格式化 -> 07-6。
 ```
 
@@ -95,12 +95,12 @@
 | 轨道 / 角色 | 文档 | 体裁 | 卡 / 内容 | 目标行数(现) |
 |---|---|---|---|---|
 | 入口(底座地图) | `00-overview.md` | 入口(非流程,不写卡) | 四条不变量 + 参数表(含 `ESP_SIZE`/`UBUNTU_ESP_SIZE`/`BOOT_SIZE`/`ROOT_SIZE`/`WINDOWS_DATA_SIZE`/`SHARED_PART_UUID`)+ 三轨道地图(每步一行:去哪份、产出什么) | ≤120(220) |
-| 共用底座之一(L0) | `01-firmware.md` | 操作卡 x4 | 01-1 改固件设置 / 01-2 做两个安装介质(Kubuntu 26.04 ISO + Windows 11 ISO)/ 01-3 核对目标盘 / 01-4 落 L0 产物 | ≤120(252) |
-| **共用底座之二:安装前的前置章节(分盘)** | **`02-partitioning.md`(新增)** | 操作卡 x4 + 1 张值表 | 02-1 分盘总则与三种轨道的目标布局(8 项分区表 + "Ubuntu 侧三块分区建在 L1 预留的 115GiB 未分配区内" + 铁律:分区表只在装机阶段定稿、**禁止事后缩容**、ESP-Ubuntu 与 `/boot` 绝不与 Windows 共用)/ 02-2 轨道 W 的分盘(只装 Windows:安装器自动分区或最小手工,不预留 Linux 空间)/ 02-3 轨道 L 的分盘(只装 Kubuntu:ESP-Ubuntu 1GiB + `/boot` 1GiB ext4 + root ≈113GiB ext4)/ 02-4 轨道 D 的分盘(双系统:ESP-Win 2GiB + MSR 16MiB + `C:` 200GiB + `D:` ≈635GiB + 预留 115GiB 未分配);值表:8 项分区目标值 | ≤110(新) |
+| 共用底座之一(L0) | `01-firmware.md` | 操作卡 x4 | 01-1 改固件设置 / 01-2 做两个安装介质(Fedora 44 Silverblue ISO + Windows 11 ISO)/ 01-3 核对目标盘 / 01-4 落 L0 产物 | ≤120(252) |
+| **共用底座之二:安装前的前置章节(分盘)** | **`02-partitioning.md`(新增)** | 操作卡 x4 + 1 张值表 | 02-1 分盘总则与三种轨道的目标布局(8 项分区表 + "Fedora 侧三块分区建在 L1 预留的 115GiB 未分配区内" + 铁律:分区表只在装机阶段定稿、**禁止事后缩容**、ESP-Fedora 与 `/boot` 绝不与 Windows 共用)/ 02-2 轨道 W 的分盘(只装 Windows:安装器自动分区或最小手工,不预留 Linux 空间)/ 02-3 轨道 L 的分盘(只装 Silverblue:ESP-Fedora 1GiB + `/boot` 1GiB ext4 + root ≈113GiB btrfs)/ 02-4 轨道 D 的分盘(双系统:ESP-Win 2GiB + MSR 16MiB + `C:` 200GiB + `D:` ≈635GiB + 预留 115GiB 未分配);值表:8 项分区目标值 | ≤110(新) |
 | 轨道 W(L1 + L2 闸门) | **`03-windows.md`**(原 `02-windows.md` 改名) | 操作卡 x9 + 1 张值表 | 03-1 装 Windows(含 WinRE 偏差判据)/ 03-2 关 Fast Startup 与休眠 / 03-3 已知文件夹重定向 / 03-4 KMS 激活 / 03-5 落 L1 产物;L2 闸门(原 `03-preflight.md` 并入):03-6 跑只读体检 / 03-7 读闸门结论(红项停)/ 03-8 跑基线备份 / 03-9 落 L2 产物;值表:重定向目录清单(分区目标值随分盘卡移入 `02-partitioning.md`) | ≤250(449) |
-| 轨道 L(L3) | `04-silverblue.md` | 操作卡 x4 | 04-1 以 UEFI 模式从安装 U 盘启动进 live / 04-2 手动分区(三块建在 115GiB 预留区内,Calamares 只指定挂载点、绝不动 Windows ESP)/ 04-3 装完重启验证 / 04-4 落 L3 产物。**改名 `04-silverblue.md`**(原 `04-ubuntu.md`;卡号随之变为 04-K) | ≤130(248) |
-| 轨道 L/D 首启收敛(L4) | `05-first-boot.md` | 操作卡 x14 | 05-1 共享盘挂载 / 05-2 家目录重定向 / 05-3 显卡与 Secure Boot(装 Ubuntu 官方预签名 nvidia 包)/ 05-4 时间 / 05-5 蓝牙 / 05-6 zram 与 swapfile / 05-7 journald 与更新策略 / 05-8 SSH 与 SMART / **05-9 包级回退与变更前备份** / 05-10 发行版升级(`do-release-upgrade`)/ 05-11 回 Windows 入口 / 05-12 落 L4 产物 / **05-13 L4 汇总执行(可选)**(B2 追加:`first-boot.sh` + `hardening.sh` 共卡)/ **05-14 snap 零残留**(K1 追加) | ≤240(436) |
-| 轨道 D 退役与救援(L5) | `07-rescue.md` | 场景卡 | 07-1 判层 / 07-2 从 grub 提示符回去(两条路)/ 07-3 Windows 侧修引导 / 07-4 只重装 Windows / 07-5 只重装 Kubuntu / 07-6 基线回滚 / 07-7 周期巡检(四项 + `nvidia` 模块签名 + 包清单与 apt pin 状态)/ 07-8 应急纪律;退役五步(原 `06-decommission.md` 并入,按"只在末尾追加编号"的规则):07-9 归位引导顺序 / 07-10 备份现状 / 07-11 删 Ubuntu 分区 / 07-12 清 NVRAM 与可选扩容 / 07-13 只停用不删(变体) | ≤280(748) |
+| 轨道 L(L3) | `04-silverblue.md` | 操作卡 x4 | 04-1 以 UEFI 模式从安装 U 盘启动进 live / 04-2 手动分区(三块建在 115GiB 预留区内,Anaconda 只指定挂载点并勾格式化、绝不动 Windows ESP)/ 04-3 装完重启验证 / 04-4 落 L3 产物。**改名 `04-silverblue.md`**(原 `04-ubuntu.md`;卡号随之变为 04-K) | ≤130(248) |
+| 轨道 L/D 首启收敛(L4) | `05-first-boot.md` | 操作卡 x13 | 05-1 共享盘挂载 / 05-2 家目录重定向 / 05-3 显卡与 Secure Boot(rebase 到 ublue NVIDIA 变体 + 一次性 MOK 注册)/ 05-4 时间 / 05-5 蓝牙 / 05-6 zram 与 swapfile / 05-7 journald 与更新策略 / 05-8 SSH 与 SMART / **05-9 部署级回滚与变更前 pin** / 05-10 发行版升级(`rpm-ostree rebase`)/ 05-11 回 Windows 入口 / 05-12 落 L4 产物 / **05-13 L4 汇总执行(可选)**(B2 追加:`first-boot.sh` + `hardening.sh` 共卡) | ≤240(436) |
+| 轨道 D 退役与救援(L5) | `07-rescue.md` | 场景卡 | 07-1 判层 / 07-2 从 grub 提示符回去(两条路)/ 07-3 Windows 侧修引导 / 07-4 只重装 Windows / 07-5 只重装 Silverblue(先试部署回滚)/ 07-6 基线回滚 / 07-7 周期巡检(四项 + `nvidia` 模块签名 + 部署列表与镜像来源)/ 07-8 应急纪律;退役五步(原 `06-decommission.md` 并入,按"只在末尾追加编号"的规则):07-9 归位引导顺序 / 07-10 备份现状 / 07-11 删 Fedora 分区 / 07-12 清 NVRAM 与可选扩容 / 07-13 只停用不删(变体) | ≤280(748) |
 | 验收 | `08-verification.md` | 勾选卡 x6(A–F) | 每组一张卡:每条 `- [ ] 做 -> 看到: ...`;卡尾"这组全绿才可以进下一步" | ≤180(340) |
 | 风险与 FAQ | `10-faq.md` | 速查卡(症状 + 阶段风险) | 症状 -> 3 行处置 -> 指向哪张卡(原 `10-faq.md` 的 18 条症状卡);另含按阶段的"本阶段最可能踩的坑 + 一句话缓解"速查(原 `09-risks.md` 并入);**风险总表不再单独成文**:逐条保留在 `00-design.md` 第 9 节(34 条) | ≤220(549) |
 

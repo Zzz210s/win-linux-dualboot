@@ -45,7 +45,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 
 做:把系统 `rebase` 到 ublue 的 **NVIDIA 变体**(镜像内 nvidia 模块**已预签名**),再重启进 MOK 界面做**一次性密钥注册**(设计 02 第 3 节 D2、设计 06 第 2 节 D3)。
   1. 先看现状:`sudo bash scripts/linux/graphics.sh --check`
-     看到:四项判据(① `modinfo -F signer nvidia` 非空 ② `mokutil --list-enrolled` 含 ublue 密钥 ③ `lsmod` 有 `nvidia` ④ `XDG_SESSION_TYPE` 为 `wayland`);零写;未 rebase 或未重启的项记"需人工",不是失败
+     看到:四项判据(① `modinfo -F signer nvidia` 非空 ② `mokutil --list-enrolled` 含 ublue 密钥 ③ `lsmod` 有 `nvidia` ④ `XDG_SESSION_TYPE` 为 `wayland`);零写;未 rebase / 未重启 / 未注册 MOK 的 ①②③ 在 `--check` 下记 **FAIL**(退出 1),④不符也记 FAIL;只有 ①②③ 读不到时(接口返 2)才记"需人工"
   2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`,脚本调接口把系统 rebase 到 ublue 的 NVIDIA 镜像(**镜像名与分支实施时按 ublue 官方文档核实**),重启后生效
      看到:脚本报 PASS"已 rebase 到 ublue 的 NVIDIA 变体:需重启",并提示重启后在 MOK 界面完成注册;重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
   3. 一次性 MOK 注册(必须人工,接口不代跑):重启进 MOK 界面按提示完成注册(MOK 密码与任务名以 ublue 官方文档为准),也可在会话内跑 `ujust enroll-secure-boot-key` 后再重启一次;随后复跑 `--check` 四项
@@ -55,8 +55,8 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   5. nouveau 兜底:桌面起不来时不要长按电源,按 `07-2` 从 GRUB 提示符回 Windows;能在 GRUB 菜单选上一部署就用旧部署启动,或按 `05-9` 回滚到 stock 部署(回滚后由 nouveau 起桌面)
      看到:系统仍可用;处置顺序是"选上一部署 / 回滚 -> rebase 回 stock 部署 -> 才考虑发行版问题"
 脚本:sudo bash scripts/linux/graphics.sh --check / --apply --yes
-坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);镜像名、`ujust` 任务名与 MOK 密码均标待核实,以官方文档为准。
-出错时:装完黑屏 -> 按 `10-1` 处置(显卡驱动专项另见 `10-faq.md` 的"显卡驱动装完黑屏"卡,卡号以改版后的 `10-faq.md` 为准);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
+坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码均标待核实,以官方文档为准。
+出错时:装完黑屏 -> 按 `10-1` 处置(显卡驱动专项见 `10-21`);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
 
 ### 05-4 时间(RTC 走 UTC)
 
@@ -75,7 +75,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 
 做:用**分层安装**装 `chntpw` 读 Windows 注册表 hive,再用上游脚本把配对密钥导入 Linux(设计 4.5;上游 KeyofBlueS/bt-keys-sync,本仓库不内置其代码)。
   1. 只读挂上 Windows 系统分区(如 `sudo mount -o ro /dev/nvme0n1p3 /mnt/win`),再跑 `sudo bash scripts/linux/bt-keys-sync-wrapper.sh --check --win-mnt /mnt/win`
-     看到:三项前置的判定(chntpw 已装 / hive 可读 / 上游脚本已就位);未装 chntpw 时记"需人工",不是失败
+     看到:三项前置的判定(chntpw 已装 / hive 可读 / 上游脚本已就位);三项任一未就绪都记 **FAIL**(退出 1);只有 `DBK_SKIP_PKG=1` 跳过分层安装时,"chntpw 是否已装"才记"需人工"
   2. 执行:`sudo bash scripts/linux/bt-keys-sync-wrapper.sh --apply --yes --win-mnt /mnt/win`
      看到:脚本经 `dbk-pkg.sh` **分层安装** `chntpw`(原子版:写进下一部署,**必须重启后才生效**;脚本会显式提示),把上游脚本下到 `/opt/bt-keys-sync/` 后以 `--windows-keys` 运行
   3. 分层安装后**先不要重启**:接着做 `05-8` 的 `smartmontools` 分层安装,两者合到同一次重启,重启后再复跑 `--check`
@@ -94,7 +94,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   2. 执行:`sudo bash scripts/linux/storage.sh --apply --yes`
      看到:脚本报 PASS(swapfile 已启用 + `fstab` 行齐备 + `zram0` 已建立 + 未配休眠);`swapon --show` 与 `zramctl` 各列一行
   3. 若 `zram0` 缺失:脚本**只核对、不装提供者**(原子版自带 zram),按 `templates/zram-generator.conf` 写 `/etc/systemd/zram-generator.conf` 后 `daemon-reload`,**重启后**再跑本卡复核
-     看到:重启后 `zramctl` 列出 `zram0`;重启前该项记"需人工",不假报 PASS
+     看到:重启后 `zramctl` 列出 `zram0`;重启前"有 `zramctl` 但无 `zram0`"记 **FAIL**(硬前置),只有连 `zramctl` 都取不到时才记"需人工";有失败项时汇总就是 FAIL(`ISSUES` 优先于需人工项)
 脚本:sudo bash scripts/linux/storage.sh --check / --apply --yes
 坑:swapfile 的 `fstab` 行必须带 `nofail`,否则分区缺失时会挡住启动;**不做休眠** —— 休眠需 swap ≥ RAM,且 NVIDIA + Wayland 下易翻车(设计 3.8)。
 出错时:`zramctl` 无 `zram0` -> 先确认配置已写并重启,再重跑;`fallocate` 失败 -> 查 root 可用空间,不要改分区表。
@@ -144,7 +144,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 
 做:先备份留档并**固定当前部署**,再 rebase 到下一个发行版分支,重启后复核版本、会话与驱动(设计 02 第 4 节、设计 06 第 2 节 D1/D4)。
   1. 先看现状:`sudo bash scripts/linux/upgrade-release.sh --check`
-     看到:五项判据(部署列表可读 / 当前部署已 `pin` / `baseline/` 在位、可备份 / 更新策略仍是"只检查/下载" / 已指定升级目标分支 `DBK_RELEASE_REF`);当前部署未 pin 或更新策略不符判 FAIL,`baseline/` 缺失与未给 `DBK_RELEASE_REF` 记"需人工"(退出 2),先补齐再谈升级
+     看到:五项判据(部署列表可读 / 当前部署已 `pin` / `baseline/` 在位、可备份 / 更新策略仍是"只检查/下载" / 已指定升级目标分支 `DBK_RELEASE_REF`);当前部署未 pin 或更新策略不符判 FAIL;部署列表读不到、`baseline/` 缺失与未给 `DBK_RELEASE_REF` 记"需人工"(退出 2),先补齐再谈升级
   2. 执行:`DBK_RELEASE_REF='<远程:分支>' sudo bash scripts/linux/upgrade-release.sh --apply --yes`
      看到:脚本先把当前部署固定(pin),再复核五条前置(任一未达成即不执行),然后把 `baseline/` 备份到 `<backup-dir>/<时间戳>-baseline/`,最后提交 rebase 到目标分支并提示重启(分支号每 6 个月推进一次,实施时按 Fedora 官方公告取值)
   3. 重启后复核:`sudo bash scripts/linux/upgrade-release.sh --check` 与 `sudo bash scripts/linux/graphics.sh --check`
