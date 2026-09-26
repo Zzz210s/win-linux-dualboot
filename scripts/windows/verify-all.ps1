@@ -96,7 +96,7 @@ Add-Manual A6 A '复核全部执行记录:没有任何一次 bcdedit /set {fwboo
 if ((Get-VerifyState 'A1') -eq 'pass' -and (Get-VerifyState 'A3') -eq 'pass') { Add-VerifyItem A7 A 'pass' '两个 ESP 互不干扰:Windows ESP 逐文件与基线一致且 BootOrder 首位仍是 Windows' '07-7' }
 elseif ((Get-VerifyState 'A1') -eq 'fail' -or (Get-VerifyState 'A3') -eq 'fail') { Add-VerifyItem A7 A 'fail' '两个 ESP 不再互不干扰:Windows ESP 或 BootOrder 首位已被改动;处置见 07-6' '07-6' }
 else { Add-Manual A7 A '无法从 Windows 侧自动判定;手动核对:两块 ESP 分别可挂载且内容完整、BootOrder 首位仍是 Windows' '07-7' }
-Add-Manual A8 A '可撤除性演练:另存 \EFI\ubuntu\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测' '07-8'
+Add-Manual A8 A '可撤除性演练:另存 \EFI\fedora\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测' '07-8'
 # ===== B 系统功能组(Fedora 侧判定;此处只记需人工) =====
 Add-Manual B1 B '在 Fedora 侧看 echo $XDG_SESSION_TYPE 应为 wayland,且登录界面无 X11 会话选项' '05-12'
 Add-Manual B2 B '在 Fedora 侧跑 graphics.sh --check:nvidia 模块签名者非空且已注册 ublue 密钥(或明确记录 nouveau 兜底的偏差)' '05-3'

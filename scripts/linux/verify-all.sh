@@ -81,7 +81,7 @@ item A3 manual "Windows 侧跑 verify-baseline.ps1 -BaselineDir baseline 看 ②
 chk_step A7 "07-7" "两个 ESP 互不干扰(两块 ESP 内容完整 + BootOrder 首位;逐文件比对见 A3)" scripts/linux/verify-l3.sh --check
 item A4 manual "Windows 管理员会话 bcdedit /enum {bootmgr} 的 path 与基线逐字一致" "07-7"
 item A6 manual "复核全部执行记录:没有任何一次 efibootmgr -o / displayorder 调整永久顺序" "07-7"
-item A8 manual "可撤除性演练:另存 \\EFI\\ubuntu\\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测" "07-8"
+item A8 manual "可撤除性演练:另存 \\EFI\\fedora\\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测" "07-8"
 G=B   # ===== B 系统功能组 =====
 ST="${DBK_SESSION_TYPE:-${XDG_SESSION_TYPE:-}}"
 if [ -z "$ST" ]; then item B1 manual "XDG_SESSION_TYPE 取不到;手动核对:echo \$XDG_SESSION_TYPE 应为 wayland" "05-12"

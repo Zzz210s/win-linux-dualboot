@@ -3,7 +3,7 @@
 # 破坏性:1
 <#
 .SYNOPSIS
-  L5 退役(07-11):按分区号或 GPT GUID 精确删除 Ubuntu 分区(两块 Ubuntu 分区可一并删)。
+  L5 退役(07-11):按分区号或 GPT GUID 精确删除 Fedora 分区(两块 Fedora 分区可一并删)。
 .DESCRIPTION
   只认显式目标:-Partition <int[]> 与/或 -PartitionGuid <string[]>(GUID 先在当前分区表里解析成分区号;都没给 -> 64 零写)。
   绝不做"删除所有 Linux 分区"这类模糊操作,也绝不用 diskpart clean / delete volume。**Windows ESP / C: / D: / MSR /
@@ -14,7 +14,7 @@
   且 BootOrder 首位仍是 Windows Boot Manager、{bootmgr} path 未变;任一不符 -> FAIL(1)并打印复读结果。
   前置断言(任一不满足 -> 64 零写):-BaselineDir(缺省 baseline)下 02-partitions.txt 与 02-firmware-entries.txt 都在;
   BootOrder 首位是 Windows Boot Manager;显式目标已确认。非管理员 -> 2(需人工);非 Windows -> 9(跳过)。
-  用法示例(仓库根、管理员 Windows PowerShell;分区号按 baseline\02-partitions.txt 实测;5 = ESP-Fedora,6 = /boot,7 = Ubuntu root):
+  用法示例(仓库根、管理员 Windows PowerShell;分区号按 baseline\02-partitions.txt 实测;5 = ESP-Fedora,6 = /boot,7 = Fedora root):
     ... -Check -Partition 5,6
     ... -Apply -Yes -Partition 5,6 -WinEspNumber 1    # 或 -PartitionGuid <GPT 分区 GUID>
   夹具钩子(仅离线验证,真机留空):DBK_PART_LAYOUT / DBK_PART_LAYOUT_AFTER(前/后分区表 JSON,结构同

@@ -4,7 +4,7 @@
 <#
 .SYNOPSIS
   轨道 D 首次装机:用 diskpart 预建整盘分区表(ESP-Windows 2048MB + MSR 16MB + C: 204800MB + D: 650240MB),
-  余下约 115GiB 保持未分配,留给 L3 的 Ubuntu 三块分区。**破坏性,只在首次装机用**。
+  余下约 115GiB 保持未分配,留给 L3 的 Fedora 三块分区。**破坏性,只在首次装机用**。
 .DESCRIPTION
   前置断言(任一不满足 -> 64 且零写):-Disk 指定的盘存在;该盘当前无有效分区表(0 个分区);-Apply 必须显式 -Yes。
   -Check(缺省)只打印将执行的 diskpart 脚本与断言结果,不执行、不落盘(零写)。
@@ -161,7 +161,7 @@ if ($data.Count -gt 0) { $dEnd = $data[0].OffsetMB + $data[0].SizeMB }
 $best = Get-MaxGapMB -Gaps (Get-GapsAfter -L $R -FromMB $dEnd)
 if ($best -lt ($TR.ReserveMB - $TOL)) {
   $f2++; Add-DbkCheck ('失败项:D: 之后连续未分配期望 >= ' + $TR.ReserveMB + 'MB(115GiB),实际 ' + (ConvertTo-GiB $best))
-} else { Add-DbkCheck ('复读通过:D: 之后仍有 ' + (ConvertTo-GiB $best) + ' 连续未分配(>= 115GiB,L3 的 Ubuntu 三块分区落在这里)') }
+} else { Add-DbkCheck ('复读通过:D: 之后仍有 ' + (ConvertTo-GiB $best) + ' 连续未分配(>= 115GiB,L3 的 Fedora 三块分区落在这里)') }
 if ($f2 -gt 0) {
   Write-DbkExit -Status FAIL -Message ('diskpart 已执行,但复读分区表与目标不符(' + $f2 + ' 项,见 checks);分区表已改动、无法自动回退:确认目标盘无误后整盘 clean 重跑本脚本,不得事后缩容')
 }

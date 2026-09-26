@@ -3,7 +3,7 @@
 # 破坏性:1
 <#
 .SYNOPSIS
-  设置"下次启动进 Kubuntu / 进安装 U 盘"的**一次性**固件启动条目(BootNext 语义),并断言 BootOrder 未被改动。
+  设置"下次启动进 Fedora / 进安装 U 盘"的**一次性**固件启动条目(BootNext 语义),并断言 BootOrder 未被改动。
 .DESCRIPTION
   机制:`bcdedit /set {fwbootmgr} bootsequence {GUID}` 把某固件条目排到**下一次启动**,用过即自动消失,不改动 BootOrder(I2)。
   纪律:绝不执行 `bcdedit /set {fwbootmgr} displayorder ...` 之类的改序操作(I2),也绝不改 `{bootmgr}` 的 `path`(I3);
@@ -11,7 +11,7 @@
   CLI 契约(设计 03 第 2 节):-Check 是**缺省**且只读;-Apply 才执行。本脚本改的是固件启动项,脚本头声明了「# 破坏性:1」,
   所以 -Apply 必须同时给 -Yes,缺 -Yes 由库层直接退 64 且**零写**。`-WhatIf` 保留(手册与 FAQ 里的既有写法),
   语义 = -Check(只打印将执行的命令,零写);-WhatIf 与 -Apply 同时给视为用法错误 64。
-  目标选择:默认按 -Match 正则匹配固件条目的 description/描述(默认 'ubuntu|kubuntu|grub');-Guid <{GUID}> 显式指定;
+  目标选择:默认按 -Match 正则匹配固件条目的 description/描述(默认 'fedora|ubuntu|grub';`ubuntu` 同时覆盖遗留的 ubuntu/kubuntu 条目名);-Guid <{GUID}> 显式指定;
   -Device USB 改按可移动介质特征匹配(描述含 USB/UEFI:/Removable,或 loader 路径为 \EFI\BOOT\)。
   匹配到多条时打印清单并非零退出(绝不能随便取第一条:失效 GUID 会把重启落到 grub rescue>)。
   -Check 判定:目标条目存在且可设 -> 0;找不到目标 / 固件不支持(枚举不出固件条目)-> 1;
@@ -25,7 +25,7 @@
   固件枚举/解析与后置断言在库 scripts/windows/dbk-win-probe.ps1 里(本脚本只做目标选择与写动作)。
   用法(仓库根目录、管理员 Windows PowerShell):
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1                  # -Check(缺省):只看计划
-    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1 -Apply -Yes      # 真正设置(一次性进 Kubuntu)
+    powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1 -Apply -Yes      # 真正设置(一次性进 Fedora)
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1 -Device USB -Check
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\set-bootnext.ps1 -Device USB -Apply -Yes   # 卡 04-1:一次性从安装 U 盘启动
   退出码:0 通过 / 1 失败(找不到目标、条目歧义、-Guid 不存在、bcdedit /set 失败、后置复读不符)/ 2 需人工(非管理员)
@@ -34,7 +34,7 @@
 [CmdletBinding()]
 param(
   [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes, [switch]$WhatIf,
-  [string]$Match = 'ubuntu|kubuntu|grub', [string]$Guid = '', [string]$Device = '',
+  [string]$Match = 'fedora|ubuntu|grub', [string]$Guid = '', [string]$Device = '',
   [string]$Step = '', [string]$Log = '', [string[]]$Extra = @()
 )
 $ErrorActionPreference = 'Stop'
@@ -64,14 +64,14 @@ $pathMatch = ''
 if ($Device) {
   if ($Device -ne 'USB') {
     Show-DbkUsage
-    Write-DbkNote ('用法错误: -Device 只认 USB(实为 ''' + $Device + ''');一次性进 Kubuntu 用默认的 -Match/-Guid,不要用 -Device。本次未执行任何命令。')
+    Write-DbkNote ('用法错误: -Device 只认 USB(实为 ''' + $Device + ''');一次性进 Fedora 用默认的 -Match/-Guid,不要用 -Device。本次未执行任何命令。')
     exit $script:DBK_USAGE
   }
   if (-not $PSBoundParameters.ContainsKey('Match')) { $Match = 'USB|UEFI:|Removable' }
   $pathMatch = '\\EFI\\BOOT\\'
 }
 if ($Device -eq 'USB') { Write-DbkNote 'set-bootnext:设置一次性固件启动条目从**安装 U 盘**启动(BootNext 语义;本脚本不改动 BootOrder)' }
-else { Write-DbkNote 'set-bootnext:设置一次性固件启动条目进 Kubuntu(BootNext 语义;本脚本不改动 BootOrder)' }
+else { Write-DbkNote 'set-bootnext:设置一次性固件启动条目进 Fedora(BootNext 语义;本脚本不改动 BootOrder)' }
 if ($script:DbkMode -eq 'apply') { Write-DbkNote '运行模式:-Apply(会调用 bcdedit /set {fwbootmgr} bootsequence)' }
 elseif ($WhatIf) { Write-DbkNote '运行模式:-WhatIf(等价 -Check:只打印计划,零写)' }
 else { Write-DbkNote '运行模式:-Check(缺省:只读判定,零写)' }
@@ -120,7 +120,7 @@ if (-not $target) {
   Write-DbkNote ('找不到目标:没有 description 匹配 /' + $Match + '/ 的固件条目。现有条目:')
   foreach ($e in $ent) { Write-DbkNote ('  ' + $e.Guid + '  ' + $e.Desc) }
   if ($Device -eq 'USB') { Write-DbkNote '兜底路径:开机按厂商启动菜单键(BOOT_MENU_KEY)一次性选带 UEFI: 前缀的 U 盘条目;仍看不到就回 docs/01-firmware.md 核对介质与固件设置。' }
-  else { Write-DbkNote '兜底路径:开机按厂商启动菜单键(BOOT_MENU_KEY)一次性选 ubuntu;若条目确实缺失,按 docs/04-silverblue.md 出错时一节重建条目。' }
+  else { Write-DbkNote '兜底路径:开机按厂商启动菜单键(BOOT_MENU_KEY)一次性选 fedora;若条目确实缺失,按 docs/04-silverblue.md 出错时一节重建条目。' }
   Write-DbkExit -Status FAIL -Message ('固件条目里没有匹配 /' + $Match + '/ 的目标(共枚举到 ' + $ent.Count + ' 条);本脚本未执行任何命令(零写)')
 }
 $cmd = ('bcdedit /set {fwbootmgr} bootsequence ' + $target.Guid)
