@@ -199,7 +199,7 @@
 | L0 共用底座 | 共用 | [docs/01-firmware.md](../01-firmware.md)(底座卡:固件设置 / 做两个安装介质 / 核对目标盘 / 落 L0 产物) |
 | 分盘(安装前的前置章节) | 共用(W/L/D 三条轨道各自的分盘方式) | [docs/02-partitioning.md](../02-partitioning.md)(02-1 分盘总则与三种轨道的目标布局 + 02-2 轨道 W 分盘 / 02-3 轨道 L 分盘 / 02-4 轨道 D 分盘;值表:8 项分区目标值) |
 | L1 + L2 | W(D 轨道也要) | [docs/03-windows.md](../03-windows.md)(Windows 全新安装与激活)+ L2 预检与基线闸门卡(原 `03-preflight.md` 并入;两者都在 Windows 侧、且必须在同一会话内连续完成)。轨道 W 的卡整体改号为 03-K(9 卡) |
-| L3 | L | [docs/04-kubuntu.md](../04-kubuntu.md)(Silverblue 安装,Anaconda 手动分区;回切批次内将改名为 `04-silverblue.md`) |
+| L3 | L | [docs/04-silverblue.md](../04-silverblue.md)(Silverblue 安装,Anaconda 手动分区) |
 | L4 | L + D | [docs/05-first-boot.md](../05-first-boot.md)(首启收敛与健壮性;其中"共享盘挂载""家目录重定向"两张卡是 D 轨道的共存增量;共 13 张卡 `05-1` … `05-13`) |
 | L5 | D | [docs/07-rescue.md](../07-rescue.md)(退役与救援;原 `06-decommission.md` 并入) |
 | 验收 | 全部 | [docs/08-verification.md](../08-verification.md) |

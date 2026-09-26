@@ -110,7 +110,7 @@
 | **共用底座之二** | 分盘:认下本机轨道的目标布局 -> 按轨道分盘(整盘重排、一次分好,禁止事后缩容) | [02-partitioning.md](02-partitioning.md) | 分区记录进 `baseline/`(W/D 落 `01-partitions.txt`;L 落 `03-efi-layout.txt` 的分区段) |
 | **W** L1 | 装 Windows -> 关快速启动与休眠 -> 已知文件夹重定向 -> 激活 -> 落 L1 产物 | [03-windows.md](03-windows.md) | `baseline/01-partitions.txt`、`baseline/01-activation.md` |
 | **W** L2 闸门 | 只读体检 -> 读闸门结论(红项停)-> 基线备份 -> 落 L2 产物 | [03-windows.md](03-windows.md) | `baseline/02-preflight-report.md`、`baseline/02-esp-backup/`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` |
-| **L** L3 | UEFI 启动进 live -> 在 115GiB 预留区手工建 Ubuntu 三块分区(Calamares 只指定挂载点,不动 Windows 的 ESP)-> 装完重启验证 -> 落 L3 产物 | [04-kubuntu.md](04-kubuntu.md) | `baseline/03-efi-layout.txt` |
+| **L** L3 | UEFI 启动进 live -> 在 115GiB 预留区手工建 Ubuntu 三块分区(Calamares 只指定挂载点,不动 Windows 的 ESP)-> 装完重启验证 -> 落 L3 产物 | [04-silverblue.md](04-silverblue.md) | `baseline/03-efi-layout.txt` |
 | **L / D** L4 | 首启收敛:共享盘挂载 / 家目录重定向 / 显卡驱动与 Secure Boot(Ubuntu 官方预签名包)/ 时间 / 蓝牙 / zram 与 swapfile / journald 与更新策略 / SSH 与 SMART / **包级回退与变更前备份** / 发行版升级 / **snap 零残留** / 回 Windows 入口 / 落 L4 产物 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`baseline/04-robustness.md` |
 | **D** 共存增量 4 步 | 115GiB 预留(在 `02-partitioning` 做)/ 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 | 落在 [02-partitioning.md](02-partitioning.md)、[03-windows.md](03-windows.md)、[05-first-boot.md](05-first-boot.md)、[07-rescue.md](07-rescue.md) | 见对应轨道的产物 |
 | **D** L5 | 退役与救援:判层 / 从 grub 提示符回去 / Windows 侧修引导 / 只重装某一系统 / 基线回滚 / 周期巡检 / 应急纪律 / 退役五步 | [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |

@@ -1,6 +1,6 @@
 # 02:分盘(安装系统前的前置章节)
 
-本文件在流程中的位置:`01-firmware`(底座:L0)-> **本文件(底座:分盘)** -> 轨道 W 的 `03-windows` / 轨道 L 的 `04-kubuntu`。
+本文件在流程中的位置:`01-firmware`(底座:L0)-> **本文件(底座:分盘)** -> 轨道 W 的 `03-windows` / 轨道 L 的 `04-silverblue`。
 
 目标状态、四条不变量与参数名在[入口文档](00-overview.md)中定义;分区数值的设计依据在[设计文档](design/00-design.md) 5.1 节,本文件不复述。
 
@@ -52,7 +52,7 @@ Ubuntu 侧三块分区(ESP-Ubuntu 1GiB + `/boot` 1GiB + root 约 113GiB)建在�
      看到:分区列表只有这三块,没有动到任何 Windows 分区与它自己的 ESP
 脚本:scripts/linux/check-partition-plan.sh --track L --check
 坑:`/boot` 不独立会让重装 root 时连带丢掉内核与 GRUB 模块;把 ESP-Ubuntu 与 Windows 的 ESP 混用,一次 Windows 更新就可能覆盖引导(I3)。
-出错时:三块分区对不上或找不到挂载点 -> 进 live 后按 `04-2` 手动分区卡(手册 `04-kubuntu`)核对(用 `check-partition-plan.sh`),不要就地重排。
+出错时:三块分区对不上或找不到挂载点 -> 进 live 后按 `04-2` 手动分区卡(手册 `04-silverblue`)核对(用 `check-partition-plan.sh`),不要就地重排。
 
 ### 02-4 轨道 D 的分盘(双系统,含 115GiB 预留)
 

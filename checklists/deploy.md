@@ -58,7 +58,7 @@
 
 **本阶段产物**:`baseline/03-efi-layout.txt`(六节) —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L3-1 一次性从安装 U 盘启动进 live(先确认 `/sys/firmware/efi` 存在) | 脚本:`scripts/windows/set-bootnext.ps1 -Device USB -Check`(空跑看计划;执行加 `-Apply -Yes`,缺 `-Yes` 退 64 零写) | 判据:进 live 桌面,`lsblk` 能看到目标盘 | 卡:[04-kubuntu.md](../docs/04-kubuntu.md) 的 `04-1`
+- `[ ]` L3-1 一次性从安装 U 盘启动进 live(先确认 `/sys/firmware/efi` 存在) | 脚本:`scripts/windows/set-bootnext.ps1 -Device USB -Check`(空跑看计划;执行加 `-Apply -Yes`,缺 `-Yes` 退 64 零写) | 判据:进 live 桌面,`lsblk` 能看到目标盘 | 卡:[04-silverblue.md](../docs/04-silverblue.md) 的 `04-1`
 - `[ ]` L3-2 手动分区:三块建在预留区内,Calamares 只指定挂载点 | 脚本:`scripts/linux/check-partition-plan.sh --track D --check` | 判据:分区列表新增三行且 Windows 各分区原值不变,没有任何 Windows 分区被标成"格式化" | 卡:`04-2`
 - `[ ]` L3-3 装完重启验证(默认仍进 Windows;进 Kubuntu 后逐项核对) | 脚本:`scripts/linux/verify-l3.sh --check` | 判据:`grub-efi-amd64-signed` 与 `shim-signed` 在位、GRUB 落 `\EFI\ubuntu\`、`/boot` 独立且为 ext4、两块 ESP 内容齐全、`BootOrder` 首位仍是 Windows Boot Manager | 卡:`04-3`
 - `[ ]` L3-4 落 L3 产物(六节) | 脚本:`scripts/linux/collect-l3.sh --check`(落盘加 `--apply`) | 判据:两棵 `\EFI\` 树 + `efibootmgr -v` + `BootOrder` + `lsblk` + `findmnt` + 引导包与内核版本摘要齐全 | 卡:`04-4`

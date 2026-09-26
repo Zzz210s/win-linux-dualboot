@@ -48,7 +48,7 @@
 | 共用底座 分盘 | [docs/02-partitioning.md](docs/02-partitioning.md) | 分区记录(W/D 落 `01-partitions.txt`;L 落 `03-efi-layout.txt` 的分区段) |
 | W L1 Windows 安装 | [docs/03-windows.md](docs/03-windows.md) | `01-partitions.txt`、`01-activation.md` |
 | W L2 预检与基线(硬闸门) | [docs/03-windows.md](docs/03-windows.md) | `02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` |
-| L L3 Kubuntu 安装 | [docs/04-kubuntu.md](docs/04-kubuntu.md) | `03-efi-layout.txt` |
+| L L3 Kubuntu 安装 | [docs/04-silverblue.md](docs/04-silverblue.md) | `03-efi-layout.txt` |
 | L / D L4 首启收敛 | [docs/05-first-boot.md](docs/05-first-boot.md) | `04-first-boot.md`、`04-robustness.md` |
 | D L5 退役与救援 | [docs/07-rescue.md](docs/07-rescue.md) | 勾选记录落在 [checklists/rollback.md](checklists/rollback.md) |
 

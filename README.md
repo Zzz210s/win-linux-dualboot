@@ -48,7 +48,7 @@ Start at [docs/00-overview.md](docs/00-overview.md): it defines the tracks, the 
 | Shared base, partitioning | [docs/02-partitioning.md](docs/02-partitioning.md) | partition record (`01-partitions.txt` for W/D, the partition section of `03-efi-layout.txt` for L) |
 | W, L1 Windows install | [docs/03-windows.md](docs/03-windows.md) | `01-partitions.txt`, `01-activation.md` |
 | W, L2 preflight and baseline (hard gate) | [docs/03-windows.md](docs/03-windows.md) | `02-preflight-report.md`, `02-esp-backup/`, `02-firmware-entries.txt`, `02-partitions.txt` |
-| L, L3 Kubuntu install | [docs/04-kubuntu.md](docs/04-kubuntu.md) | `03-efi-layout.txt` |
+| L, L3 Kubuntu install | [docs/04-silverblue.md](docs/04-silverblue.md) | `03-efi-layout.txt` |
 | L / D, L4 first-boot convergence | [docs/05-first-boot.md](docs/05-first-boot.md) | `04-first-boot.md`, `04-robustness.md` |
 | D, L5 decommission and rescue | [docs/07-rescue.md](docs/07-rescue.md) | checkoff in [checklists/rollback.md](checklists/rollback.md) |
 

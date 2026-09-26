@@ -120,7 +120,7 @@ if (-not $target) {
   Write-DbkNote ('找不到目标:没有 description 匹配 /' + $Match + '/ 的固件条目。现有条目:')
   foreach ($e in $ent) { Write-DbkNote ('  ' + $e.Guid + '  ' + $e.Desc) }
   if ($Device -eq 'USB') { Write-DbkNote '兜底路径:开机按厂商启动菜单键(BOOT_MENU_KEY)一次性选带 UEFI: 前缀的 U 盘条目;仍看不到就回 docs/01-firmware.md 核对介质与固件设置。' }
-  else { Write-DbkNote '兜底路径:开机按厂商启动菜单键(BOOT_MENU_KEY)一次性选 ubuntu;若条目确实缺失,按 docs/04-kubuntu.md 出错时一节重建条目。' }
+  else { Write-DbkNote '兜底路径:开机按厂商启动菜单键(BOOT_MENU_KEY)一次性选 ubuntu;若条目确实缺失,按 docs/04-silverblue.md 出错时一节重建条目。' }
   Write-DbkExit -Status FAIL -Message ('固件条目里没有匹配 /' + $Match + '/ 的目标(共枚举到 ' + $ent.Count + ' 条);本脚本未执行任何命令(零写)')
 }
 $cmd = ('bcdedit /set {fwbootmgr} bootsequence ' + $target.Guid)
