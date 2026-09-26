@@ -4,7 +4,7 @@
 
 目标状态、四条不变量与参数名在[入口文档](00-overview.md)中定义;分区数值与分盘动作在 `02-partitioning.md`(本文件不复述);依据见[设计文档](design/00-design.md) 4.4 节(L3)、5.1 节(分区表)与第 7 节(故障矩阵),以及[原子版设计](design/02-fedora-atomic-variant-design.md) 第 5 节(分区与布局)、第 6 节(双系统安装风险)与[回切设计](design/06-atomic-restore-design.md) 第 5 节(手册层)。
 
-**本阶段最危险的动作只有一个:把某块分区勾成"格式化"。** 它会在几秒内清空 `\EFI\Microsoft\`(或 Fedora 侧的 `\EFI\fedora\` 与 `/boot`),让系统进不去;此时唯一的退路是 L2 基线。L3 其余步骤都可以慢,这一条不能错。
+**本阶段最危险的动作只有一个:把 Windows 的任何分区(尤其它的 ESP)勾成"格式化"。** 它会在几秒内清空 `\EFI\Microsoft\`,Windows 当场进不去;Fedora 侧那三块是新建分区,格式化反而是必须的(见 `04-2`)。此时唯一的退路是 L2 基线。L3 其余步骤都可以慢,这一条不能错。
 
 ## 开始前
 
@@ -26,13 +26,13 @@
 
 ### 04-2 手动分区:ESP-Fedora 1GiB + /boot 1GiB ext4 + root ≈113GiB btrfs
 
-做:在 live 里手工建 Fedora 三块(ESP-Fedora 1024MiB FAT32 / `/boot` 1024MiB ext4 / root 约 113GiB btrfs),三块都落在 `02-partitioning` 预留的 115GiB 未分配区内;Anaconda 里**只指定挂载点**,不新建、不删除、不改尺寸(设计 06 第 5 节)。
+做:在 live 里手工建 Fedora 三块(ESP-Fedora 1024MiB FAT32 / `/boot` 1024MiB ext4 / root 约 113GiB btrfs),三块都落在 `02-partitioning` 预留的 115GiB 未分配区内;Anaconda 里**只做两件事:给三块指定挂载点、勾格式化**(设计 4.4),不新建、不删除、不改尺寸(设计 06 第 5 节)。
   1. 先用核对脚本读现状,按输出的"下一步该建什么"建这三块
      看到:脚本报 PASS 且列出待建项;它同时断言 Windows ESP 未被挂载、尺寸仍是 2048MiB(读不到就提示停手)
-  2. Anaconda 的手动分区页里只把三块指定挂载点:`/boot/efi`(ESP-Fedora)、`/boot`、`/`(btrfs);Windows 各分区一律不挂载、不格式化、不改尺寸
-     看到:分区列表新增三行且 Windows 的 ESP / `C:` / `D:` 原值未被动过;点"下一步"前没有任何 Windows 分区被标成"格式化"
+  2. Anaconda 的手动分区页里把三块指定挂载点**并勾上格式化**:`/boot/efi`(ESP-Fedora)、`/boot`、`/`(btrfs)—— 三块都是新建分区,不勾装不出系统;Windows 各分区一律不挂载、不格式化、不改尺寸
+     看到:分区列表新增三行且三块新分区都被标成"格式化";Windows 的 ESP / `C:` / `D:` 原值未被动过,没有任何一块被标成"格式化"
 脚本:scripts/linux/check-partition-plan.sh --track D --check
-坑:**绝不让 Anaconda 使用 Windows 的 ESP** —— 含既有 ESP 的盘上是它的已知失败模式(自 F34 起的上游 issue #284),把 Windows 的 2GiB ESP 设成 `/boot/efi` 更等于当场毁掉 Windows 引导(不变量 I3);Fedora 必须用独立 `ESP-Fedora` 且 `/boot` 独立(每个部署的内核与 initrd 在此),root 必须是 btrfs(ostree 部署与 `var` 子卷需要,ext4 不支持);ESP-Fedora 或 `/boot` 勾了格式化 = Fedora 引导丢失;把三块建在预留区之外会挤压 Windows 分区。
+坑:**绝不让 Anaconda 使用 Windows 的 ESP** —— 含既有 ESP 的盘上是它的已知失败模式(自 F34 起的上游 issue #284),把 Windows 的 2GiB ESP 设成 `/boot/efi` 更等于当场毁掉 Windows 引导(不变量 I3);Fedora 必须用独立 `ESP-Fedora` 且 `/boot` 独立(每个部署的内核与 initrd 在此),root 必须是 btrfs(ostree 部署与 `var` 子卷需要,ext4 不支持);**格式化只勾新建的三块**(ESP-Fedora / `/boot` / root 都是新建分区,按设计 4.4 要勾,不勾装不出系统)—— 反过来,**Windows 的任何分区绝不能勾**:勾了 Windows 的 ESP 等于当场毁掉 Windows 引导(违反不变量 I3),勾 `C:` / `D:` 等于清空数据;把三块建在预留区之外会挤压 Windows 分区。
 出错时:分区表对不上 -> 不要就地重排,按 `07-1` 判层后走救援;Anaconda 在写引导前中止(issue #284 的形态)-> 按 `07-1` 在 live 环境手工修,最坏退回轨道 W(`03-windows`)。
 
 ### 04-3 装完重启进入 Silverblue 并核对部署
