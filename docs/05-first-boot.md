@@ -47,7 +47,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   1. 先看现状:`sudo bash scripts/linux/graphics.sh --check`
      看到:四项判据(① `modinfo -F signer nvidia` 非空 ② `mokutil --list-enrolled` 含 ublue 密钥 ③ `lsmod` 有 `nvidia` ④ `XDG_SESSION_TYPE` 为 `wayland`);零写;未 rebase 或未重启的项记"需人工",不是失败
   2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`,脚本调接口把系统 rebase 到 ublue 的 NVIDIA 镜像(**镜像名与分支实施时按 ublue 官方文档核实**),重启后生效
-     看到:脚本报"已提交 rebase,需重启";重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
+     看到:脚本报 PASS"已 rebase 到 ublue 的 NVIDIA 变体:需重启",并提示重启后在 MOK 界面完成注册;重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
   3. 一次性 MOK 注册(必须人工,接口不代跑):重启进 MOK 界面按提示完成注册(MOK 密码与任务名以 ublue 官方文档为准),也可在会话内跑 `ujust enroll-secure-boot-key` 后再重启一次;随后复跑 `--check` 四项
      看到:`mokutil --list-enrolled` 含 ublue 密钥;四项全过;注册只需做一次,不是每次更新都重来
   4. 会话与内核行校验:`echo "$XDG_SESSION_TYPE"` 为 `wayland`;`cat /proc/cmdline` 不含 `nomodeset`
@@ -56,7 +56,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
      看到:系统仍可用;处置顺序是"选上一部署 / 回滚 -> rebase 回 stock 部署 -> 才考虑发行版问题"
 脚本:sudo bash scripts/linux/graphics.sh --check / --apply --yes
 坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);镜像名、`ujust` 任务名与 MOK 密码均标待核实,以官方文档为准。
-出错时:装完黑屏 -> 按 `10-1` 处置;驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
+出错时:装完黑屏 -> 按 `10-1` 处置(显卡驱动专项另见 `10-faq.md` 的"显卡驱动装完黑屏"卡,卡号以改版后的 `10-faq.md` 为准);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
 
 ### 05-4 时间(RTC 走 UTC)
 
@@ -78,8 +78,8 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
      看到:三项前置的判定(chntpw 已装 / hive 可读 / 上游脚本已就位);未装 chntpw 时记"需人工",不是失败
   2. 执行:`sudo bash scripts/linux/bt-keys-sync-wrapper.sh --apply --yes --win-mnt /mnt/win`
      看到:脚本经 `dbk-pkg.sh` **分层安装** `chntpw`(原子版:写进下一部署,**必须重启后才生效**;脚本会显式提示),把上游脚本下到 `/opt/bt-keys-sync/` 后以 `--windows-keys` 运行
-  3. 分层安装后**先重启一次**,再复跑 `--check`(与 `05-8` 的 `smartmontools` 合到同一次重启,少重启一轮)
-     看到:重启后 `command -v chntpw` 有输出;没重启就复跑会记"需人工"(不是失败,但包还没进当前系统)
+  3. 分层安装后**先不要重启**:接着做 `05-8` 的 `smartmontools` 分层安装,两者合到同一次重启,重启后再复跑 `--check`
+     看到:重启后 `command -v chntpw` 有输出;分层已提交但未重启时,`--check` 走 `pkg_installed`(认已提交的分层)不记"需人工",只有 `--apply` 会报"已提交,需重启"(不是失败,但包还没进当前系统)
   4. 顺序(错了就得重来):先在 Linux 配对目标设备 -> 回 Windows 对同一设备再配对一次(让它成为权威来源)-> 回 Linux 以 `--windows-keys` 导入 -> 两系统各连一次复测
      看到:`bluetoothctl devices` 能看到该设备;两个系统都不再需要重新配对
 脚本:sudo bash scripts/linux/bt-keys-sync-wrapper.sh --check / --apply --yes --win-mnt /mnt/win
@@ -109,7 +109,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   3. 变更(升级/分层)前复核一次:`sudo bash scripts/linux/set-updates.sh --check`
      看到:三项判据全过;配置被改回自动应用时这里变 FAIL,按 `05-9` 固定当前部署后再处理
 脚本:sudo bash scripts/linux/set-journald.sh --check / --apply;sudo bash scripts/linux/set-updates.sh --check / --apply
-坑:自动应用与自动重启同"变更前先备份与留档"直接冲突;原子版没有"只装安全更新"这个粒度,别照搬 apt 口径 —— 语义就是"只检查/下载"(设计 06 第 2 节 D5);`/var` 不属于部署,日志不随回滚丢失(`journalctl -b -1` 可回看上一轮启动)。
+坑:自动应用与自动重启同"变更前先备份与留档"直接冲突;原子版没有"只装安全更新"这个粒度,别照搬 Ubuntu 的包粒度口径 —— 语义就是"只检查/下载"(设计 06 第 2 节 D5);`/var` 不属于部署,日志不随回滚丢失(`journalctl -b -1` 可回看上一轮启动)。
 出错时:journald 起不来 -> 看 `journalctl -u systemd-journald` 定位;定时器未 enabled -> 手工 enable 后重跑,不要改成自动应用。
 
 ### 05-8 SSH 救援通道与磁盘健康
@@ -119,7 +119,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
      看到:两项判定(`sshd` 是否 active、各盘 `smartctl -H` 是否 PASSED/OK);未装 `smartctl` 时记"需人工"
   2. 执行:`sudo bash scripts/linux/set-remote-health.sh --apply`
      看到:脚本经 `dbk-pkg.sh` **分层安装** `smartmontools`(写进下一部署,**必须重启后才生效**;脚本会显式提示),并执行 `systemctl enable --now sshd smartd`
-  3. 分层安装后**先重启一次**(与 `05-5` 的 `chntpw` 合到同一次重启),重启后再复跑 `--check`
+  3. 分层安装后**重启一次**(`05-5` 的 `chntpw` 已并入这一轮,不要在两卡之间各重启一次),重启后再复跑 `--check`
      看到:脚本报 PASS(`sshd` active 且各盘 SMART 健康检查通过);`ss -tlnp | grep :22` 能看到 22 端口监听(附加证据,不作为失败项)
 脚本:sudo bash scripts/linux/set-remote-health.sh --check / --apply
 坑:**分层安装需重启后生效**:装了没重启时 `smartctl` 仍不可用(记"需人工",不是失败);`sshd`/`smartd` 的 enable 是即时的,与分层包不同。
@@ -144,9 +144,9 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 
 做:先备份留档并**固定当前部署**,再 rebase 到下一个发行版分支,重启后复核版本、会话与驱动(设计 02 第 4 节、设计 06 第 2 节 D1/D4)。
   1. 先看现状:`sudo bash scripts/linux/upgrade-release.sh --check`
-     看到:五项判据(部署列表可读 / 当前部署已 `pin` / `baseline/` 在位于可备份 / 更新策略仍是"只检查/下载" / 已指定升级目标分支 `DBK_RELEASE_REF`);缺一项即 FAIL,先补齐再谈升级
+     看到:五项判据(部署列表可读 / 当前部署已 `pin` / `baseline/` 在位、可备份 / 更新策略仍是"只检查/下载" / 已指定升级目标分支 `DBK_RELEASE_REF`);当前部署未 pin 或更新策略不符判 FAIL,`baseline/` 缺失与未给 `DBK_RELEASE_REF` 记"需人工"(退出 2),先补齐再谈升级
   2. 执行:`DBK_RELEASE_REF='<远程:分支>' sudo bash scripts/linux/upgrade-release.sh --apply --yes`
-     看到:脚本先把当前部署固定(pin),再把 `baseline/` 备份到 `<backup-dir>/<时间戳>-baseline/`、复核五条前置,然后提交 rebase 到目标分支并提示重启(分支号每 6 个月推进一次,实施时按 Fedora 官方公告取值)
+     看到:脚本先把当前部署固定(pin),再复核五条前置(任一未达成即不执行),然后把 `baseline/` 备份到 `<backup-dir>/<时间戳>-baseline/`,最后提交 rebase 到目标分支并提示重启(分支号每 6 个月推进一次,实施时按 Fedora 官方公告取值)
   3. 重启后复核:`sudo bash scripts/linux/upgrade-release.sh --check` 与 `sudo bash scripts/linux/graphics.sh --check`
      看到:版本已更新;会话仍为 `wayland`;`nvidia-smi` 与 `modinfo -F signer nvidia` 正常(签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`);不满意则按 `05-9` 回滚到已固定的部署
 脚本:sudo bash scripts/linux/upgrade-release.sh --check / --apply --yes
@@ -172,11 +172,11 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   1. 先看:`bash scripts/linux/collect-l4.sh --check`
      看到:打印两份产物的全部节;此时零写(不创建文件,也不碰共享盘做写测试)
   2. 再落盘:`bash scripts/linux/collect-l4.sh --apply --out-dir baseline`
-     看到:脚本报"L4 产物已落盘";第一份含发行版版本 / 会话类型 / **部署列表与 pin** / **显卡驱动来源与模块签名** / **Secure Boot 密钥(MOK)** / 共享盘写测试 / 待更新(自动更新定时器);第二份是 R1-R9 逐项现状与证据(含 **`/boot` 独立挂载**那一节;取不到的写"未取到")
+     看到:脚本报"L4 产物已落盘";第一份含发行版版本 / 会话类型 / **部署列表与 pin** / **显卡驱动来源与模块签名** / **Secure Boot 密钥(MOK)** / 共享盘写测试 / 待更新(自动更新定时器)/ **`/boot` 独立挂载**那一节;第二份是 R1-R9 逐项现状与证据(取不到的写"未取到")
   3. 带回 Windows 侧后核对:`git status`
      看到:`baseline/` 下的变化一个都不出现(仅 [baseline/README.md](../baseline/README.md) 入库)
 脚本:bash scripts/linux/collect-l4.sh --check / --apply --out-dir baseline
-坑:两份产物都不入库;漏掉部署列表、MOK 或 `/boot` 独立挂载会让后续复检缺证据。
+坑:两份产物都不入库;第一份里漏掉部署列表、MOK 或 `/boot` 独立挂载会让后续复检缺证据。
 出错时:读不到共享盘证据 -> 先让 `05-1` 通过再重跑;写不进 `baseline/` -> 核对目录权限与磁盘空间,不要改产物路径。
 
 ### 05-13 L4 汇总执行(可选:按顺序跑各模块并聚合结果)
