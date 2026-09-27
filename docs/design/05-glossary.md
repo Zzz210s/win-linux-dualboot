@@ -152,7 +152,7 @@ Fedora 的安装器(**现行**,只用来给 Fedora 三块分区指定挂载点�
 在原子版上把部署的**基础镜像换成另一个 ref**(如换到 ublue 的 NVIDIA 变体、或升到下一个 Fedora 大版本):`rpm-ostree rebase <ref>` 落一个新部署,重启后生效。两种用途分别对应卡 `05-3`(换 ublue 变体)与 `05-10`(大版本升级,约 13 个月一次)。
 
 **分层安装(layering)**
-在原子基础层上叠加 rpm 包(`rpm-ostree install`)。它**不改运行中的系统**:变更先落成一个新部署,**重启后**才生效;卸载同样要重启。图形软件优先走 Flatpak 以免分层(卡 `05-8`)。
+在原子基础层上叠加 rpm 包(`rpm-ostree install`)。它**不改运行中的系统**:变更先落成一个新部署,**重启后**才生效;卸载同样要重启。图形软件优先走 Flatpak 以免分层(口径见 `docs/00-overview.md` 与 `docs/10-faq.md`;无专属卡)。
 
 **磁盘隔离(disk isolation)**
 系统盘与数据盘分离:Windows 侧 `C:` 200GiB 只放系统与程序、`D:` ≈635GiB 放数据;Fedora 侧 root ≈113GiB(btrfs)只放系统。作用是“原地重装只格系统分区,数据不丢”。

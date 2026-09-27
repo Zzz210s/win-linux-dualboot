@@ -6,7 +6,7 @@
 
 本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**47 张动作卡、45 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
 
-材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴,、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 34 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
+材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 34 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
 
 注意:**本仓库里的任何命令都还没有在真机上跑过**——所有脚本只到夹具级验证。动手之前请先看[当前状态](#当前状态)。
 
@@ -142,8 +142,8 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 - **额外软件用分层安装,且只有重启后才生效**:`rpm-ostree install` 落一个新部署,不进重启前运行中的系统;图形软件走 Flatpak,不进基础镜像;
 - **每个版本支持期约 13 个月**(每 6 个月一发新版本),所以大版本升级(`rpm-ostree rebase`)是反复出现、有专门卡片的计划事件,不是一次性的稀有事;
 - **用户数据不属于部署**:`/var`(以及符号链接到 `/var/home` 的 `/home`)不随回滚回退;但只格 root 的重装仍会丢 `~`,所以动手前先把 `~` 拷到共享盘(见 [docs/07-rescue.md](docs/07-rescue.md))。数据盘 `D:` 两种情况都不受影响。
-- **原子版里没有 snapd**:原子基础层不带 snap 守护进程,也没有 apt 能把它装回来,所以 2026-09-22 改投 Kubuntu 的那个“snap 清不干净”的动因被结构性消灭,而不只是被压住;回切记录见 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md)。
-- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。以下四项在各手册里标 `待核实`,必须留到真机首跑时确认:ublue 镜像名与分支、`ujust enroll-secure-boot-key` 任务名与 MOK 密码(`universalblue`)、Fedora 44 的 Anaconda 是否已修上游 issue #284、以及本机固件是否支持同盘两块 ESP。
+- **原子版里没有 snapd**:原子基础层不带 snap 守护进程,也没有 apt 能把它装回来,所以 Kubuntu 变体**只能自己压制、并在回切前被认定为设计缺口**的“snap 清不干净”问题,在这里被结构性消灭,而不只是被压住;回切记录见 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md)。
+- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。以下四项在各手册、设计文档与脚本里标 `待核实`,必须留到真机首跑时确认:ublue 镜像名与分支、`ujust enroll-secure-boot-key` 任务名与 MOK 密码(`universalblue`)、Fedora 44 的 Anaconda 是否已修上游 issue #284、以及本机固件是否支持同盘两块 ESP。
 - **明确被否(不使用)**:**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照栈**;**ZFS root 快照**;**以逐包降级作为主要恢复手段**——回滚单位是整个部署,不可变基础层上也没有受支持的 `dnf downgrade` 路径;
 - **四级回退粒度**:部署级 <-> `rpm-ostree rollback` 加 `pin`;配置 <-> 各脚本留下的 `.dbk.bak` 备份;基线级 <-> ESP 备份 + 固件启动项快照;阶段级 <-> L5 退役流程。
 
