@@ -120,8 +120,8 @@ B2="② 修 GRUB 自身(root / prefix 按现场给:root=$D2,prefix=$P2)
   insmod normal
   normal
 看到: insmod normal 报 file not found = prefix 指错(分区号或 grub2 目录路径不对);修正 prefix 后重来。
-  normal 成功会回到正常 GRUB 菜单。本脚本按 **Fedora / Silverblue 的目录名 `grub2`** 生成(Fedora 用 /boot/grub2/grub.cfg);
-  若目标发行版用 `grub`(Debian/Ubuntu 系),把 prefix 换成 $D2/grub(或有独立 /boot 时 $D2 换成根分区后加 /boot/grub)再试。
+  normal 成功会回到正常 GRUB 菜单。本脚本按 **Fedora / Silverblue 的目录名 grub2** 生成(Fedora 用 /boot/grub2/grub.cfg);
+  若目标发行版用 grub(Debian/Ubuntu 系),把 prefix 换成 $D2/grub(或有独立 /boot 时 $D2 换成根分区后加 /boot/grub)再试。
   独立 /boot 分区由 --boot-part 指定(本脚本探测到独立 /boot 时会自动用它)。"
 TAIL="纪律提醒:以上只走 GRUB 提示符。不要改永久启动顺序(不执行 efibootmgr 的 -o 写操作)、不要改 {bootmgr} 的 path、
 不要关闭 Secure Boot(驱动签名与 Secure Boot 状态见卡 07-7 的 check-signature.sh)。修好后进系统把偏差写进 L4 记录。"
