@@ -6,7 +6,7 @@
 .DESCRIPTION
   校验值来源(设计 4.1 与 5.3):
     ① Fedora 44 Silverblue ISO:官方发布页(https://fedoraproject.org/atomic-desktops/)的 `*-CHECKSUM` 文件里的
-       `SHA256 (<文件名>) = <哈希>` 行(该文件放在与 ISO 同一目录,缺省名 <ISO 文件名>.CHECKSUM,可用 -IsoChecksum 指定),
+       `SHA256 (<文件名>) = <哈希>` 行(该文件放在与 ISO 同一目录,缺省名 `<ISO 去 .iso>-CHECKSUM`,兼容旧式 `<ISO 文件名>.CHECKSUM`,可用 -IsoChecksum 指定),
        本脚本逐字符比对;该文件另有官方 GPG 签名(`*-CHECKSUM.asc`),签名核验由人工 gpg --verify 完成。
        兼容 Ubuntu 系的 `<64 位十六进制> *<文件名>` 行格式,两种写法都认。
     ② Windows 11 ISO:微软官方**不发布**该镜像的 SHA256(设计 5.3),因此本脚本不做哈希比对;要求它来自微软官方下载域
@@ -62,7 +62,11 @@ function Get-ExpectedSha256 {
   # 读官方 CHECKSUM 文件里该 ISO 文件名对应的 SHA256 值;找不到(缺文件 / 无该文件名行)返回空串
   param([string]$Iso, [string]$ChecksumFile)
   $ck = $ChecksumFile
-  if (-not $ck) { $ck = $Iso + '.CHECKSUM' }
+  if (-not $ck) {
+    # Fedora 官方命名:把 .iso 换成 -CHECKSUM(如 Fedora-Silverblue-44-1.1-x86_64-CHECKSUM);兼容旧式 <ISO>.CHECKSUM
+    $cand = [System.IO.Path]::ChangeExtension($Iso, $null) + '-CHECKSUM'
+    if (Test-Path -LiteralPath $cand) { $ck = $cand } else { $ck = $Iso + '.CHECKSUM' }
+  }
   if (-not (Test-Path -LiteralPath $ck)) { return '' }
   $leaf = Split-Path -Leaf $Iso
   foreach ($line in [System.IO.File]::ReadAllLines($ck, [System.Text.Encoding]::UTF8)) {

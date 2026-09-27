@@ -5,7 +5,7 @@
 适用:本仓库(win-linux-dualboot)全部手册与清单(本次修订后:**手册 8 份 + 1 份入口页**,按"三轨道 + 分盘前置章节"组织)
 前置设计:`00-design.md`(方案本体;已随其"修订九:回切 Fedora 44 原子版"同步修订)、`02-fedora-atomic-variant-design.md`(现行系统内容真源)与 `06-atomic-restore-design.md`(回切决策与发行版薄接口);旧口径的 `04-kubuntu-variant-design.md` 已标废止、只留作决策记录
 
-本文件描述手册的**结构规范**(卡格式与自检规则),基础系统口径以 `04-kubuntu-variant-design.md` 与 `00-design.md` 为准。
+本文件描述手册的**结构规范**(卡格式与自检规则),基础系统口径以 `02-fedora-atomic-variant-design.md` 与 `06-atomic-restore-design.md` 为准(`04-kubuntu-variant-design.md` 已标废止,仅作历史记录)。
 
 ---
 

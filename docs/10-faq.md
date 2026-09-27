@@ -219,7 +219,7 @@
 - 旧口径(04 号变体设计,已废止)下 snap 清不干净是**设计缺口**:压制只覆盖 `snapd` 一个包名与两个目录,漏掉其它带 snap 依赖的包、`~/.snap`、`/var/lib/snapd`、`20snapd.conf`、`snapd.socket/timer/seeded` 单元与 `snap` 用户组;升级还会把 snap 装回来(设计 06 第 1 节)。
 - 原子版从根上消掉这一类:RPM 体系 + Flatpak 一等公民,base image 里没有 snapd,也不存在"某条安装路径把 snap 拉回来"的机制。
 - 判据是 `command -v snap` 无输出(机制不存在,不需要 pin、不需要清残留);GUI 应用走 Flatpak,系统级工具走分层安装。
--> `05-7`;设计 3.22、设计 06 第 1 节
+-> 无对应卡(原子版结构性消除);设计 3.22、设计 06 第 1 节
 脚本:无(机制不存在:原子版无 snap 可清,判据靠 `command -v snap` 无输出)
 
 ### 10-23 分层安装为什么要重启

@@ -2,8 +2,8 @@
 # 对应卡:05-5
 # 破坏性:1
 # L4 卡 05-5:蓝牙配对密钥同步包装(上游 KeyofBlueS/bt-keys-sync;本仓库不内置其代码)。
-# 方向(上游建议,以 Windows 侧密钥为权威):1) Ubuntu 配对目标设备 -> 2) 回 Windows 对同一设备再配对
-#   -> 3) 回 Ubuntu 用 --windows-keys 导入 -> 4) 复测两系统都能直连。**反向写 Windows 注册表有风险,本脚本不做**。
+# 方向(上游建议,以 Windows 侧密钥为权威):1) 在 Fedora 配对目标设备 -> 2) 回 Windows 对同一设备再配对
+#   -> 3) 回 Fedora 用 --windows-keys 导入 -> 4) 复测两系统都能直连。**反向写 Windows 注册表有风险,本脚本不做**。
 # 判据(--check,零写):① chntpw 已安装(经 dbk-pkg.sh 的 pkg_installed 判定;DBK_SKIP_PKG=1 时记需人工);
 #   ② Windows 注册表 hive 可读(<win-mnt>/Windows/System32/config/SYSTEM,只读挂载即可);
 #   ③ 上游脚本已就位(--script 指定,或已下载到 DEST)。三项齐 → PASS(上游运行与两系统直连复测属卡内人工步骤)。

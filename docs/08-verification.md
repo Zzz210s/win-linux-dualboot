@@ -21,7 +21,7 @@
 - [ ] A2 连续重启 3 次都默认进 Windows -> 看到:3 次都不按键、不选菜单,每次都自动进 Windows,全程不出现 `grub>` / `grub rescue>`(需人工)
 - [ ] A3 `\EFI\Microsoft\` 与 L2 基线逐文件一致 -> 看到:`scripts/windows/verify-baseline.ps1 -BaselineDir baseline` 的 ② 行是「通过」(`\EFI\Microsoft\` 逐文件哈希一致、ESP 上无新增文件)(脚本判定;Windows 侧;设计 I3)
 - [ ] A4 `{bootmgr}` 的 `path` 与基线一致 -> 看到:同一巡检的 ③ 行是「通过」,`path` 与 `baseline/02-firmware-entries.txt` 逐字一致(脚本判定;Windows 侧;设计 I3)
-- [ ] A5 fedora 条目位于 `BootOrder` 末尾 -> 看到:`efibootmgr -v` 的 `BootOrder` 最后一项指向 `\EFI\fedora\shimx64.efi`;固件条目表里没有任何 Linux 条目排在 Windows Boot Manager 之前(脚本判定;设计 I1)
+- [ ] A5 fedora 条目位于 `BootOrder` 末尾 -> 看到:`efibootmgr -v` 的 `BootOrder` 最后一项指向 `\EFI\fedora\shimx64.efi`;固件条目表里没有任何 Linux 条目排在 Windows Boot Manager 之前(脚本判定;设计 I1)。注:清理/匹配类脚本里保留 `ubuntu` 字样属**预期**——为兼容历史固件条目,不是半改名
 - [ ] A6 全程未使用 `efibootmgr -o` -> 看到:全部执行记录里没有 `efibootmgr -o` / `bcdedit /set {fwbootmgr} displayorder` 的实执行,进 Linux 一律走一次性入口(需人工;设计 I2)
 - [ ] A7 两个 ESP 互不干扰 -> 看到:在 Fedora 侧任何引导相关操作之后,`\EFI\Microsoft\` 仍与基线逐文件一致(A3 通过)、`BootOrder` 首位仍是 Windows Boot Manager(A1 通过),且两块 ESP 可分别挂载、`\EFI\fedora\` 与 `\EFI\Microsoft\` 各自内容完整(脚本判定;涉及两块 ESP 的实测由 `scripts/linux/verify-l3.sh --check` 承担)
 - [ ] A8 可撤除性演练(参考设备必做,其他设备推荐) -> 看到:另存 `\EFI\fedora\` 后删除该子树(保留分区),连续重启 3 次都自动进 Windows 且无 `grub rescue`;用副本还原(或 live chroot 重建)后 A1/A3/A4/A5 复检仍通过(需人工)
@@ -95,7 +95,7 @@
 - [ ] F8 磁盘健康 -> 看到:`systemctl is-active smartd` 为 `active`;`smartctl -H <DISK>` 报 `SMART overall-health self-assessment test result: PASSED`(脚本判定)
 - [ ] F9 挂载稳健 -> 看到:`awk '!/^[[:space:]]*#/ && NF>=4 && $2!="/" {print $2, $4}' /etc/fstab` 逐行核对——L4 写入的共享盘行与 swapfile 行(以及独立 `/boot` 行)都带 `nofail`;`/boot/efi` 属必需挂载,**不加** `nofail`;`findmnt --verify` 不报 error(脚本判定)
 
-脚本:Fedora 侧由 `scripts/linux/verify-all.sh` 判定 F2-F9(F5 复用 `scripts/linux/set-updates.sh --check`,F2 复用 `scripts/linux/rollback-deploy.sh --check`);F1 是"真做一次"的演练,两侧都记 `需人工`。
+脚本:Fedora 侧由 `scripts/linux/verify-all.sh` 判定 F2、F4–F9(F5 复用 `scripts/linux/set-updates.sh --check`,F2 复用 `scripts/linux/rollback-deploy.sh --check`);F1 是"真做一次"的演练,两侧都记 `需人工`。
 
 这组全绿才可以进下一步
 

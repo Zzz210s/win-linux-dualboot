@@ -37,7 +37,7 @@
   4. 写入 U 盘:分盘写用 Rufus(https://rufus.ie/,分区类型 GPT、目标系统 UEFI);一盘多 ISO 用 Ventoy(https://www.ventoy.net/)
      看到:一次性启动菜单里出现带 `UEFI:` 前缀的 U 盘条目
 
-脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -IsoChecksum <SHA256SUMS 路径>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
+脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -IsoChecksum <官方 CHECKSUM 路径>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
 坑:`CHECKSUM` 与签名必须取自官方发布页,镜像站的文件可能滞后;Ventoy 在 `Secure Boot` 下须先完成一次密钥注册,否则报 `Verification failed`。
 出错时:哈希不一致 -> 重新下载或换镜像站重下;U 盘引导被 `Secure Boot` 拒绝 -> 先确认是不是 Ventoy,不要关闭 `Secure Boot`(见 `01-1`)。
 
