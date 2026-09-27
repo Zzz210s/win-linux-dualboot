@@ -2,11 +2,11 @@
 
 [English](README.md) | 简体中文
 
-一套可复现、可安全撤除的 Windows 11 专业版 + Kubuntu 26.04 LTS 双系统部署手册,面向同规格的全新设备。
+一套可复现、可安全撤除的 Windows 11 专业版 + Fedora 44 Silverblue 双系统部署手册,面向同规格的全新设备。
 
-本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
+本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**47 张动作卡、45 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
 
-材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴,以及记录基础系统改换决定的 [docs/design/04-kubuntu-variant-design.md](docs/design/04-kubuntu-variant-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 34 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
+材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴,、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 34 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
 
 注意:**本仓库里的任何命令都还没有在真机上跑过**——所有脚本只到夹具级验证。动手之前请先看[当前状态](#当前状态)。
 
@@ -19,7 +19,7 @@
 - [四条不变量](#四条不变量)
 - [适用设备类](#适用设备类)
 - [目标分区表](#目标分区表)
-- [回退策略与 snap 规避](#回退策略与-snap-规避)
+- [回退策略与原子语义](#回退策略与原子语义)
 - [两侧隔离与共享盘](#两侧隔离与共享盘)
 - [崩溃后原地重装](#崩溃后原地重装)
 - [健壮性九项](#健壮性九项)
@@ -36,7 +36,7 @@
 1. **在已有生产力系统上"缩小分区"**。缩容失败、不可移动文件挡路、BitLocker 索要恢复密钥、安装器看不到 NVMe——这些事故几乎都出自这一步。
 2. **启动顺序指向了 Linux**。等你哪天把 Linux 分区格式化掉,下次重启就停在 `grub>` / `grub rescue>`,Windows 也一起进不去。
 
-本方案因此立两个前提:一是**整盘重装**(分区表一次定稿,而不是后期做手术);二是把"安全撤除 Linux"当作一等公民流程来设计与验收。Linux 侧是 apt 体系的传统可变系统,所以取舍也写在明处:包装完立即生效(没有分层、没有"重启才生效"),LTS 窗口三年,但也没有"一条命令回退整个系统"的能力——恢复手段是包级降级加原地重装;snap 包整套规避。两条死法的完整成因、被否方案与理由见 [docs/00-overview.md](docs/00-overview.md) 与设计文档第 1、3、4 节。
+本方案因此立两个前提:一是**整盘重装**(分区表一次定稿,而不是后期做手术);二是把“安全撤除 Linux”当作一等公民流程来设计与验收。Linux 侧是 Fedora 44 Silverblue,原子不可变系统:基础层只读、额外软件用分层安装且**重启才生效**,整个系统可以在 GRUB 菜单里退回上一部署。每个版本的支持期约 13 个月(每 6 个月一发),所以大版本升级(`rpm-ostree rebase`)是反复出现、有专门卡片的计划事件。原子系统里根本不存在 snapd,所以“snap 清不干净”这个问题被结构性消灭。两条死法的完整成因、被否方案与理由见 [docs/00-overview.md](docs/00-overview.md) 与设计文档第 1、3、4 节。
 
 ## 怎么用
 
@@ -48,7 +48,7 @@
 | 共用底座 分盘 | [docs/02-partitioning.md](docs/02-partitioning.md) | 分区记录(W/D 落 `01-partitions.txt`;L 落 `03-efi-layout.txt` 的分区段) |
 | W L1 Windows 安装 | [docs/03-windows.md](docs/03-windows.md) | `01-partitions.txt`、`01-activation.md` |
 | W L2 预检与基线(硬闸门) | [docs/03-windows.md](docs/03-windows.md) | `02-preflight-report.md`、`02-esp-backup/`、`02-firmware-entries.txt`、`02-partitions.txt` |
-| L L3 Kubuntu 安装 | [docs/04-silverblue.md](docs/04-silverblue.md) | `03-efi-layout.txt` |
+| L L3 Silverblue 安装 | [docs/04-silverblue.md](docs/04-silverblue.md) | `03-efi-layout.txt` |
 | L / D L4 首启收敛 | [docs/05-first-boot.md](docs/05-first-boot.md) | `04-first-boot.md`、`04-robustness.md` |
 | D L5 退役与救援 | [docs/07-rescue.md](docs/07-rescue.md) | 勾选记录落在 [checklists/rollback.md](checklists/rollback.md) |
 
@@ -68,7 +68,7 @@
 |---|---|---|---|
 | 共用底座 | 三条轨道都要 | 约 3 步 | 固件设置、做两个安装介质、核对目标盘 |
 | **W** | 只装 Windows | 约 5 步 | 分区、安装、激活、关快速启动与休眠、收敛 |
-| **L** | 只装 Kubuntu | 约 6 步 | 安装、首启(驱动/挂载/时间/snap)、收敛、包级回退演练 |
+| **L** | 只装 Silverblue | 约 6 步 | 安装、首启(驱动与 MOK/挂载/时间)、收敛、部署级回滚演练 |
 | **D** | 双系统 | 共用底座 + W + L + 共存增量 4 步 | 预留 115GiB、引导不变量核查、`ntfs3` 共享盘、退役与救援 |
 
 双系统专属只有 4 项增量:115GiB 预留、引导不变量核查(`BootOrder` 首位始终是 Windows Boot Manager)、`ntfs3` 共享盘、L5 退役流程;其余部分与单系统安装共用或完全一致。
@@ -82,7 +82,7 @@ checklists/            deploy.md(L0-L4,三轨道)与 rollback.md(L5)两份勾选
 scripts/windows/       每卡一个 PowerShell 脚本 + 共享契约库
 scripts/linux/         Linux 侧每卡一个脚本 + 共享契约库
 scripts/repo/          本仓库自检(文档结构、脚本语法)
-templates/             diskpart 脚本与 fstab/GRUB/unattended-upgrades/journald/user-dirs 片段
+templates/             diskpart 脚本与 fstab/GRUB/rpm-ostreed/journald/user-dirs/zram 片段
 baseline/              每台设备的部署产物,永不入库(仅 README.md 入库)
 ```
 
@@ -92,12 +92,12 @@ baseline/              每台设备的部署产物,永不入库(仅 README.md �
 
 | 编号 | 不变量 | 防住的事故 |
 |---|---|---|
-| I1 | `BootOrder` 第一位**永远是 Windows Boot Manager** | 删除 Linux 分区后,固件仍指向已消失的 `\EFI\ubuntu\shimx64.efi`,重启停在 `grub rescue>` |
+| I1 | `BootOrder` 第一位**永远是 Windows Boot Manager** | 删除 Linux 分区后,固件仍指向已消失的 `\EFI\fedora\shimx64.efi`,重启停在 `grub rescue>` |
 | I2 | 进 Linux 只用**一次性 `BootNext`**(或厂商启动菜单键),绝不用 `efibootmgr -o` 调整顺序 | 留下一个"没人记得撤销"的永久启动顺序 |
 | I3 | 绝不覆盖 `\EFI\Microsoft\`,绝不修改 `{bootmgr}` 的 `path` | Windows 引导路径被第三方接管,系统更新后翻车 |
 | I4 | 改分区表或固件设置之前,先有可用基线:BitLocker 挂起、ESP 已备份、固件启动项已快照 | 除重装外无路可退 |
 
-I3 在本方案里还有**结构**上的保障:Windows 与 Kubuntu 各用一块独立 ESP,所以 Windows 更新只能改写装 `\EFI\Microsoft\` 的那一块,够不到 `\EFI\ubuntu\`。
+I3 在本方案里还有**结构**上的保障:Windows 与 Silverblue 各用一块独立 ESP,所以 Windows 更新只能改写装 `\EFI\Microsoft\` 的那一块,够不到 `\EFI\fedora\`。
 
 这四条之所以管用,是因为"卡在 grub 命令行"的根因不是 GRUB 坏了,而是固件 NVRAM 里的条目仍指向已被删除的引导文件、且排在 Windows 前面。只要 I1 与 I2 成立,即使 Linux 侧被彻底清除,固件也会在失效条目之后回落到 Windows(见 [docs/00-overview.md](docs/00-overview.md))。
 
@@ -108,9 +108,9 @@ I3 在本方案里还有**结构**上的保障:Windows 与 Kubuntu 各用一块�
 - 单块 NVMe SSD,**标称 1TB 级**,UEFI + GPT 引导。容量口径要说清:1024GB 型号实际可用约 **953.7GiB**,方案分区表按此制定;1000GB 型号只有约 **931.3GiB**,此时把 `D:` 从约 635GiB 减到约 613GiB,其余七项不动;
 - 混合显卡(集成显卡 + 独立显卡);
 - 允许整盘格式化:两个系统都是全新安装,不存在"保留现有系统"的路径;
-- 目标组合:Windows 11 专业版 + **Kubuntu 26.04 LTS**(Plasma 6.6、**Wayland-only**、**Calamares 安装器**、LTS 窗口 3 年(到 2029-04)、内核 7.0)。
+- 目标组合:Windows 11 专业版 + **Fedora 44 Silverblue**(GNOME 50、**Wayland**、**Anaconda 安装器**、支持期约 13 个月(每 6 个月一发新版本))。
 
-偏离项要么给出适配分支(两块及以上磁盘、容量明显偏离 1TB、仅独显、共享盘降级为只读、共用 ESP 回退分支),要么明确**不适用于 v1**:需要磁盘加密、VMD/RAID 模式锁定无法更改、固件只从第一块盘引导的机型,以及需要快照式回滚的方案。吸收厂商差异的设备参数表(`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`DISK_MODEL`、`DISK_SIZE`、`UBUNTU_ESP_SIZE` 等)定义在 [docs/00-overview.md](docs/00-overview.md),每台设备填一份。snap 规避(最小安装 + 清除残留 + apt pin)是契约的一部分,不是可选偏好——见 [docs/design/04-kubuntu-variant-design.md](docs/design/04-kubuntu-variant-design.md) 第 3 节。
+偏离项要么给出适配分支(两块及以上磁盘、容量明显偏离 1TB、仅独显、共享盘降级为只读、共用 ESP 回退分支),要么明确**不适用于 v1**:需要磁盘加密、VMD/RAID 模式锁定无法更改、固件只从第一块盘引导的机型,以及需要快照式回滚的方案。吸收厂商差异的设备参数表(`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`DISK_MODEL`、`DISK_SIZE`、`FEDORA_ESP_SIZE` 等)定义在 [docs/00-overview.md](docs/00-overview.md),每台设备填一份。原子语义(只读基础层、分层安装需重启、以部署为回滚单位)是契约的一部分,不是可选偏好——见 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与 [docs/design/00-design.md](docs/design/00-design.md) 第 3 节。
 
 ## 目标分区表
 
@@ -122,37 +122,39 @@ I3 在本方案里还有**结构**上的保障:Windows 与 Kubuntu 各用一块�
 | 2 | MSR | 16MiB | Microsoft Reserved | Windows 保留 |
 | 3 | Windows 系统 `C:` | 200GiB | NTFS | 系统与程序;重装 Windows 时唯一被格式化的分区 |
 | 4 | Windows 数据 `D:` | 约 635GiB | NTFS | 游戏、下载、文档、容器镜像;双系统共享盘 |
-| 5 | ESP-Ubuntu | 1GiB | EFI System(FAT32) | Kubuntu 自己的 ESP,只放 `\EFI\ubuntu\`;挂 `/boot/efi` |
+| 5 | ESP-Fedora | 1GiB | EFI System(FAT32) | Silverblue 自己的 ESP,只放 `\EFI\fedora\`;挂 `/boot/efi` |
 | 6 | `/boot` | 1GiB | ext4 | 独立分区:只重装 root 时可保留内核与 GRUB 模块 |
-| 7 | Ubuntu root | 约 113GiB | ext4 | `/`(Ubuntu 默认;不用 btrfs,因为不需要快照) |
+| 7 | Fedora root | 约 113GiB | btrfs | `/`(原子版默认;`/boot` 仍是 ext4) |
 | 8 | WinRE | 1GiB | Recovery | Windows 恢复环境,置于磁盘末尾 |
 
-合计约 953GiB(2 + 0.016 + 200 + 635 + 1 + 1 + 113 + 1)。Ubuntu 侧合计 115GiB(1 + 1 + 113),共享数据盘约占全盘三分之二。
+合计约 953GiB(2 + 0.016 + 200 + 635 + 1 + 1 + 113 + 1)。Fedora 侧合计 115GiB(1 + 1 + 113),共享数据盘约占全盘三分之二。
 
-- **Ubuntu 侧三块分区在 L1 预留的 115GiB 未分配区内创建**:L1 的 `diskpart` 只分到 `D:` 为止,余量**不分配**;L3 的 Calamares 在这个区间里切出 ESP-Ubuntu 1GiB + `/boot` 1GiB + root 约 113GiB。
-- **两块 ESP 绝不共用**:Windows 一块 2GiB,Kubuntu 一块 1GiB;两者的尺寸都不允许被安装器削减。
+- **Fedora 侧三块分区在 L1 预留的 115GiB 未分配区内创建**:L1 的 `diskpart` 只分到 `D:` 为止,余量**不分配**;L3 的 Anaconda 在这个区间里切出 ESP-Fedora 1GiB + `/boot` 1GiB + root 约 113GiB。
+- **两块 ESP 绝不共用**:Windows 一块 2GiB,Silverblue 一块 1GiB;两者的尺寸都不允许被安装器削减。
 - 不建 swap 分区:交换空间由 L4 配的 zram 与 4GiB swapfile 承担,休眠不在方案内。
 - 分区表用 `diskpart` 预建([templates/partitions.txt](templates/partitions.txt)),这也是"允许整盘格式化"成为前提的原因。
 
-## 回退策略与 snap 规避
+## 回退策略与原子语义
 
-Kubuntu 26.04 LTS 是 apt 体系的传统可变系统,方案把它的得与失都写在明处:
+Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在明处:
 
-- **包装完立即生效**:`sudo apt install` 当场生效,没有只读 `/usr`、没有分层安装、没有"重启才生效"这回事;系统级工具直接从归档装;
-- **LTS 窗口 3 年(到 2029-04)**只收安全更新,所以大版本升级(`do-release-upgrade`)是一次稀有的、有专门卡片的计划事件,不是反复出现的杂事;
-- **回退是部署级**:`rpm-ostree rollback` 把整个系统退回上一部署,`rpm-ostree pin` 保护某个部署不被垃圾回收([scripts/linux/rollback-deploy.sh](scripts/linux/rollback-deploy.sh) 报部署列表与是否存在回滚候选);系统级损坏走原地重装(见 [docs/07-rescue.md](docs/07-rescue.md)),数据盘 `D:` 两种情况都不受影响。
-- **snap 是成套规避而不是靠记性**:最小安装(S1)+ 清除残留(S2)+ `Pin-Priority: -1` 的 apt pin(S3),浏览器改用 Mozilla 官方 APT 仓库的 deb。留着 `snapd` 不是选项:归档里的 `firefox` 是过渡包,`do-release-upgrade` 也会自己把 snap 装回来;
-- **明确被否(不使用)**:**`snapd`**;**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照**;**ZFS root 快照**;**自定义 Secure Boot 密钥与自签驱动**——NVIDIA 走 `ubuntu-drivers` 装的官方预签名包,不需要注册任何密钥;
-- **四级回退粒度**:单包 <-> `rollback-pkg.sh`;配置 <-> 各脚本留下的 `.dbk.bak` 备份;基线级 <-> ESP 备份 + 固件启动项快照;阶段级 <-> L5 退役流程。
+- **运行中的系统是一个部署,不是一堆包**:`/usr` 只读,上一个部署留在盘上、在同一个 GRUB 菜单里可启动。`rpm-ostree rollback` 退回它,`rpm-ostree pin` 保护某个已知可用的部署不被垃圾回收([scripts/linux/rollback-deploy.sh](scripts/linux/rollback-deploy.sh) 报部署列表、pin 状态与是否存在回滚候选)。这正是 Kubuntu 时代不得不放弃的“一条命令回退整个系统”;
+- **额外软件用分层安装,且只有重启后才生效**:`rpm-ostree install` 落一个新部署,不进重启前运行中的系统;图形软件走 Flatpak,不进基础镜像;
+- **每个版本支持期约 13 个月**(每 6 个月一发新版本),所以大版本升级(`rpm-ostree rebase`)是反复出现、有专门卡片的计划事件,不是一次性的稀有事;
+- **用户数据不属于部署**:`/var`(以及符号链接到 `/var/home` 的 `/home`)不随回滚回退;但只格 root 的重装仍会丢 `~`,所以动手前先把 `~` 拷到共享盘(见 [docs/07-rescue.md](docs/07-rescue.md))。数据盘 `D:` 两种情况都不受影响。
+- **原子版里没有 snapd**:原子基础层不带 snap 守护进程,也没有 apt 能把它装回来,所以 2026-09-22 改投 Kubuntu 的那个“snap 清不干净”的动因被结构性消灭,而不只是被压住;回切记录见 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md)。
+- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。以下四项在各手册里标 `待核实`,必须留到真机首跑时确认:ublue 镜像名与分支、`ujust enroll-secure-boot-key` 任务名与 MOK 密码(`universalblue`)、Fedora 44 的 Anaconda 是否已修上游 issue #284、以及本机固件是否支持同盘两块 ESP。
+- **明确被否(不使用)**:**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照栈**;**ZFS root 快照**;**以逐包降级作为主要恢复手段**——回滚单位是整个部署,不可变基础层上也没有受支持的 `dnf downgrade` 路径;
+- **四级回退粒度**:部署级 <-> `rpm-ostree rollback` 加 `pin`;配置 <-> 各脚本留下的 `.dbk.bak` 备份;基线级 <-> ESP 备份 + 固件启动项快照;阶段级 <-> L5 退役流程。
 
 ## 两侧隔离与共享盘
 
 方案在**两个系统上都把系统与数据分开**,所以任何一边崩都不会拖垮另一边:
 
 - **Windows**:200GiB 系统分区(`C:`)+ 约 635GiB 数据分区(`D:`)。六个已知文件夹(桌面/文档/下载/图片/视频/音乐)、游戏库与容器镜像全部重定向到 `D:`,所以重装 Windows 只格式化 `C:`。分工是刻意的:`C:` 是可抛弃的那块,`D:` 是值得长期保护的那块。
-- **Kubuntu**:约 113GiB root + 独立 1GiB `/boot`。文档、下载、图片与桌面放在共享盘上,这才让 root 保持小;`/home` 就是 root 上的普通目录,所以重装前备份意味着先把 `~` 拷到共享盘。
+- **Silverblue**:约 113GiB btrfs root + 独立 1GiB `/boot`。文档、下载、图片与桌面放在共享盘上,这才让 root 保持小;`/home` 是指向 `/var/home` 的符号链接,所以它不随部署回滚丢,但只格 root 的重装仍会丢,重装前备份意味着先把 `~` 拷到共享盘。
 
-`D:` 不是 Windows 私有卷,而是**共享分区**:Windows 侧原生访问,Kubuntu 侧以内核 `ntfs3` 驱动读写挂载——在 Windows 里编辑的办公文件,切到 Linux 直接打开,不需要拷贝或中转介质。四项前提让它安全,且都是前置条件而不是建议:
+`D:` 不是 Windows 私有卷,而是**共享分区**:Windows 侧原生访问,Silverblue 侧以内核 `ntfs3` 驱动读写挂载--在 Windows 里编辑的办公文件,切到 Linux 直接打开,不需要拷贝或中转介质。四项前提让它安全,且都是前置条件而不是建议:
 
 1. Windows 关闭 Fast Startup 与休眠,否则 NTFS 处于"混合关机"的脏状态,Linux 挂载会失败甚至损坏;
 2. `D:` 不启用 BitLocker / 设备加密,否则 Linux 侧无法直接读写;
@@ -165,44 +167,44 @@ Kubuntu 26.04 LTS 是 apt 体系的传统可变系统,方案把它的得与失�
 
 两个系统都能**在原盘上原地恢复**,这是设计目标而不是期望:
 
-- **Windows 崩溃** → 只格式化 `C:` 重装 Windows;`D:`、Ubuntu 三块分区、MSR 与 WinRE 一律不动。安装程序在 Windows 那块 ESP 上重建 `\EFI\Microsoft\`,可能顺带覆盖该 ESP 上的 `\EFI\BOOT\bootx64.efi`(属正常);Ubuntu 的独立 ESP 是另一块分区,不受影响。
-- **Kubuntu 崩溃** → 先把 `~` 拷到共享盘,再只格式化 root(ext4)重装 Kubuntu;`/boot` 与 ESP-Ubuntu 挂上但**绝不勾选格式化**,Windows 侧与共享数据都保住。
+- **Windows 崩溃** → 只格式化 `C:` 重装 Windows;`D:`、Fedora 三块分区、MSR 与 WinRE 一律不动。安装程序在 Windows 那块 ESP 上重建 `\EFI\Microsoft\`,可能顺带覆盖该 ESP 上的 `\EFI\BOOT\bootx64.efi`(属正常);Fedora 的独立 ESP 是另一块分区,不受影响。
+- **Silverblue 崩溃** → 先试上一部署(`rollback-deploy.sh --apply --yes`,或在 GRUB 菜单里选);还不够再先把 `~` 拷到共享盘,然后只格式化 root(btrfs)重装 Silverblue;`/boot` 与 ESP-Fedora 挂上但**绝不勾选格式化**,Windows 侧与共享数据都保住。
 - **只是引导层损坏** → 不要重装:用 L2 基线还原 ESP + `bcdboot` 重建 + 清理残留 NVRAM 条目(见 [docs/07-rescue.md](docs/07-rescue.md))。
 
 全流程最危险、因此在每个涉及处都写成第一号禁令的一步,是**误格 ESP**:其中一块装着 `\EFI\Microsoft\`,一格式化就把两个系统一起弄挂。
 
 ## 健壮性九项
 
-失去一个可用系统的代价远高于重装,所以 Kubuntu 侧做了九项加固(设计文档 4.7 节,R1 至 R9),每项都对应一个可回退点:
+失去一个可用系统的代价远高于重装,所以 Silverblue 侧做了九项加固(设计文档 4.7 节,R1 至 R9),每项都对应一个可回退点:
 
-1. **变更前先备份**:`baseline/` 与每个脚本即将改动的 `/etc` 文件(`fstab`、`user-dirs.dirs`、GRUB 默认值、apt 片段)先留 `.dbk.bak` 副本;
-2. **包级回退**:`apt install <包>=<版本>` 加 `apt-mark hold`,配合 `--list` / `--check` / `--unhold` 查看与解除冻结;
-3. **独立 `/boot` 与保留旧内核**:升级翻车时 GRUB 菜单里仍有可启动的旧内核,固件层 `BootNext` 与内核选择互补且不违反 I2;
-4. **常备救援介质**:Kubuntu 安装 U 盘兼作 live 环境,不回收;
+1. **变更前先备份**:`baseline/` 与每个脚本即将改动的 `/etc` 文件(`fstab`、`user-dirs.dirs`、GRUB 默认值、`rpm-ostreed.conf`)先留 `.dbk.bak` 副本;
+2. **部署级回滚**:`rpm-ostree rollback` 退回上一部署,`rpm-ostree pin` 保护已知可用的部署不被垃圾回收,配合 `--pin` / `--unpin` / `--check` 查看与冻结或解除([scripts/linux/rollback-deploy.sh](scripts/linux/rollback-deploy.sh));
+3. **独立 `/boot` 与 GRUB 部署菜单**:升级翻车时开机菜单里仍能选上一部署,固件层 `BootNext` 与之互补且不违反 I2;
+4. **常备救援介质**:Silverblue 安装 U 盘兼作 live 环境,不回收;
 5. **崩溃可观测**:journald 持久化,启动失败后仍能 `journalctl -b -1` 回看;
-6. **OOM 与内存压力防护**:zram 核对通过(优先 `systemd-zram-generator`,退化 `zram-tools`)+ 4GiB swapfile,并确认 `systemd-oomd` 启用;
+6. **OOM 与内存压力防护**:zram 核对(`zramctl` 有 `zram0` 即通过;不符才按模板 `templates/zram-generator.conf` 兜底)+ 4GiB swapfile,并确认 `systemd-oomd` 启用;
 7. **常开 SSH 救援通道**:桌面挂死时仍可从另一台机器排障;
-8. **保守更新策略**:`unattended-upgrades` 只装安全更新、**不自动重启**(`Automatic-Reboot "false"`);
-9. **磁盘健康监控**:apt 装 `smartmontools`(`smartd`),配合发行版默认的文件系统校验策略。
+8. **保守更新策略**:`rpm-ostreed-automatic` 只 `check` / `download`,**不自动应用、不自动重启**;
+9. **磁盘健康监控**:分层安装 `smartmontools`(`smartd`),配合发行版默认的文件系统校验策略。
 
 ## 验收
 
 是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分六组:
 
-- **A. 引导安全组(A1-A8)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线逐文件一致、`{bootmgr}` 的 `path` 未变、全程没写过永久启动顺序、ubuntu 条目位于末尾、两块 ESP 互不干扰,并含一次**可逆的撤除演练**。
-- **B. 系统功能组(B1-B11)**:Wayland 会话、显卡驱动正常且有 nouveau 兜底、Secure Boot 仍开启且未引入自签密钥、驱动来源为 Ubuntu 官方包、`ntfs3` 读写挂载带 `nofail`、共享盘双向可见、**snap 零残留**(`snap list` 空 + `dpkg -l snapd` 无输出 + `apt-cache policy snapd` 无候选 + `apt-get install -s firefox` 不含 snapd)、家目录重定向生效、RTC 用 UTC、切换系统后蓝牙无需重配、`fwupd` 能识别设备。
+- **A. 引导安全组(A1-A8)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线逐文件一致、`{bootmgr}` 的 `path` 未变、全程没写过永久启动顺序、fedora 条目位于末尾、两块 ESP 互不干扰,并含一次**可逆的撤除演练**。
+- **B. 系统功能组(B1-B11)**:Wayland 会话且无 X11 可选、显卡驱动正常且有 nouveau 兜底、模块签名者非空、Secure Boot 仍开启且未引入自签密钥、驱动来源为 ublue 预签名 NVIDIA 镜像、一次性 MOK 注册已完成(`mokutil --list-enrolled`)、`ntfs3` 读写挂载带 `nofail`、共享盘双向可见、家目录重定向生效、RTC 用 UTC、切换系统后蓝牙无需重配、`fwupd` 能识别设备。
 - **C. 双系统切换组(C1-C3)**:一次性 `BootNext` 进 Linux 且不改默认项、一键回 Windows、切换三次后顺序仍稳定。
 - **D. 可撤除性组(D1-D6)**:L5 五步退役完整推演、系统盘隔离逐项核对、两条原地重装路径各走一遍、非重装的引导修复路径已被证明可用。
 - **E. 记录组(E1-E5)**:产物齐全且未入库、偏差回写到设备参数表。
-- **F. 健壮性组(F1-F9)**:真做一次包级回退演练加一次原地重装演练(并确认 `D:` 上的数据仍在)、包级回退与变更前备份可用、journald 持久化、更新策略与配置一致(只装安全更新、不自动重启)、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、L4 写入的挂载项带 `nofail` 而 `/boot/efi` 刻意不加。
+- **F. 健壮性组(F1-F9)**:真做一次部署回滚演练加一次原地重装演练(先 `--pin`、更新或分层一次、`rollback-deploy.sh --apply --yes`、重启后 `nvidia` 仍加载且 `/var` 数据仍在、最后 `--unpin`;并确认 `D:` 上的数据仍在)、部署回滚与变更前备份可用、journald 持久化、更新策略与配置一致(只 `check`/`download`,不自动应用、不自动重启)、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、L4 写入的挂载项带 `nofail` 而 `/boot/efi` 刻意不加。
 
 两侧总控是 [scripts/linux/verify-all.sh](scripts/linux/verify-all.sh) 与 [scripts/windows/verify-all.ps1](scripts/windows/verify-all.ps1),都只做只读判定;两侧都落汇总时用 `--out-dir` / `-OutDir` 指到与人工填写版不同的目录,避免互相覆盖。未勾选项只有在落成"已知例外"并写明影响面时才可接受,否则该设备判为未完成。至少一台设备完整跑通,才能称为"参考实现"——目前还没有。
 
 ## 风险
 
-已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**34 条**),按阶段的速查与 **23 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Ubuntu 侧 NVIDIA 驱动与 Secure Boot 签名口径、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Calamares 误把 `/boot/efi` 指向 Windows 的 ESP、`do-release-upgrade` 或 `firefox` 过渡包把 snap 装回来、把硬件故障误判成双系统问题。
+已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**34 条**),按阶段的速查与 **25 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Fedora 侧 NVIDIA 驱动签名与一次性 ublue MOK 注册、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Anaconda 误把 `/boot/efi` 指向 Windows 的 ESP(上游 issue #284)、原子基础层的 `rebase` 落到坏内核或坏驱动、把硬件故障误判成双系统问题。
 
-Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。安装介质校验按厂商现实分开写:Kubuntu ISO 按官方 `SHA256SUMS` 文件比对;Windows ISO 官方未发布镜像哈希,只做"官方下载域 + 官方安装器校验"([docs/01-firmware.md](docs/01-firmware.md))。
+Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。安装介质校验按厂商现实分开写:Fedora Silverblue ISO 按官方 `*-CHECKSUM` 文件与其 GPG 签名比对;Windows ISO 官方未发布镜像哈希,只做“官方下载域 + 官方安装器校验”([docs/01-firmware.md](docs/01-firmware.md))。
 
 ## 当前状态
 
