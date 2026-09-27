@@ -74,7 +74,7 @@
 | `FIRMWARE_MODE` | 存储控制器模式 | AHCI / NVMe(VMD 关闭) |
 | `GPU` | 显卡组合 | Intel + NVIDIA(混合) |
 | `ESP_SIZE` | 目标 ESP-Windows 大小 | 2GiB |
-| `UBUNTU_ESP_SIZE` | 目标 ESP-Fedora 大小 | 1GiB |
+| `FEDORA_ESP_SIZE` | 目标 ESP-Fedora 大小 | 1GiB |
 | `BOOT_SIZE` | 目标 `/boot` 大小 | 1GiB(ext4,独立于 ESP) |
 | `ROOT_SIZE` | 目标 Fedora root 大小 | ≈113GiB(btrfs) |
 | `WINDOWS_SYSTEM_SIZE` | 目标 Windows 系统分区大小 | 200GiB |
@@ -84,7 +84,7 @@
 | `DISK_SIZE` | 目标磁盘容量 | 标称 1TB / 约 953GiB |
 | `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | 安装后由 `blkid` 获取 |
 
-- Linux 侧参数由更早方案的"`ROOT_SIZE` 100GiB + `SNAPSHOT_SIZE` 15GiB"改为"`UBUNTU_ESP_SIZE` 1GiB + `BOOT_SIZE` 1GiB + `ROOT_SIZE` ≈113GiB"(`SNAPSHOT_SIZE` 不再存在);`UBUNTU_ESP_SIZE` 与 `BOOT_SIZE` 必须与 Windows 的 ESP 分开,尺寸不允许被安装器削减。
+- Linux 侧参数由更早方案的"`ROOT_SIZE` 100GiB + `SNAPSHOT_SIZE` 15GiB"改为"`FEDORA_ESP_SIZE` 1GiB + `BOOT_SIZE` 1GiB + `ROOT_SIZE` ≈113GiB"(`SNAPSHOT_SIZE` 不再存在);`FEDORA_ESP_SIZE` 与 `BOOT_SIZE` 必须与 Windows 的 ESP 分开,尺寸不允许被安装器削减。
 - `*_SIZE` 各字段是"目标值",写入 L1 的 `diskpart` 脚本,实际分区表以 L1 产物为准并记录偏差;`SHARED_PART_UUID` 是唯一一个安装后才能确定的字段,回填后必须与 [templates/fstab.snippet](../templates/fstab.snippet) 里的值一致。
 
 ---

@@ -359,7 +359,7 @@
 | `FIRMWARE_MODE` | 存储控制器模式 | AHCI / NVMe(VMD 关闭) |
 | `GPU` | 显卡组合 | Intel + NVIDIA(混合) |
 | `ESP_SIZE` | 目标 ESP-Windows 大小 | 2GiB |
-| `UBUNTU_ESP_SIZE` | 目标 ESP-Fedora 大小 | 1GiB |
+| `FEDORA_ESP_SIZE` | 目标 ESP-Fedora 大小 | 1GiB |
 | `BOOT_SIZE` | 目标 `/boot` 大小 | 1GiB(ext4,独立于 ESP) |
 | `ROOT_SIZE` | 目标 Fedora root 大小 | ≈113GiB(btrfs) |
 | `WINDOWS_SYSTEM_SIZE` | 目标 Windows 系统分区大小 | 200GiB |
@@ -369,7 +369,7 @@
 | `DISK_SIZE` | 目标磁盘容量 | 标称 1TB / 约 953GiB |
 | `SHARED_PART_UUID` | 共享数据分区(D:)的 UUID | 安装后由 `blkid` 获取 |
 
-对照说明:Linux 侧参数由更早方案的"`ROOT_SIZE` 100GiB + `SNAPSHOT_SIZE` 15GiB"改为"`UBUNTU_ESP_SIZE` 1GiB + `BOOT_SIZE` 1GiB + `ROOT_SIZE` ≈113GiB"(快照分区参数不再存在,`SNAPSHOT_SIZE` 已删除)。**镜像来源不进设备参数表**:基础系统是 Fedora 官方 Silverblue + ublue 的 NVIDIA 变体,镜像名与分支写在 `05-3` 卡与 02 号设计第 3 节(实施时核实)。
+对照说明:Linux 侧参数由更早方案的"`ROOT_SIZE` 100GiB + `SNAPSHOT_SIZE` 15GiB"改为"`FEDORA_ESP_SIZE` 1GiB + `BOOT_SIZE` 1GiB + `ROOT_SIZE` ≈113GiB"(快照分区参数不再存在,`SNAPSHOT_SIZE` 已删除)。**镜像来源不进设备参数表**:基础系统是 Fedora 官方 Silverblue + ublue 的 NVIDIA 变体,镜像名与分支写在 `05-3` 卡与 02 号设计第 3 节(实施时核实)。
 
 ### 5.3 跨系统共享数据分区(两个系统都能访问的磁盘)
 
@@ -643,5 +643,5 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 2026-09-17 | 修订五:依据 B 站实战评论区证据(新增 11.1 节)补齐坑位——新增决策 3.17 **显卡模式(MUX)排障分支**、3.18 **内核/驱动更新收紧**、3.19 **引导菜单黑屏处置**;故障矩阵新增 8 行、风险表新增 9 条、参数表新增 `DISK_MODEL`/`DISK_SIZE`、偏离项新增"固件只认第一块盘"、未决项新增 HWE 内核与外置盘分支 |
 | 2026-09-19 | **修订七:改用 Fedora 44 Silverblue 原子版**(已被修订八取代,保留为历史)。基础系统由 Ubuntu 26.04 LTS 改为 Fedora 44 Silverblue;回滚由快照级改为部署级(`rpm-ostree rollback`);NVIDIA 路径改为 `rpm-ostree rebase` 到第三方预签名 NVIDIA 变体 + 一次性 MOK 注册;分区改为"Windows 独占 2GiB ESP + Linux 独立 1GiB ESP + 独立 `/boot` 1GiB + root ≈113GiB btrfs";新增 1.4 轨道结构、决策 3.21 生命周期与升级、3.22 原子版语义、3.23 三轨道。该版的设计依据与取舍已归档到 `02-fedora-atomic-variant-design.md` |
 | 2026-09-21 | 消除最后一处不和谐:I1 举例路径由 `\EFI\ubuntu\grubx64.efi` 改为原子版时代的 `\EFI\fedora\grubx64.efi`(仅举例路径,不变量语义未变),并同步 `docs/00-overview.md` 的同一处与说明句。**该行已废弃,保留为历史记录**(修订八已把举例路径改回 `\EFI\ubuntu\`) |
-| 2026-09-22 | **修订八:基础系统由 Fedora 44 Silverblue 改为 Kubuntu 26.04 LTS**(见 `04-kubuntu-variant-design.md`)。按"逐节核对"重写全文:第 1 节补回滚降级目标与非目标(新增 **ZFS root 快照**为被否项);第 3 节决策表改 Kubuntu 口径(基础系统 Kubuntu 26.04 LTS / Plasma 6.6 Wayland-only / Calamares / LTS 3 年;回滚改**包级回退 + 原地重装**;Secure Boot 走 Ubuntu 官方预签名包、**不需要自签与 MOK**;根文件系统 **ext4**;新增 **snap 规避 S1–S6** 决策 3.22);第 4 节 L4 卡清单改 **14 张**(`05-1` … `05-14`)、4.7 的 R1–R9 改为新策略(变更前备份 / 包级回退 / 旧内核保留 / 救援 U 盘 / journald / OOM-zram / SSH / 保守更新 / SMART)、4.8 原地重装两法改 Ubuntu 口径(`grub-install` + `update-grub`、`grub-efi-amd64-signed`/`shim-signed`);第 5 节改 `ESP-Ubuntu 1GiB` 与 `UBUNTU_ESP_SIZE`、删除第三方镜像参数(**分区数值一律未变**);第 7 节回滚粒度表改按新策略重写(单包 / 配置 / 系统级 / 引导级);第 8 节 B 组新增 **snap 零残留**与**驱动来源为 Ubuntu 官方包**、去掉 `rpm-ostree status` 项,F 组把"部署回滚演练"换成 **包级回退演练 + 原地重装演练**;第 9 节删掉原子版专属风险(第三方镜像/MOK/分层安装/部署回滚),新增 Kubuntu 时代风险(第三方 PPA、失去原子回滚、安装器误选 ESP、snap 被静默装回),**总条数仍为 34**;第 11 节把第三方镜像相关条目替换为 Kubuntu/Ubuntu 侧证据(官方发布说明、Calamares 文档、Mozilla 官方安装文档与社区实测) |
+| 2026-09-22 | **修订八:基础系统由 Fedora 44 Silverblue 改为 Kubuntu 26.04 LTS**(见 `04-kubuntu-variant-design.md`)。按"逐节核对"重写全文:第 1 节补回滚降级目标与非目标(新增 **ZFS root 快照**为被否项);第 3 节决策表改 Kubuntu 口径(基础系统 Kubuntu 26.04 LTS / Plasma 6.6 Wayland-only / Calamares / LTS 3 年;回滚改**包级回退 + 原地重装**;Secure Boot 走 Ubuntu 官方预签名包、**不需要自签与 MOK**;根文件系统 **ext4**;新增 **snap 规避 S1–S6** 决策 3.22);第 4 节 L4 卡清单改 **14 张**(`05-1` … `05-13` 加末张 snap 零残留卡 05-14)、4.7 的 R1–R9 改为新策略(变更前备份 / 包级回退 / 旧内核保留 / 救援 U 盘 / journald / OOM-zram / SSH / 保守更新 / SMART)、4.8 原地重装两法改 Ubuntu 口径(`grub-install` + `update-grub`、`grub-efi-amd64-signed`/`shim-signed`);第 5 节改 `ESP-Ubuntu 1GiB` 与 `UBUNTU_ESP_SIZE`、删除第三方镜像参数(**分区数值一律未变**);第 7 节回滚粒度表改按新策略重写(单包 / 配置 / 系统级 / 引导级);第 8 节 B 组新增 **snap 零残留**与**驱动来源为 Ubuntu 官方包**、去掉 `rpm-ostree status` 项,F 组把"部署回滚演练"换成 **包级回退演练 + 原地重装演练**;第 9 节删掉原子版专属风险(第三方镜像/MOK/分层安装/部署回滚),新增 Kubuntu 时代风险(第三方 PPA、失去原子回滚、安装器误选 ESP、snap 被静默装回),**总条数仍为 34**;第 11 节把第三方镜像相关条目替换为 Kubuntu/Ubuntu 侧证据(官方发布说明、Calamares 文档、Mozilla 官方安装文档与社区实测) |
 | 2026-09-25 | **修订九:回切 Fedora 44 Silverblue(原子版)+ 发行版薄接口层**(见 `06-atomic-restore-design.md`;`02-fedora-atomic-variant-design.md` 恢复为现行内容真源)。逐节同步:标题与第 1 节改系统组合(GNOME 50 / Wayland)与"恢复部署级回滚"目标;第 3 节决策表改原子版口径(3.1–3.7 / 3.14 / 3.16–3.19;3.20 事实表换 Fedora 原子版事实;3.21 生命周期改约 13 个月与 `rpm-ostree rebase`;3.22 由 snap 规避改为"原子版语义");第 4 节 L3/L4 改 Anaconda 与 13 张 L4 卡、映射表改 `\EFI\fedora\`、部署级回滚演练;第 5 节 ESP-Fedora 与 root **btrfs**(**分区数值一律未变**);第 7/8 节回滚粒度与验收改部署级回滚;第 9 节风险表换原子版条目;第 11 节证据来源换 Fedora/ublue 侧。第 2 节仅替换 I1 举例路径(`\EFI\ubuntu\` → `\EFI\fedora\`),不变量语义未变。分区数值一字未动 |

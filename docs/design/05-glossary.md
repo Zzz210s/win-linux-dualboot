@@ -9,7 +9,7 @@
 ## 一、工程方法类
 
 **夹具(fixture)**
-预置的假命令与假数据环境,让脚本在**没有真机**的情况下也能跑通并被断言。本项目 51 个步骤脚本**全部**有夹具,断言合计 320 条(k1 77 / Windows 174 / 文档校验器 69)。
+预置的假命令与假数据环境,让脚本在**没有真机**的情况下也能跑通并被断言。本项目 45 个步骤脚本**全部**有夹具,断言合计 369 条(k1 126 / Windows 174 / 文档校验器 69)。
 相关词:**runner**(跑夹具的入口,末行打印 `PASS=n FAIL=m`)、**假件(stub)**(夹具里的假命令,如假的 `efibootmgr`)、**零写断言**(快照对比,证明只读路径没改任何文件)。
 真源:`docs/design/03-step-automation-design.md` 第 7 节。
 
@@ -78,10 +78,10 @@
 ## 二、流程类
 
 **阶段 L0–L5**
-L0 装机前固件与介质 → L1 Windows → L2 预检基线(**硬闸门**)→ L3 Kubuntu 安装 → L4 首启收敛 → L5 退役与救援。
+L0 装机前固件与介质 → L1 Windows → L2 预检基线(**硬闸门**)→ L3 Silverblue 安装 → L4 首启收敛 → L5 退役与救援。
 
 **轨道 W / L / D**
-三种装机目标:**W** 只装 Windows、**L** 只装 Kubuntu、**D** 双系统。分盘是三种轨道共用的**前置章节**。
+三种装机目标:**W** 只装 Windows、**L** 只装 Fedora 44 Silverblue、**D** 双系统。分盘是三种轨道共用的**前置章节**。
 
 **硬闸门(hard gate)**
 L2 的预检结论:**有红项就禁止进入 L3**。红/黄/绿三态写进闸门报告,再由 `check-gate` 读出并给出"允许/禁止"。
@@ -90,10 +90,10 @@ L2 的预检结论:**有红项就禁止进入 L3**。红/黄/绿三态写进闸�
 安全移除 Linux 的顺序:先归位引导顺序 → 备份现状 → 删 Linux 分区 → 清 NVRAM ⇒ 可选扩回数据盘。**顺序不可交换**;反例就是"先格式化 Linux 分区再修引导",那正是卡在 `grub>` 提示符的成因。
 
 **原地重装(in-place reinstall)**
-只格式化系统分区重装(Windows 只格 `C:`、Kubuntu 只格 root),不动数据盘、不动对方的 ESP。
+只格式化系统分区重装(Windows 只格 `C:`、Fedora 侧只格 root(btrfs)),不动数据盘、不动对方的 ESP。
 
 **可撤除性演练(retractability drill)**
-验收 D 组:临时删掉 `\EFI\ubuntu\` 目录并重启,确认机器**自动进 Windows**、不会停在 `grub>`;再用 ESP 镜像还原。这是"删了 Linux 也不卡引导"这条承诺的实测证据。
+验收 D 组:临时删掉 `\EFI\fedora\` 目录并重启,确认机器**自动进 Windows**、不会停在 `grub>`;再用 ESP 镜像还原。这是"删了 Linux 也不卡引导"这条承诺的实测证据。
 
 **验收 A–F 组**
 `docs/08-verification.md` 的六组检查:引导安全 / 系统功能 / 双系统切换 / 可撤除性 / 记录 / 健壮性。
@@ -107,7 +107,7 @@ L2 的预检结论:**有红项就禁止进入 L3**。红/黄/绿三态写进闸�
 I1 `BootOrder` 首位**永远是 Windows Boot Manager**;I2 进 Linux 只用**一次性** `BootNext`,不改永久顺序;I3 绝不覆盖 `\EFI\Microsoft\`、绝不改 `{bootmgr}` 的 `path`;I4 破坏性动作之前先有基线。
 
 **ESP(EFI System Partition)**
-固件唯一会读的引导分区(FAT32)。本项目**两块独立 ESP**:`ESP-Windows` 2GiB(只给 Windows)、`ESP-Ubuntu` 1GiB(只放 `\EFI\ubuntu\`)。独立的作用是让"不覆盖对方引导"从纪律变成结构。
+固件唯一会读的引导分区(FAT32)。本项目**两块独立 ESP**:`ESP-Windows` 2GiB(只给 Windows)、`ESP-Fedora` 1GiB(只放 `\EFI\fedora\`)。独立的作用是让“不覆盖对方引导”从纪律变成结构。
 
 **BootOrder / BootNext**
 固件里的**永久**启动顺序 / **一次性**启动项(用完自动消失)。`efibootmgr -o` 会改永久顺序 → 违反 I2;`efibootmgr -n` 或用固件启动菜单键则符合 I2。
@@ -116,7 +116,7 @@ I1 `BootOrder` 首位**永远是 Windows Boot Manager**;I2 进 Linux 只用**一
 Linux 引导器 / 它找不到 `/boot` 时掉落的最小 shell。项目提供两条恢复路径:在 `grub>` 里 `insmod normal` 等命令修回来,或直接从 GRUB 链式加载 `\EFI\Microsoft\Boot\bootmgfw.efi` 回 Windows。
 
 **Secure Boot / shim / MOK**
-固件验签 / 第三方引导的签名跳板 / 你自签名模块后要手动注册的密钥库(Machine Owner Key)。本项目走**官方预签名包**路线,所以保持 Secure Boot 开启且**不需要**自签与 MOK 注册。
+固件验签 / 第三方引导的签名跳板 / 你自签名模块后要手动注册的密钥库(Machine Owner Key)。本项目走 **ublue 预签名镜像**路线:内核模块在镜像里已签,但仍要**一次性 MOK 注册**(`mokutil`,由 `ujust enroll-secure-boot-key` 驱动,MOK 密码 `universalblue` 待核实)把 ublue 的密钥登记进固件;Secure Boot 保持开启、**不自签密钥**。
 
 **UEFI / GPT / VMD / AHCI**
 固件接口 / 分区表格式 / Intel 的 RAID 模式(会遮蔽 NVMe,Linux 安装器看不到盘)/ 直通模式(目标状态)。
@@ -125,7 +125,7 @@ Linux 引导器 / 它找不到 `/boot` 时掉落的最小 shell。项目提供�
 Windows 的"混合关机"。开启时 NTFS 处于脏状态,Linux 侧挂载有**数据损坏**风险,所以装机前必须关掉;本项目也不配置休眠。
 
 **共享盘(shared disk)**
-`D:` 分区(NTFS),Windows 原生读写、Kubuntu 用内核 `ntfs3` 读写挂到 `/mnt/shared`。前提:`D:` 不加密、Windows 关快速启动、挂载选项带 `windows_names` 与 `nofail`。
+`D:` 分区(NTFS),Windows 原生读写、Silverblue 侧用内核 `ntfs3` 读写挂到 `/mnt/shared`。前提:`D:` 不加密、Windows 关快速启动、挂载选项带 `windows_names` 与 `nofail`。
 
 **XDG 重定向(XDG redirect)**
 把"文档/下载/图片/桌面"等家目录目录指到共享盘(`~/.config/user-dirs.dirs`),让两个系统看到同一批文件;`~/.config`、`~/.ssh`、代码仓库**留在本地**,因为它们依赖 POSIX 权限语义。
@@ -133,20 +133,29 @@ Windows 的"混合关机"。开启时 NTFS 处于脏状态,Linux 侧挂载有**�
 **zram / swapfile**
 用压缩内存当交换(快) / 用文件当交换(可随时改大小)。本项目**不建 swap 分区、不配休眠**。
 
-**snap 规避(S1–S6)**
-Ubuntu 系默认用 snap 分发部分软件(Kubuntu 的 `kubuntu-desktop` 有 `Recommends: snapd`)。规避六招:最小安装、清残留、apt pin 到 -1、浏览器改用 Mozilla 官方 deb 源、升级后复核、用 deb/Flatpak 替代。四条可观测判据写在卡 `05-14`。
+**snap 规避(S1–S6,已废止)**
+Kubuntu 时代的约束(最小安装、清残留、apt pin 到 -1、浏览器改用 Mozilla 官方 deb 源、升级后复核、用 deb/Flatpak 替代),随 2026-09-25 回切原子版**整体废止**。原子版从结构上**没有 snapd**——基础层不自带守护进程,也没有 apt 能把它装回来——所以只剩一条验收判据:登录后 `command -v snap` 无输出。原卡 05-14(snap 零残留,2026-09-25 回切时删除)已不存在;相关说明见 `docs/10-faq.md` 的 `10-22` 与 [`06-atomic-restore-design.md`](06-atomic-restore-design.md)。
 
 **Wayland-only / PRIME offload / nouveau 兜底**
-Kubuntu 26.04 只有 Wayland 会话(X11 已移除) / 混合显卡下用独显按需渲染、核显负责显示 / 开源驱动作为"专有驱动装坏也能进桌面"的退路。
+Fedora 44 Silverblue 的会话类型是 **Wayland**(不提供 X11 回退) / 混合显卡下用独显按需渲染、核显负责显示 / 开源驱动作为“专有驱动装坏也能进桌面”的退路。
 
-**Calamares / Anaconda**
-Kubuntu 的安装器 / Fedora 的安装器(本项目的**历史**方案,Fedora 原子版已于 2026-09 被 Kubuntu 取代,相关设计文档保留作决策记录)。
+**Anaconda / Calamares**
+Fedora 的安装器(**现行**,只用来给 Fedora 三块分区指定挂载点并勾格式化,不让它重排分区表)/ Kubuntu 的安装器(2026-09-22 至 2026-09-25 的过渡方案,已废止,记录在 [`04-kubuntu-variant-design.md`](04-kubuntu-variant-design.md))。Anaconda 在已有 ESP 的盘上装 Silverblue 有失败记录(上游 issue #284),所以卡 `04-2` 要求显式确认 Linux 侧 ESP 指向 `ESP-Fedora`。
 
-**原子版(atomic,rpm-ostree)**
-不可变系统 + 部署级回滚。属于**被否方案**:它的回滚优势被"包管理、驱动、开发环境整套要改"的代价抵消。
+**原子版(atomic,`rpm-ostree`)**
+不可变系统 + 部署级回滚。**现行**方案的基础系统(Fedora 44 Silverblue):`/usr` 只读、额外软件用**分层安装**(重启才生效)、`/var`(含 `/home`)不随部署回滚。2026-09-22 曾被 Kubuntu 26.04 LTS 取代,2026-09-25 回切恢复,决策与代价见 [`06-atomic-restore-design.md`](06-atomic-restore-design.md)。
+
+**部署级回滚(deployment rollback)**
+回滚单位是**整个部署**(不是单个包):`rpm-ostree rollback` 退回上一部署,`rpm-ostree pin` 保护某个已知可用的部署不被垃圾回收;开机菜单里也能直接选旧部署。索引 0 = 当前启动、1 = 上一部署。接口与脚本:`scripts/linux/dbk-rollback.sh` / `scripts/linux/rollback-deploy.sh`(卡 `05-9`)。
+
+**rebase**
+在原子版上把部署的**基础镜像换成另一个 ref**(如换到 ublue 的 NVIDIA 变体、或升到下一个 Fedora 大版本):`rpm-ostree rebase <ref>` 落一个新部署,重启后生效。两种用途分别对应卡 `05-3`(换 ublue 变体)与 `05-10`(大版本升级,约 13 个月一次)。
+
+**分层安装(layering)**
+在原子基础层上叠加 rpm 包(`rpm-ostree install`)。它**不改运行中的系统**:变更先落成一个新部署,**重启后**才生效;卸载同样要重启。图形软件优先走 Flatpak 以免分层(卡 `05-8`)。
 
 **磁盘隔离(disk isolation)**
-系统盘与数据盘分离:Windows 侧 `C:` 200GiB 只放系统与程序、`D:` ≈635GiB 放数据;Kubuntu 侧 root ≈113GiB 只放系统。作用是"原地重装只格系统分区,数据不丢"。
+系统盘与数据盘分离:Windows 侧 `C:` 200GiB 只放系统与程序、`D:` ≈635GiB 放数据;Fedora 侧 root ≈113GiB(btrfs)只放系统。作用是“原地重装只格系统分区,数据不丢”。
 
 ---
 
@@ -175,4 +184,6 @@ Kubuntu 的安装器 / Fedora 的安装器(本项目的**历史**方案,Fedora �
 - 术语的规则真源:[`01-playbook-reshape-design.md`](01-playbook-reshape-design.md)(卡格式与自检规则 C1–C9)
 - 脚本契约真源:[`03-step-automation-design.md`](03-step-automation-design.md)(CLI、退出码、每卡一脚本映射)
 - 当前方案与决策记录:[`00-design.md`](00-design.md)
-- 变体决策(当前用 Kubuntu):[`04-kubuntu-variant-design.md`](04-kubuntu-variant-design.md)
+- 当前变体设计:[`02-fedora-atomic-variant-design.md`](02-fedora-atomic-variant-design.md)
+- 回切记录:[`06-atomic-restore-design.md`](06-atomic-restore-design.md)
+- 已废止的 Kubuntu 变体:[`04-kubuntu-variant-design.md`](04-kubuntu-variant-design.md)
