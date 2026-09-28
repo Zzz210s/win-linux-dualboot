@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 对应卡:05-4
+# 破坏性:1(--apply 会写系统时间状态:timedatectl set-local-rtc 0 / set-ntp true;必须显式 --yes)
 # L4:时间收敛(设计 4.5 的「时间」行)——RTC 走 UTC(`RTC in local TZ: no`)+ NTP 已启用。
 # 用途:--check 只读判定下面两项判据;--apply 把 RTC 基准改成 UTC(仅当当前是本地时间)并打开 NTP,再复读判据。
 # 判据(--check,零写):① `timedatectl` 输出含 `RTC in local TZ: no`(RTC 走 UTC);
@@ -7,9 +8,10 @@
 #   取不到 timedatectl 输出 → 需人工(2):脚本判不了,必须人看(硬规则 5:未在真机验证的读法按需人工呈现)。
 # 为什么:RTC 与 Windows 共用同一块硬件时钟;Linux 若按本地时间写 RTC,Windows 侧时间会漂移(反之亦然),
 #   统一 UTC 是双系统时间一致的前提(Windows 侧可配合 RealTimeIsUniversal=1,见 05-4 回滚段)。
-# 人工边界:本步不声明破坏性(不写 `# 破坏性:1`):只改 RTC 基准与 NTP 开关,可逆,不动分区表、不动引导。
+#   故按库层统一口径声明「# 破坏性:1」:--apply 缺 --yes → 64 且零写(与 hardening.sh、storage.sh 同口径)。
+# 人工边界:改的是系统时间服务状态(timedatectl set-local-rtc 0 / set-ntp true),动作可逆但要动系统,
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。
-# 夹具级验证,真机未跑。用法: set-time.sh [--check|--apply] [--json] [--log <路径>] [--step NN-K]
+# 夹具级验证,真机未跑。用法: set-time.sh [--check|--apply --yes] [--json] [--log <路径>] [--step NN-K]
 # 夹具注入(真机不需要设置):DBK_TIMEDATECTL 覆盖 timedatectl 命令(允许写成"命令 + 参数",按空白切分)。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # 对应卡:05-11
+# 破坏性:1(一次性写固件启动项 `efibootmgr -n`:--apply 必须显式 --yes;不碰永久启动顺序)
 # L4 卡 05-11:以**一次性**启动项从 Fedora 切回 Windows(`efibootmgr -n`,等价 EFI BootNext),并断言 BootOrder 未变(I2)。
 # 判据(--check,零写):① 有 efibootmgr(非 UEFI → 跳过 9);② 能读到 BootOrder(efivarfs 只对 root 可读,读不到 → 需人工);
 #   ③ 能唯一定位 Windows Boot Manager 条目。三条齐 → PASS 并给出将执行的 `efibootmgr -n <编号>`。
-# --apply(需要 root;本卡不改永久启动顺序,故不声明破坏性、不强制 --yes):执行 efibootmgr -n <编号>,
-#   复读 BootNext 与 BootOrder 断言一致后提示手工 systemctl reboot(本脚本**不自动重启**)。
+# --apply(需要 root;缺 --yes 由库层退 64 且零写——写固件一次性启动项算破坏性写,与 Windows 侧 `set-bootnext.ps1 -Apply -Yes`
+#   同口径、同门槛):执行 efibootmgr -n <编号>,复读 BootNext 与 BootOrder 断言一致后提示手工 systemctl reboot(本脚本**不自动重启**)。
 # 纪律(设计第 2 节 / 不变量 I2):进 Windows 只用一次性 BootNext,**绝不执行 `efibootmgr -o`**——改永久顺序即违反 I2。
 # 注入:DBK_WIN_MATCH(描述关键字,缺省 Windows Boot Manager)/ DBK_EFIBOOTMGR(命令,可带参数)。夹具级验证,真机未跑。
-# 用法:reboot-to-windows.sh [--match <关键字>] [--check|--apply] [--json] [--log <路径>] [--step NN-K] [-h]
+# 用法:reboot-to-windows.sh [--match <关键字>] [--check|--apply --yes] [--json] [--log <路径>] [--step NN-K] [-h]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
@@ -98,4 +99,4 @@ probe
 if [ "$DBK_MODE" = apply ]; then
   dbk_exit PASS "一次性启动项 BootNext=$WIN_NUM 已设置且 BootOrder 未变;现在手工执行 sudo systemctl reboot 即进入 Windows"
 fi
-dbk_exit PASS "可切回 Windows:--apply 将执行 efibootmgr -n $WIN_NUM;本脚本不执行 efibootmgr -o,重启后一次性条目自动消失"
+dbk_exit PASS "可切回 Windows:--apply --yes 将执行 efibootmgr -n $WIN_NUM;本脚本不执行 efibootmgr -o,重启后一次性条目自动消失"

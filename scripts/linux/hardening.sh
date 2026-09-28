@@ -143,7 +143,7 @@ item_r7() {
 item_r8() {   # 保守更新策略:委托 set-updates.sh(只装安全更新、不自动重启)
   local name="R8 保守更新(只安全更新、不自动重启)"
   if [ ! -r "$HERE/set-updates.sh" ]; then record "$name" skip "缺 $HERE/set-updates.sh;请人工核对 unattended-upgrades 配置"; return; fi
-  run_step set-updates.sh
+  run_step set-updates.sh --yes
   case "$STEP_RC" in
     0) record "$name" ok "$(last_line "$STEP_OUT")" ;;
     2) record "$name" skip "set-updates.sh 判为需人工:$(last_line "$STEP_OUT")" ;;

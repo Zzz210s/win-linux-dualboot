@@ -77,7 +77,7 @@
 - `[ ]` L4-8 SSH 救援通道与磁盘健康(分层安装 `smartmontools`,`sshd` 与 `smartd` 启用) | 脚本:`scripts/linux/set-remote-health.sh --check` | 判据:两项 `systemctl is-active` 为 `active`;`smartctl -H` 报 PASSED(分层安装重启后生效) | 卡:`05-8`
 - `[ ]` L4-9 **部署级回滚与变更前 pin**(回滚单位是整个部署;先 `--pin` 固定当前部署,出事 `--apply` 回到上一部署) | 脚本:`scripts/linux/rollback-deploy.sh --check` | 判据:`--check` 能读出部署列表与回滚候选(部署数 ≥ 2);`--pin/--unpin` 能固定与解除当前部署;参考设备真做一次回滚演练 | 卡:`05-9`
 - `[ ]` L4-10 **发行版升级**(约 13 个月一次:`rpm-ostree rebase`,前置备份与 pin) | 脚本:`scripts/linux/upgrade-release.sh --check`(执行加 `--apply --yes`) | 判据:没 pin 当前部署、`baseline/` 缺失或缺 `DBK_RELEASE_REF` 时脚本拒绝升级;重启后版本已更新、会话仍 `wayland`、`nvidia` 模块签名正常 | 卡:`05-10`
-- `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -Check`(执行加 `-Apply -Yes`) | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
+- `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -Check`(执行加 `-Apply -Yes` / `--apply --yes`) | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
 - `[ ]` L4-12 落 L4 两份产物 | 脚本:`scripts/linux/collect-l4.sh --check`(落盘加 `--apply`) | 判据:`baseline/04-first-boot.md` 与 `baseline/04-robustness.md` 在位 | 卡:`05-12`
 - `[ ]` L4-13 (可选)按顺序汇总跑一遍 L4 各模块 | 脚本:`scripts/linux/first-boot.sh --check`;`scripts/linux/hardening.sh --check`(执行时 `--apply --yes`,缺 `--yes` 退 64 零写) | 判据:单项失败不改整体退出码,只在摘要里标出失败项 | 卡:`05-13`
 

@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # 对应卡:05-7
+# 破坏性:1(--apply 会写 /etc 下的配置片段并重启 systemd-journald;必须显式 --yes)
 # L4:journald 持久化(设计 4.7 的 R5「崩溃可观测」)——日志落 /var/log/journal,崩溃或启动失败后
 #   仍可用 `journalctl -b -1` 回看上一轮启动;/var 不属于部署,日志不随部署回滚丢失。
 # 用途:--check 只读判定下面三项判据;--apply 安装配置片段并重启 systemd-journald,再复读判据。
 # 判据(--check,零写):① 配置文件存在且含 `Storage=persistent`;
 #   ② `journalctl --disk-usage` 可读且输出非空;③ `systemctl is-active systemd-journald` = active。
 #   取不到 systemctl / journalctl(命令不存在或读不到)→ 该项需人工(2):脚本判不了。
-# 人工边界:本步不声明破坏性(不写 `# 破坏性:1`):只写 /etc 下一个片段并重启 journald,可逆,不动分区/引导。
+# 人工边界:写 /etc 下一个片段并重启 journald 虽可逆,仍按库层统一口径声明「# 破坏性:1」:
+#   --apply 缺 --yes → 64 且零写(与 hardening.sh、storage.sh 同口径);不动分区/引导。
 # 回滚:删除 $DBK_JOURNALD_CONF(或还原 <目标>.dbk.bak)后 `systemctl restart systemd-journald`。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。
-# 夹具级验证,真机未跑。用法: set-journald.sh [--check|--apply] [--json] [--log <路径>] [--step NN-K]
+# 夹具级验证,真机未跑。用法: set-journald.sh [--check|--apply --yes] [--json] [--log <路径>] [--step NN-K]
 # 夹具注入(真机不需要设置):DBK_JOURNALD_CONF(配置目标)/ DBK_JOURNALCTL / DBK_SYSTEMCTL。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

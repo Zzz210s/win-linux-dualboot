@@ -63,11 +63,11 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 做:核对硬件时钟按 UTC 记时并启用网络校时;Windows 侧如需要再配 `RealTimeIsUniversal=1`(设计 4.5)。
   1. 先空跑:`sudo bash scripts/linux/set-time.sh --check`
      看到:输出两项判据(RTC 基准与 NTP 状态);`timedatectl` 取不到时脚本记"需人工"而不是判失败
-  2. 执行:`sudo bash scripts/linux/set-time.sh --apply`
+  2. 执行:`sudo bash scripts/linux/set-time.sh --apply --yes`
      看到:脚本报 PASS(两项判据全部达成);`timedatectl` 显示 `RTC in local TZ: no`
   3. Windows 侧(可选,与 Linux 侧成对):管理员执行 `reg add "HKLM\SYSTEM\CurrentControlSet\Control\TimeZoneInformation" /v RealTimeIsUniversal /t REG_DWORD /d 1 /f`
      看到:Windows 重启后与 Linux 时间一致(偏差在分钟级);该值只在 Windows 里改,不要在 Linux 里挂载并写 Windows 注册表
-脚本:sudo bash scripts/linux/set-time.sh --check / --apply
+脚本:sudo bash scripts/linux/set-time.sh --check / --apply --yes
 坑:只统一一侧会让另一侧漂移整时区 —— 两种口径只能选一种(`RTC in local TZ: no` 配 `RealTimeIsUniversal=1`,或反过来迁就本地时间);本脚本只改 RTC 基准与 NTP,不动时区。
 出错时:读不到 `RTC in local TZ` 行 -> 人工跑 `timedatectl` 对照输出格式;NTP 起不来 -> 查网络与时间同步服务,不要手改系统时间。
 
@@ -102,13 +102,13 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 ### 05-7 日志与更新策略(journald 持久化;只检查/下载,不自动应用)
 
 做:打开 journald 持久化,并把自动更新配成**只检查/下载、绝不自动应用与自动重启**——两件事各一个脚本,同属本卡(设计 00 4.7 节 R5 与 R8、设计 06 第 2 节 D5)。
-  1. `sudo bash scripts/linux/set-journald.sh --check` -> `--apply`
+  1. `sudo bash scripts/linux/set-journald.sh --check` -> `--apply --yes`
      看到:配置片段含 `Storage=persistent`;`journalctl --disk-usage` 有输出;`systemctl is-active systemd-journald` 为 active
-  2. `sudo bash scripts/linux/set-updates.sh --check` -> `--apply`
+  2. `sudo bash scripts/linux/set-updates.sh --check` -> `--apply --yes`
      看到:写入的 `rpm-ostreed` 片段(`templates/rpm-ostreed.snippet`)含 `AutomaticUpdatePolicy=check`,不含"自动应用/自动重启"的取值;`systemctl is-enabled rpm-ostreed-automatic.timer` 为 enabled
   3. 变更(升级/分层)前复核一次:`sudo bash scripts/linux/set-updates.sh --check`
      看到:三项判据全过;配置被改回自动应用时这里变 FAIL,按 `05-9` 固定当前部署后再处理
-脚本:sudo bash scripts/linux/set-journald.sh --check / --apply;sudo bash scripts/linux/set-updates.sh --check / --apply
+脚本:sudo bash scripts/linux/set-journald.sh --check / --apply --yes;sudo bash scripts/linux/set-updates.sh --check / --apply --yes
 坑:自动应用与自动重启同"变更前先备份与留档"直接冲突;原子版没有"只装安全更新"这个粒度,别照搬 Ubuntu 的包粒度口径 —— 语义就是"只检查/下载"(设计 06 第 2 节 D5);`/var` 不属于部署,日志不随回滚丢失(`journalctl -b -1` 可回看上一轮启动)。
 出错时:journald 起不来 -> 看 `journalctl -u systemd-journald` 定位;定时器未 enabled -> 手工 enable 后重跑,不要改成自动应用。
 
@@ -117,11 +117,11 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 做:启用 `sshd` 常开(桌面挂死时从另一台机器登录排障),并**分层安装** `smartmontools`、启用 `smartd`(设计 00 4.7 节 R7 与 R9)。
   1. 先空跑:`sudo bash scripts/linux/set-remote-health.sh --check`
      看到:两项判定(`sshd` 是否 active、各盘 `smartctl -H` 是否 PASSED/OK);未装 `smartctl` 时记"需人工"
-  2. 执行:`sudo bash scripts/linux/set-remote-health.sh --apply`
+  2. 执行:`sudo bash scripts/linux/set-remote-health.sh --apply --yes`
      看到:脚本经 `dbk-pkg.sh` **分层安装** `smartmontools`(写进下一部署,**必须重启后才生效**;脚本会显式提示),并执行 `systemctl enable --now sshd smartd`
   3. 分层安装后**重启一次**(`05-5` 的 `chntpw` 已并入这一轮,不要在两卡之间各重启一次),重启后再复跑 `--check`
      看到:脚本报 PASS(`sshd` active 且各盘 SMART 健康检查通过);`ss -tlnp | grep :22` 能看到 22 端口监听(附加证据,不作为失败项)
-脚本:sudo bash scripts/linux/set-remote-health.sh --check / --apply
+脚本:sudo bash scripts/linux/set-remote-health.sh --check / --apply --yes
 坑:**分层安装需重启后生效**:装了没重启时 `smartctl` 仍不可用(记"需人工",不是失败);`sshd`/`smartd` 的 enable 是即时的,与分层包不同。
 出错时:无 `smartctl` -> 先确认分层已提交并重启(不要改用别的方式装包);健康行不是 PASSED/OK -> 立刻备份数据并按磁盘告警处置。
 
@@ -156,14 +156,14 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 ### 05-11 回 Windows 的入口(一次性,不改启动顺序)
 
 做:确认本机有一条"一键回 Windows"的路径,并且它是**一次性**的(不变量 I2);三条路径任一可用即可。
-  1. Linux 侧先空跑再执行:`sudo bash scripts/linux/reboot-to-windows.sh --check` -> `sudo bash scripts/linux/reboot-to-windows.sh --apply`
+  1. Linux 侧先空跑再执行:`sudo bash scripts/linux/reboot-to-windows.sh --check` -> `sudo bash scripts/linux/reboot-to-windows.sh --apply --yes`
      看到:空跑打印 `BootOrder` 与目标条目;执行后报 PASS(一次性启动项已设置且 `BootOrder` 未变),再手工 `sudo systemctl reboot`
   2. 厂商菜单键兜底:开机按参数表 `BOOT_MENU_KEY`,选 `Windows Boot Manager`
      看到:进入 Windows;这条路径零副作用,也是 L3 进 Linux 用的同一条
   3. Windows 侧等价入口:`scripts/windows/set-bootnext.ps1 -Apply -Yes`(用 `bcdedit /set {fwbootmgr} bootsequence {GUID}` 做一次性切换;缺 `-Yes` 会以用法错误 64 退出且零写)
      看到:脚本断言 `BootOrder` 首位仍是 Windows Boot Manager
-脚本:sudo bash scripts/linux/reboot-to-windows.sh --check / --apply
-坑:**任何改永久顺序的做法都破坏 I2**(`efibootmgr -o`、`displayorder`);一次性设置只生效一次,进 Linux 后要再回 Windows 必须重新设置。
+脚本:sudo bash scripts/linux/reboot-to-windows.sh --check / --apply --yes
+坑:**任何改永久顺序的做法都破坏 I2**(`efibootmgr -o`、`displayorder`);一次性设置只生效一次,进 Linux 后要再回 Windows 必须重新设置;**本脚本声明了 `# 破坏性:1`——写固件一次性启动项算破坏性写,`--apply` 缺 `--yes` 会退 64 且零写**(与 Windows 侧 `set-bootnext.ps1 -Apply -Yes` 同口径)。
 出错时:读不到 `BootOrder` -> 用 `sudo` 重跑或人工 `sudo efibootmgr` 核对;找不到 Windows 条目 -> 引导层问题按 `07-rescue.md` 处置,不要手工改永久顺序。
 
 ### 05-12 落 L4 产物(两份基线文档)

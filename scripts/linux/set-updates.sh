@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 对应卡:05-7
+# 破坏性:1(--apply 会写更新策略配置并启用自动更新定时器;必须显式 --yes)
 # L4:更新策略收紧(Fedora 44 Silverblue / 原子版语义;设计依据:docs/design/06-atomic-restore-design.md
 #   第 2 节 D5「只检查/下载,绝不自动应用与自动重启」与第 3 节 dbk-update.sh 行)。
 # 用途:--check 只读判定更新策略是否已配为「只检查/下载、不自动应用与自动重启」;--apply 经 dbk-update.sh 写
@@ -7,7 +8,8 @@
 # 语义说明(不可改):原子版没有「只装安全更新」这个粒度 → 语义如实替换为「只检查/下载」。
 # 判据(--check,零写):① 配置已配为「只检查/下载」;② 配置里没有「自动应用/自动重启」的取值;③ 定时器已启用。
 #   三项一并由 dbk-update.sh 的 update_policy_check 判定(0 已配 / 1 未配或不符 / 2 读不到 -> 需人工)。
-# 人工边界:本步不声明破坏性(只写一个配置文件并启用一个定时器,可逆:删配置 + disable 定时器后复跑 --check)。
+# 人工边界:写一个配置文件并启用一个定时器可逆(删配置 + disable 定时器后复跑 --check),但确实改了系统状态,
+#   故按库层统一口径声明「# 破坏性:1」:--apply 缺 --yes → 64 且零写(与 hardening.sh、storage.sh 同口径)。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。夹具级验证,真机未跑。
 # 用法: set-updates.sh [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
 # 注入(夹具用):DBK_RPM_OSTREED_CONF / DBK_SYSTEMCTL(两个注入点都直接透传给 dbk-update.sh)。

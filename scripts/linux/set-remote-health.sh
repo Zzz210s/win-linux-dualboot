@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 对应卡:05-8
+# 破坏性:1(--apply 会分层装包并 enable --now sshd smartd;必须显式 --yes)
 # L4:远程与磁盘健康(Fedora 44 Silverblue / 原子版语义;设计依据:docs/design/06-atomic-restore-design.md 第 4 节
 #   set-remote-health.sh 行;02 号设计 R7/R9)—— sshd 常开(桌面挂死时从另一台机器登录排障)+ smartd 监控磁盘健康。
 # 用途:--check 只读判定;--apply 经 dbk-pkg.sh 分层安装 smartmontools 并 `systemctl enable --now sshd smartd`。
@@ -9,9 +10,10 @@
 #   ③ 附加证据(不作为失败项):`ss -tlnp | grep :22` 能看到 22 端口监听。
 # 安装语义(原子版):分层安装**写进下一部署、重启后才生效**;输出必须显式提示「分层安装需重启」。DBK_SKIP_PKG=1
 #   (兼容 DBK_SKIP_APT)只跳过分层安装动作(判据按现状判定)。
-# 人工边界:本步不声明破坏性(不写 `# 破坏性:1`):分层安装可逆(去掉分层后回到原始镜像),不动分区/引导。
+# 人工边界:分层安装可逆(去掉分层后回到原始镜像),但它确实改了系统状态(提交分层 + 启用两个服务),
+#   故按库层统一口径声明「# 破坏性:1」:--apply 缺 --yes → 64 且零写(与 hardening.sh、storage.sh 同口径);不动分区/引导。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。
-# 夹具级验证,真机未跑。用法: set-remote-health.sh [--check|--apply] [--json] [--log <路径>] [--step NN-K] [-h]
+# 夹具级验证,真机未跑。用法: set-remote-health.sh [--check|--apply --yes] [--json] [--log <路径>] [--step NN-K] [-h]
 # 夹具注入(真机不需要设置):DBK_SYSTEMCTL / DBK_SMARTCTL / DBK_LSBLK / DBK_SS / DBK_SKIP_PKG;
 #   装包判定经 dbk-pkg.sh 读取 DBK_RPM_OSTREE(接口内部已随 2026-09-25 回切改为 ostree 口径)。
 # 待核实(以官方文档为准):smartctl 的健康行文本与退出码位掩码语义、smartd 单元名均未在真机验证。

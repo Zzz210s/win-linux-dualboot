@@ -6,15 +6,15 @@
 05-1	scripts/linux/mount-shared.sh	1	挂载共享盘 D:(写 /etc/fstab,需 --yes)
 05-2	scripts/linux/xdg-redirect.sh	1	家目录重定向(写 user-dirs.dirs,需 --yes)
 05-3	scripts/linux/graphics.sh	1	显卡与 Secure Boot(rebase 到 ublue NVIDIA 变体 + 一次性 MOK 注册 + Wayland 核对;需 --yes)
-05-4	scripts/linux/set-time.sh	0	时间收敛:RTC 走 UTC(RTC in local TZ: no)+ NTP 启用
+05-4	scripts/linux/set-time.sh	1	时间收敛:RTC 走 UTC(RTC in local TZ: no)+ NTP 启用
 05-5	scripts/linux/bt-keys-sync-wrapper.sh	1	蓝牙配对密钥同步(分层安装 chntpw + 读 Windows hive;需 --yes)
 05-6	scripts/linux/storage.sh	1	zram 与 swapfile(优先核对 zram-generator,不符才按模板兜底;不配休眠;需 --yes)
-05-7	scripts/linux/set-journald.sh	0	journald 持久化
-05-7	scripts/linux/set-updates.sh	0	更新策略:rpm-ostreed-automatic 只检查/下载、不自动应用与不自动重启
-05-8	scripts/linux/set-remote-health.sh	0	SSH 与 SMART:分层安装 smartmontools + enable --now sshd smartd
+05-7	scripts/linux/set-journald.sh	1	journald 持久化
+05-7	scripts/linux/set-updates.sh	1	更新策略:rpm-ostreed-automatic 只检查/下载、不自动应用与不自动重启
+05-8	scripts/linux/set-remote-health.sh	1	SSH 与 SMART:分层安装 smartmontools + enable --now sshd smartd
 05-9	scripts/linux/rollback-deploy.sh	1	部署级回滚
 05-10	scripts/linux/upgrade-release.sh	1	发行版升级:前置 pin + 备份 baseline/ -> rpm-ostree rebase -> 重启后复检(需 --yes)
-05-11	scripts/linux/reboot-to-windows.sh	0	一次性重启进 Windows(不改 BootOrder)
+05-11	scripts/linux/reboot-to-windows.sh	1	一次性重启进 Windows(不改 BootOrder)
 05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md(发行版/驱动来源与 MOK/部署列表与 pin/待更新)
 05-13	scripts/linux/first-boot.sh	1	L4 汇总执行(可选):按顺序跑各模块并聚合结果
 05-13	scripts/linux/hardening.sh	1	L4 汇总执行(可选):R1-R9 九项(被 first-boot.sh 编排,也可单跑)
