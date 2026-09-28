@@ -143,7 +143,7 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 - **每个版本支持期约 13 个月**(每 6 个月一发新版本),所以大版本升级(`rpm-ostree rebase`)是反复出现、有专门卡片的计划事件,不是一次性的稀有事;
 - **用户数据不属于部署**:`/var`(以及符号链接到 `/var/home` 的 `/home`)不随回滚回退;但只格 root 的重装仍会丢 `~`,所以动手前先把 `~` 拷到共享盘(见 [docs/07-rescue.md](docs/07-rescue.md))。数据盘 `D:` 两种情况都不受影响。
 - **原子版里没有 snapd**:原子基础层不带 snap 守护进程,也没有 apt 能把它装回来,所以 Kubuntu 变体**只能自己压制、并在回切前被认定为设计缺口**的“snap 清不干净”问题,在这里被结构性消灭,而不只是被压住;回切记录见 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md)。
-- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。以下四项在各手册、设计文档与脚本里标 `待核实`,必须留到真机首跑时确认:ublue 镜像名与分支、`ujust enroll-secure-boot-key` 任务名与 MOK 密码(`universalblue`)、Fedora 44 的 Anaconda 是否已修上游 issue #284、以及本机固件是否支持同盘两块 ESP。
+- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。其中三项已于 2026-09-27 对照上游核实:镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(streams = `gts` / `stable` / `stable-daily` / `latest`)、MOK 任务 `ujust enroll-secure-boot-key` 与密码 `universalblue`(密钥 `/etc/pki/akmods/certs/akmods-ublue.der`)、以及**上游 issue #284 仍未关闭**——这正是 Fedora 必须用独立 ESP 与独立 `/boot` 的原因。仍需现场确认两项:所选 stream 对应的 Fedora 版本要与安装的一致(Bluefin 的 `stable` 可能落后一代)、以及本机固件是否支持同盘两块 ESP。
 - **明确被否(不使用)**:**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照栈**;**ZFS root 快照**;**以逐包降级作为主要恢复手段**——回滚单位是整个部署,不可变基础层上也没有受支持的 `dnf downgrade` 路径;
 - **四级回退粒度**:部署级 <-> `rpm-ostree rollback` 加 `pin`;配置 <-> 各脚本留下的 `.dbk.bak` 备份;基线级 <-> ESP 备份 + 固件启动项快照;阶段级 <-> L5 退役流程。
 

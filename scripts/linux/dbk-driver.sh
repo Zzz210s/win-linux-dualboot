@@ -5,6 +5,9 @@
 #   docs/design/02-fedora-atomic-variant-design.md 第 3 节 D2 的「看到:」四项;docs/design/03-step-automation-design.md
 #   第 6 节库文件行(四个发行版薄接口之一)。接口名不带发行版痕迹,只换内部实现;Kubuntu 时代的 ubuntu-drivers
 #   预签名包路径(不换镜像分支、不注册 MOK)已随 2026-09-25 回切废弃。
+# 已核实(2026-09-27):镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest;
+#   MOK 任务 `ujust enroll-secure-boot-key`、密码 universalblue、待导入密钥 /etc/pki/akmods/certs/akmods-ublue.der。
+#   仍需现场确认:所选 stream 与安装的 Fedora 版本是否一致(Bluefin 的 stable 可能落后一代)。
 # 调用约定:调用方先 source 本库(如需落日志,先 source dbk-obs.sh 的 dbk_obs —— dbk-cli.sh 只是替调用方 source 它),
 #   然后使用:
 #   driver_check            0 = 已就绪(签名者非空 + ublue 密钥已注册 + nvidia 已加载)/ 1 = 未完成 / 2 = 需人工

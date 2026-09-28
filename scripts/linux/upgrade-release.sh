@@ -23,7 +23,8 @@
 # 注入(夹具用):DBK_RELEASE_REF(升级目标分支);DBK_RPM_OSTREE / DBK_RPM_OSTREED_CONF / DBK_SYSTEMCTL /
 #   DBK_MOKUTIL / DBK_OS_RELEASE / DBK_BASELINE_DIR / DBK_BACKUP_DIR 全部透传给对应接口;
 #   本脚本不写发行版命令字面量(规则 S-1:命令与分支名都由接口或注入给)。
-# 待核实(以官方文档为准):rebase 的分支写法与返回码;目标分支号每 6 个月推进一次(实施时按 Fedora 官方公告取值);
+# 已核实(2026-09-27):rebase 的确切写法与镜像路径见接口 dbk-driver.sh 与设计 06 第 3 节(本步骤脚本不出现发行版/包管理器字面量,受 S-1 约束);
+#   目标 stream 每 6 个月推进一次(实施时按 Fedora 官方公告取值);返回码仍以真机为准;
 #   /etc/os-release 的 VERSION_ID 取值 —— 均未在真机验证(夹具级验证,真机未跑)。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,11 +46,11 @@ dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "upgrade-release"
 
-REF_STR="${DBK_RELEASE_REF:-}"   # 升级目标分支(人工给;分支号每 6 个月推进一次,待核实)
+REF_STR="${DBK_RELEASE_REF:-}"   # 升级目标 stream(人工给;每 6 个月推进一次,取值见 ublue/Fedora 公告)
 OS_RELEASE="${DBK_OS_RELEASE:-/etc/os-release}"
 BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"; BAKDIR="${DBK_BACKUP_DIR:-/var/backups/dbk}"
-# MOK 口径同 05-3(待核实:MOK 界面里的密码 universalblue 取自 ublue 上游文档)。
-MOK_HOWTO="重启进 MOK 界面完成一次性注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实)"
+# MOK 口径同 05-3(已核实:MOK 密码 universalblue、密钥 /etc/pki/akmods/certs/akmods-ublue.der,取自 ublue 上游 just 配方)。
+MOK_HOWTO="重启进 MOK 界面完成一次性注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue)"
 
 ISSUES=(); MANUAL=(); LIST=""; CUR_IDX=0
 os_ver() { grep -m1 -E '^VERSION_ID=' "$OS_RELEASE" 2>/dev/null | cut -d= -f2- || true; }

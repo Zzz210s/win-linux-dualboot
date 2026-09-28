@@ -46,9 +46,9 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 做:把系统 `rebase` 到 ublue 的 **NVIDIA 变体**(镜像内 nvidia 模块**已预签名**),再重启进 MOK 界面做**一次性密钥注册**(设计 02 第 3 节 D2、设计 06 第 2 节 D3)。
   1. 先看现状:`sudo bash scripts/linux/graphics.sh --check`
      看到:四项判据(① `modinfo -F signer nvidia` 非空 ② `mokutil --list-enrolled` 含 ublue 密钥 ③ `lsmod` 有 `nvidia` ④ `XDG_SESSION_TYPE` 为 `wayland`);零写;未 rebase / 未重启 / 未注册 MOK 的 ①②③ 在 `--check` 下记 **FAIL**(退出 1),④不符也记 FAIL;只有 ①②③ 读不到时(接口返 2)才记"需人工"
-  2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`,脚本调接口把系统 rebase 到 ublue 的 NVIDIA 镜像(**镜像名与分支实施时按 ublue 官方文档核实**),重启后生效
+  2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`,脚本调接口把系统 rebase 到 ublue 的 NVIDIA 镜像(已核实形态 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest;**实施时须确认所选 stream 对应的 Fedora 版本与安装的 44 一致**),重启后生效
      看到:脚本报 PASS"已 rebase 到 ublue 的 NVIDIA 变体:需重启",并提示重启后在 MOK 界面完成注册;重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
-  3. 一次性 MOK 注册(必须人工,接口不代跑):重启进 MOK 界面按提示完成注册(MOK 密码与任务名以 ublue 官方文档为准),也可在会话内跑 `ujust enroll-secure-boot-key` 后再重启一次;随后复跑 `--check` 四项
+  3. 一次性 MOK 注册(必须人工,接口不代跑):重启进 MOK 界面按提示完成注册(已核实:任务 `ujust enroll-secure-boot-key`、密码 `universalblue`、待导入密钥 `/etc/pki/akmods/certs/akmods-ublue.der`;若 Secure Boot 已开启,ublue/Bazzite 文档建议先关再注册、注册后重开),也可在会话内跑 `ujust enroll-secure-boot-key` 后再重启一次;随后复跑 `--check` 四项
      看到:`mokutil --list-enrolled` 含 ublue 密钥;四项全过;注册只需做一次,不是每次更新都重来
   4. 会话与内核行校验:`echo "$XDG_SESSION_TYPE"` 为 `wayland`;`cat /proc/cmdline` 不含 `nomodeset`
      看到:两项都成立;`nomodeset` 会关掉 KMS,与默认 Wayland 会话冲突(设计 4.5、11.1)

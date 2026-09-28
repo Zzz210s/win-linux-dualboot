@@ -137,10 +137,10 @@
 | 断言 | 等级 | 来源 |
 |---|---|---|
 | Fedora 44 Silverblue 于 2026-04-28 GA,支持约 13 个月 | 高 | Fedora 官方发布与生命周期文档(02 号设计已记录) |
-| ublue 的 NVIDIA 变体镜像内模块预签名,MOK 注册密码为 `universalblue` | 中 | ublue 上游文档与社区指南(**实施时以官方文档为准**) |
-| `ujust enroll-secure-boot-key` 的任务名与行为 | 中 | 同上(**待核实**) |
-| Anaconda 在含既有 ESP 的盘上装 Silverblue 的失败模式 | 中 | 上游 issue 与社区实测(02 号设计已记录) |
-| 双 ESP 的固件支持 | 低 | 无官方承诺;列"参考设备必做"实测项 |
+| ublue 的 NVIDIA 变体镜像内模块预签名;镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(gts / stable / stable-daily / latest);MOK 密码 `universalblue`、密钥 `/etc/pki/akmods/certs/akmods-ublue.der` | **高** | ublue 的 just 配方(`system_files/shared/usr/share/ublue-os/just/default.just`)、Bazzite Secure Boot 指南、Bluefin 文档(2026-09-27 核实) |
+| `ujust enroll-secure-boot-key` 的任务名与行为 | **高** | 同上(配方内即 `mokutil --timeout -1` + `mokutil --import /etc/pki/akmods/certs/akmods-ublue.der`),2026-09-27 核实 |
+| Anaconda 在含既有 ESP 的盘上装 Silverblue 的失败模式 | **高(仍未修)** | 上游 issue `fedora-silverblue/issue-tracker#284` **截至 2026-09 仍开**;相关 Bugzilla 2439271;因此独立 ESP + 独立 `/boot` 是**必需**而非可选 |
+| 双 ESP 的固件支持 | 低(**仅剩的设备侧未知项**) | 无官方承诺;列"参考设备必做"实测项(镜像名/任务名/MOK 密码/#284 已于 2026-09-27 核实) |
 | snap 残留的未覆盖面(包名、目录、单元、用户组) | 高 | 本仓库实现自查 + Ubuntu 包元数据 |
 
 ## 10. 变更历史

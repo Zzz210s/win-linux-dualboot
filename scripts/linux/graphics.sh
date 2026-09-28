@@ -15,7 +15,7 @@
 #   本步不关 Secure Boot、不自签密钥(自签反而会破坏上游的预签名路径)。签名与 Secure Boot 状态细查见 07-7 的 check-signature.sh
 #   (镜像来源与版本由卡 07-7 判定)。
 # MOK 注册必须人工完成(接口不代跑):--apply 只提交 rebase;重启进 MOK 界面完成一次性注册(密码见下),会话内执行
-#   `ujust enroll-secure-boot-key`,再次重启后重跑本脚本复核。
+#   ujust enroll-secure-boot-key,再次重启后重跑本脚本复核。
 # nouveau 兜底(设计 02 第 7 节):桌面起不来时不要长按电源 —— 用 07-2 从 GRUB 提示符回 Windows,或按 05-9 回滚到 stock 部署
 #   (回滚后由 nouveau 起桌面);接口 driver_fallback_nouveau 打印同一套步骤。
 # --apply 的终局与动作结果一致,且不吞掉当下可判的失败(计划 Task 5 修订版四种):rebase 失败 → 1;rebase 成功且只余
@@ -25,7 +25,9 @@
 # 用法: graphics.sh [--check|--apply] [--json] [--log <路径>] [--yes] [--step 05-3] [-h]
 # 注入(夹具用):DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_RPM_OSTREE / DBK_UBLUE_IMAGE 与 XDG_SESSION_TYPE,
 #   全部透传给 dbk-driver.sh;本脚本不写发行版命令字面量(规则 S-1)。
-# 待核实(以官方文档为准):ublue 实际镜像名与分支;MOK 注册任务名 enroll-secure-boot-key 与 MOK 密码 universalblue;
+# 已核实(2026-09-27):ublue NVIDIA 变体镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(streams = gts / stable / stable-daily / latest);
+#   MOK 任务 ujust enroll-secure-boot-key、密码 universalblue、待导入密钥 /etc/pki/akmods/certs/akmods-ublue.der(ublue 的 just 配方与官方文档);
+#   仍需现场确认:所选 stream 对应的 Fedora 版本是否与安装的 44 对齐(Bluefin 的 stable 可能落后一代)。
 #   modinfo -F signer / mokutil --list-enrolled 的输出格式。夹具级验证,真机未跑。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,8 +45,8 @@ dbk_log_default "graphics"
 # 未达成项分三类:ISSUES_RESTART 是"重启后才可能成立"的 ①②③;ISSUES 是当下就能判定的失败(④ 非 wayland、未知状态码);
 # MANUAL 是读不到/判不了。--check 一律按失败计;--apply 要靠这个分类选终局退出码。
 ISSUES_RESTART=(); ISSUES=(); MANUAL=()
-# 待核实(以官方文档为准):MOK 注册任务名 enroll-secure-boot-key 与 MOK 密码 universalblue(设计 02 第 3 节 D2)。
-MOK_HOWTO="重启进 MOK 界面完成一次性密钥注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实)"
+# 已核实(2026-09-27):MOK 任务 ujust enroll-secure-boot-key、密码 universalblue(设计 02 第 3 节 D2)。
+MOK_HOWTO="重启进 MOK 界面完成一次性密钥注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue;若 Secure Boot 已开启则先关再注册、注册后重开,见 ublue/Bazzite 文档)"
 
 # ①②③ 的逐条证据(只读;判定已由 driver_check 给出,这里只把值亮出来)——每条都带实际取到的值。
 evidence_lines() {
