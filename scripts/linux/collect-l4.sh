@@ -1,26 +1,19 @@
 #!/usr/bin/env bash
 # 对应卡:05-12
-# 用途:落 L4 产物(Fedora 44 Silverblue / 原子版语义;设计依据:docs/design/06-atomic-restore-design.md
-#   第 3 节与第 5 节的 05-12 行)。字段口径:部署列表与 pin / MOK 注册 / nvidia 模块签名 / zram 核对 /
-#   **/boot 独立挂载(保留)**。--apply 写 <out-dir>/04-first-boot.md 与 <out-dir>/04-robustness.md;
-#   --check(缺省)只打印将落盘的节,零写。
-#   04-first-boot.md 记:主机/内核/**发行版版本**、会话类型、**部署与回滚**、**显卡驱动来源与模块签名**、
-#   **Secure Boot 密钥(MOK)**、共享盘写测试、**timedatectl**、**蓝牙结论**、**待更新(自动更新定时器)**、
-#   挂载与内存压力摘要(含 /boot 独立挂载那一节)。
-#   04-robustness.md 记 R1-R9 逐项一行(措施 / 现状 / 证据命令与输出摘要 / 回滚点):R1 变更前备份 baseline、
-#   R2 部署级回滚(接口 dbk-rollback.sh:列部署 + 回滚前 pin + 回到上一部署)、R3 旧内核保留、R4 救援 U 盘、
-#   R5 journald 持久化、R6 OOM/zram、R7 SSH 通道、R8 保守更新(只检查/下载,不自动应用与自动重启)、R9 SMART。
-#   取不到的写「未取到(原因)」,不编造。
+# 用途:落 L4 产物(Fedora 44 Silverblue / 原子版语义;设计依据:docs/design/06-atomic-restore-design.md 第 3 节与第 5 节的 05-12 行)。
+#   字段口径:部署列表与 pin / MOK 注册 / nvidia 模块签名 / zram 核对 / **/boot 独立挂载(保留)**。
+#   --apply 写 <out-dir>/04-first-boot.md 与 <out-dir>/04-robustness.md;--check(缺省)只打印将落盘的节,零写。
+#   04-first-boot.md 记:主机/内核/**发行版版本**、会话类型、**部署与回滚**、**显卡驱动来源与模块签名**、**Secure Boot 密钥(MOK)**、
+#   共享盘写测试、**timedatectl**、**蓝牙结论**、**待更新(自动更新定时器)**、挂载与内存压力摘要(含 /boot 独立挂载那一节)。
+#   04-robustness.md 记 R1-R9 逐项一行(措施 / 现状 / 证据命令与输出摘要 / 回滚点):R1 变更前备份 baseline、R2 部署级回滚(接口 dbk-rollback.sh:列部署 + 回滚前 pin + 回到上一部署)、
+#   R3 旧内核保留、R4 救援 U 盘、R5 journald 持久化、R6 OOM/zram、R7 SSH 通道、R8 保守更新(只检查/下载,不自动应用与自动重启)、R9 SMART;取不到的写「未取到(原因)」,不编造。
 # 用法: collect-l4.sh [--check|--apply] [--out-dir <目录>] [--json] [--log <路径>] [--step NN-K]
-# 判据与纪律:产物落 baseline/(不入库,仅 baseline/README.md 例外;多设备用 baseline/<设备别名>/);
-#   --apply 先写 <文件>.new 再 mv 原子替换;共享盘写测试只在 --apply 执行(--check 必须零写,连共享盘上的
-#   临时文件也不碰)。
+# 判据与纪律:产物落 baseline/(不入库,仅 baseline/README.md 例外;多设备用 baseline/<设备别名>/);--apply 先写 <文件>.new 再 mv 原子替换;
+#   共享盘写测试只在 --apply 执行(--check 必须零写,连共享盘上的临时文件也不碰)。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。本卡无破坏性动作(不声明「# 破坏性:1」,不需 --yes)。
-# 注入(真机不需要设置):DBK_OUT_DIR / DBK_SHARED_MNT / DBK_BOOT_DIR / DBK_SWAPFILE / DBK_JOURNAL_DIR /
-#   DBK_OS_RELEASE / DBK_MOKUTIL / DBK_MODINFO / DBK_SYSTEMCTL;四个发行版接口另读 DBK_RPM_OSTREE / DBK_LSMOD。
-# 本脚本不写发行版命令字面量(规则 S-1):部署/更新/密钥注册的判定一律走 dbk-rollback.sh / dbk-driver.sh /
-#   dbk-update.sh 的接口。待核实(以官方文档为准):timedatectl 输出字段、bluetoothctl list 的输出、
-#   systemd 单元名(systemd-oomd / sshd / smartd)与自动更新定时器单元名,均未在真机验证(夹具级验证,真机未跑)。
+# 注入(真机不需要设置):DBK_OUT_DIR / DBK_SHARED_MNT / DBK_BOOT_DIR / DBK_SWAPFILE / DBK_JOURNAL_DIR / DBK_OS_RELEASE / DBK_MOKUTIL / DBK_MODINFO / DBK_SYSTEMCTL;
+#   四个发行版接口另读 DBK_RPM_OSTREE / DBK_LSMOD。本脚本不写发行版命令字面量(规则 S-1):部署/更新/密钥注册的判定一律走 dbk-rollback.sh / dbk-driver.sh / dbk-update.sh 的接口。
+# 待核实(以官方文档为准):timedatectl 输出字段、bluetoothctl list 的输出、systemd 单元名(systemd-oomd / sshd / smartd)与自动更新定时器单元名,均未在真机验证(夹具级验证,真机未跑)。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -70,20 +63,28 @@ etc() { evs "$1" | sed 's/|/\\|/g'; }
 ecc() { ev "$@" | sed 's/|/\\|/g'; }
 osv() { grep -m1 -E "^$1=" "$OS_RELEASE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true; }
 session_line() { case "${XDG_SESSION_TYPE:-}" in wayland) printf 'XDG_SESSION_TYPE=wayland(符合要求)' ;; "") printf 'XDG_SESSION_TYPE=未取到(需人工:不在图形会话里?)' ;; *) printf 'XDG_SESSION_TYPE=%s(不符合要求,应为 wayland)' "$XDG_SESSION_TYPE" ;; esac; }
-# 接口类判据的渲染:<标签> <接口函数> [参数…];rc 0 = 值,2 = 未取到(需人工),其它 = 异常;只收 stdout(说明走 stderr,落 --log)。
+# 接口层 stderr 不吞(设计第 2 节可观测性:不许用 2>/dev/null 蒙掉):收进文件后经 dbk_obs 落 stderr 与 --log 日志。
+obs_cap() {   # <变量名> <命令…>:stdout → 变量;stderr → dbk_obs;返回接口自身退出码(0 值 / 2 未取到 / 其它异常)
+  local __v="$1" __t __out="" __rc=0; shift; __t="$(mktemp)"
+  __out="$("$@" 2>"$__t")" || __rc=$?
+  printf -v "$__v" '%s' "${__out:-}"
+  [ -s "$__t" ] && dbk_obs "接口输出: $(tr '\n' ' ' <"$__t")"
+  rm -f "$__t"; return "$__rc"
+}
+# 接口类判据的渲染:<标签> <接口函数> [参数…];rc 0 = 值,2 = 未取到(需人工),其它 = 异常;值只收 stdout(接口说明经 dbk_obs 落 stderr 与 --log)。
 ifr() {
   local lab="$1" out rc=0; shift
-  out="$("$@" 2>/dev/null)" || rc=$?
+  obs_cap out "$@" || rc=$?
   case "$rc" in 0) printf '%s: %s' "$lab" "$(flat "$out")" ;; 2) printf '%s: 未取到(需人工;原因见上面接口输出)' "$lab" ;; *) printf '%s: 异常(接口返回码 %s)' "$lab" "$rc" ;; esac
 }
 # ①pinned 部署(判定走 deployments_list 的标记)②MOK 注册 ③模块加载来源 ④待重启改动 ⑤自动更新定时器。
-pinned_line() { local list rc=0; list="$(deployments_list 2>/dev/null)" || rc=$?
+pinned_line() { local list rc=0; obs_cap list deployments_list || rc=$?
   { [ "$rc" -eq 0 ] && case "$list" in *"[pinned]"*) printf '有(%s)' "$(printf '%s\n' "$list" | grep '\[pinned\]' | tr '\n' ' ' | cut -c1-160)" ;; *) printf '无(回滚前先按 05-9 pin 当前部署)' ;; esac; } || printf '未取到(需人工)'; }
-mok_line() { local rc=0; mok_check >/dev/null 2>&1 || rc=$?
+mok_line() { local _mok rc=0; obs_cap _mok mok_check || rc=$?
   case "$rc" in 0) printf 'ublue 密钥已注册(见 05-3)' ;; 1) printf 'ublue 密钥未注册(重启进 MOK 界面完成一次性注册;见 05-3)' ;; *) printf '未取到(需人工)' ;; esac; }
-mod_line() { local out rc=0; out="$(driver_module_state 2>/dev/null)" || rc=$?
+mod_line() { local out rc=0; obs_cap out driver_module_state || rc=$?
   case "$rc" in 0) printf 'nvidia 已加载(%s)' "$(flat "$out")" ;; 1) printf 'nvidia 未加载(%s;可能是 nouveau 兜底或未重启)' "$(flat "$out")" ;; *) printf '未取到(需人工)' ;; esac; }
-reboot_line() { local rc=0; rollback_needs_reboot >/dev/null 2>&1 || rc=$?
+reboot_line() { local rc=0; obs_cap _rb rollback_needs_reboot || rc=$?
   case "$rc" in 0) printf '有已下载并排入下次启动的改动(staged),重启后生效' ;; 1) printf '没有 staged 部署(无待重启改动)' ;; *) printf '未取到(需人工)' ;; esac; }
 timer_line() { if ! have "${SC_STR%% *}"; then printf '未取到(未安装 %s)' "$SC_STR"; return 0; fi
   printf '%s -> %s' "$SC_STR is-enabled $UPDATE_TIMER" "$(flat "$(cap "$SC_STR" is-enabled "$UPDATE_TIMER")")"; }
@@ -140,13 +141,12 @@ $(evs "grep -n nofail /etc/fstab")
 EOF
 }
 robustness_body() {
-  local jd zr sw oomd sshd smart tm dlist kern up ver
-  ver="$(osv VERSION_ID)"
+  local jd zr sw oomd sshd smart tm dlist kern up ver; ver="$(osv VERSION_ID)"
   if [ -d "$JRNL" ]; then jd="存在"; else jd="不存在"; fi
   if have zramctl; then zr="行数=$(cap zramctl | grep -c . || true)"; else zr="未取到(未安装 zramctl)"; fi
   if have swapon; then sw="行数=$(cap swapon --show | grep -c . || true)"; else sw="未取到(未安装 swapon)"; fi
   oomd="$(one systemctl is-active systemd-oomd)"; sshd="$(one systemctl is-active sshd)"; smart="$(one systemctl is-active smartd)"
-  tm="$(one systemctl is-enabled "$UPDATE_TIMER")"; up="$(pinned_line)"; dlist="$(deployments_list 2>/dev/null | tr '\n' ' ' || true)"
+  tm="$(one systemctl is-enabled "$UPDATE_TIMER")"; up="$(pinned_line)"; obs_cap dlist deployments_list || true; dlist="$(printf '%s' "$dlist" | tr '\n' ' ')"
   kern="$(ls -1 "$BOOT_DIR"/vmlinuz-* 2>/dev/null | wc -l | tr -d ' ' || true)"
   cat <<EOF
 # baseline/04-robustness.md (L4 产物;卡 05-12,设计 06 第 2 节 D4 与第 4 节 R1-R9)

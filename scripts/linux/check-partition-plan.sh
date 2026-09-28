@@ -66,7 +66,7 @@ for i in "${!P_NAME[@]}"; do
   if [ "$m" -ge $((WIN_ESP_MIB - 100)) ] && [ "$m" -le $((WIN_ESP_MIB + 100)) ]; then WIN_ESP="$i"; fi
 done
 
-ISSUES=()
+ISSUES=(); MANUALS=()
 if [ "$WIN_ESP" -lt 0 ]; then
   if [ "$TRACK" = D ]; then
     if [ "$VFAT_ANY" -ge 0 ]; then
@@ -147,22 +147,27 @@ if [ "$TRACK" = D ] && command -v sgdisk >/dev/null 2>&1; then
       }
       END { if (w==0) w=disk_end; if (d==0) { print -1 } else { printf "%d", (w-d)*512/1048576 } }')"
     if [ "${REG:-0}" -lt 0 ]; then
-      dbk_add_check "分区表里找不到 Windows 数据分区(0700);预留区检查跳过"
+      MANUALS+=("分区表里找不到 Windows 数据分区(TYPE=0700):115GiB 预留区是否成立取不到证据 → 需人工,不得当作通过;人工核对 sudo sgdisk -p /dev/$TARGET_DISK 里的 0700 与 2700 分区")
     elif [ "${REG:-0}" -lt "$RESERVE_MIB" ]; then
       ISSUES+=("预留区被压缩:期望 ≥${RESERVE_MIB}MiB(115GiB),实际 ${REG}MiB")
     else
       dbk_add_check "轨道 D 预留区:${REG}MiB(≥${RESERVE_MIB}MiB)"
     fi
   else
-    dbk_add_check "sgdisk -p 读不到分区表;预留区检查跳过"
+    MANUALS+=("sgdisk -p 读不到分区表:115GiB 预留区是否成立取不到证据 → 需人工,不得当作通过;用 sudo 重跑本脚本或人工执行 sudo sgdisk -p /dev/$TARGET_DISK")
   fi
 elif [ "$TRACK" = D ]; then
-  dbk_add_check "未安装 sgdisk(或 parted);预留区检查跳过"
+  MANUALS+=("未安装 sgdisk:115GiB 预留区是否成立取不到证据 → 需人工,不得当作通过;在 live 里装上 gdisk 后重跑,或人工核对分区表(115GiB 预留区是这张卡唯一的守护对象)")
 fi
 
 if [ "${#ISSUES[@]}" -gt 0 ]; then
   for m in "${ISSUES[@]}"; do dbk_add_check "失败项: $m"; done
   dbk_exit FAIL "分区计划核对未通过(${#ISSUES[@]} 项);逐条见 checks,修好前不要继续安装"
+fi
+# 取不到证据不得当作通过:预留区是这张卡唯一的守护对象,看不到就当「需人工」(不落 PASS)。
+if [ "${#MANUALS[@]}" -gt 0 ]; then
+  for m in "${MANUALS[@]}"; do dbk_add_check "需人工: $m"; done
+  dbk_exit 需人工 "预留区判据取不到证据(${#MANUALS[@]} 项):需人工核对,不得当作通过;逐条见 checks"
 fi
 
 dbk_note "下一步该建什么(live 里手工建;Anaconda 里只指定挂载点,不让它动 Windows ESP):"

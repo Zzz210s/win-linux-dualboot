@@ -134,6 +134,9 @@ pkg_needs_reboot() {
   flat="${out//[[:space:]]/}"
   case "$flat" in
     *'"staged":true'*) return 0 ;;
+    *'"staged":'*) return 1 ;;
   esac
-  return 1
+  # 键存在性护栏:没有 "staged": 键 = 字段名漂移,不能当「无待重启」→ 2(与 dbk-rollback.sh 的 rollback_needs_reboot 同口径)。
+  _pkg_note "错误: $PKG_CMD status --json 里没有 staged 键(字段名漂移,可能与官方输出不一致),无法判断是否有未生效分层改动(需人工)"
+  return 2
 }

@@ -77,7 +77,7 @@ if [ "$APPLY" -ne 1 ]; then
   log "R5 journald 持久化:$TPL/journald-persistent.snippet -> $JOURNALD_CONF;restart systemd-journald;判据 /var/log/journal 存在"
   log "R6 OOM/zram:调 scripts/linux/storage.sh(swapfile + zram0);systemd-oomd 由该脚本一并核对"
   log "R7 SSH 救援:enable --now sshd(不装包);判据 ss -tlnp | grep :22"
-  log "R8 保守更新:调 scripts/linux/set-updates.sh(只装安全更新、不自动重启)"
+  log "R8 保守更新:调 scripts/linux/set-updates.sh(只检查/下载,不自动应用与不自动重启;需 --yes)"
   log "R9 磁盘健康:分层安装 smartmontools(原子版:重启后生效);enable --now smartd;判据 smartctl -H 摘要"
   log "dry-run 结束:未修改任何文件。确认无误后加 --apply 重跑:sudo bash scripts/linux/hardening.sh --apply"
   exit 0
@@ -140,9 +140,9 @@ item_r7() {
   if [ -n "$listen" ]; then record "$name" ok "sshd 已 enable --now;监听: $(printf '%s' "$listen" | sed 's/^[[:space:]]*//')"
   else record "$name" fail "sshd 已启用但 22 端口未监听(ss -tlnp | grep :22 为空)"; fi
 }
-item_r8() {   # 保守更新策略:委托 set-updates.sh(只装安全更新、不自动重启)
-  local name="R8 保守更新(只安全更新、不自动重启)"
-  if [ ! -r "$HERE/set-updates.sh" ]; then record "$name" skip "缺 $HERE/set-updates.sh;请人工核对 unattended-upgrades 配置"; return; fi
+item_r8() {   # 保守更新策略:委托 set-updates.sh(只检查/下载,不自动应用与不自动重启;原子版语义,同 05-7)
+  local name="R8 保守更新(只检查/下载,不自动应用与不自动重启)"
+  if [ ! -r "$HERE/set-updates.sh" ]; then record "$name" skip "缺 $HERE/set-updates.sh;请人工核对更新策略配置(节名与键名见 scripts/linux/dbk-update.sh 接口)"; return; fi
   run_step set-updates.sh --yes
   case "$STEP_RC" in
     0) record "$name" ok "$(last_line "$STEP_OUT")" ;;

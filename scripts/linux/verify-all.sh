@@ -24,7 +24,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
-DBK_STEP="08-A-F"
+# --step(执行器专用,与 Windows 侧 verify-all.ps1 同口径,真源 docs/design/03 第 5 节):取值 = 验收条目关联的卡号(NN-K);非法值在条目表建好后校验(→ 64 且不落产物),合法值只判该卡号条目、其余记跳过不计入退出码(本执行器不绑卡、无「# 对应卡:」头)。
+STEP_SEL="${DBK_STEP:-}"; case "$STEP_SEL" in 08-A-F) STEP_SEL="" ;; esac; DBK_STEP="${STEP_SEL:-08-A-F}"
 if [ "$DBK_MODE" = apply ]; then dbk_log_default "verify-all"; fi
 STEP_ROOT="${DBK_STEP_ROOT:-$ROOT}"; GIT_ROOT="${DBK_GIT_ROOT:-$ROOT}"; BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"
 FSTAB="${DBK_FSTAB:-/etc/fstab}"; JRNL="${DBK_JOURNAL_DIR:-/var/log/journal}"
@@ -32,10 +33,8 @@ SHARED="${DBK_SHARED_MNT:-/mnt/shared}"; DISK="${DBK_DISK:-/dev/nvme0n1}"
 SUMMARY="$OUTDIR/08-verification.md"; HOST="${DBK_HOSTNAME:-$(hostname 2>/dev/null || echo unknown)}"
 G=""; R=(); n_pass=0; n_fail=0; n_manual=0; n_skip=0; HOOK_OUT=""; HOOK_RC=0; STEP_OUT=""; STEP_RC=0
 tag_of() { case "$1" in pass) printf PASS ;; fail) printf FAIL ;; manual) if [ "$CONFIRM" -eq 1 ]; then printf '需人工(已确认)'; else printf 需人工; fi ;; *) printf 跳过 ;; esac; }
-item() {   # <编号> <结论> <原因> <关联卡>;G = 当前组(记录里把原因内的 | 换成全角,避免拆列歧义)
-  R+=("$1|$G|$2|${3//|/／}|$4")
-  case "$2" in fail) n_fail=$((n_fail + 1)) ;; manual) n_manual=$((n_manual + 1)) ;; pass) n_pass=$((n_pass + 1)) ;; *) n_skip=$((n_skip + 1)) ;; esac
-  if [ "${DBK_JSON:-0}" -ne 1 ]; then printf '[%s] %s %s\n' "$(tag_of "$2")" "$1" "$3"; fi; }
+item() {   # <编号> <结论> <原因> <关联卡>;G=当前组(原因内的 | 换全角,避免拆列歧义);打印/计数/--step 过滤统一在汇总段
+  R+=("$1|$G|$2|${3//|/／}|$4"); }
 run_hook() {   # <命令或回放文件> [参数…]:输出进 HOOK_OUT(不吞 stderr),HOOK_RC = 命令退出码
   local spec="$1" p=(); shift || true; HOOK_OUT=""; HOOK_RC=0
   if [ -e "$spec" ]; then HOOK_OUT="$(cat -- "$spec" 2>&1)" || HOOK_RC=$?; return 0; fi
@@ -47,9 +46,11 @@ run_hook() {   # <命令或回放文件> [参数…]:输出进 HOOK_OUT(不吞 s
 avail() { [ -e "${1:-}" ] || command -v "${1%% *}" >/dev/null 2>&1; }
 first() { printf '%s\n' "${1:-}" | grep -v '^[[:space:]]*$' | head -n1 | cut -c1-140 || true; }
 chk_cmd_all() {   # <编号> <卡> <标签> <命令> <分号分隔正则;全中才 PASS> [参数…]
-  local id="$1" card="$2" lab="$3" spec="$4" res="$5" re miss=""; shift 5
+  local id="$1" card="$2" lab="$3" spec="$4" res="$5" re miss="" RES=(); shift 5
   run_hook "$spec" "$@"
-  for re in ${res//;/ }; do printf '%s' "$HOOK_OUT" | grep -qE "$re" || miss="$miss $re"; done
+  # 逐项按整条正则匹配(不按空白切词):否则 'RTC in local TZ: no' 会被拆成 6 个必须同时命中的词,双语言判据(中英各写一条)也没法表达。
+  mapfile -t RES <<<"${res//;/$'\n'}"
+  for re in ${RES[@]+"${RES[@]}"}; do [ -n "$re" ] || continue; printf '%s' "$HOOK_OUT" | grep -qE "$re" || miss="$miss $re"; done
   if ! avail "$spec"; then item "$id" manual "$lab:未找到命令 $spec;手动核对:按 $card 与 08 清单手工执行" "$card"
   elif [ -z "$miss" ]; then item "$id" pass "$lab:$(first "$HOOK_OUT")" "$card"
   else item "$id" fail "$lab:输出缺$miss;实际:$(first "$HOOK_OUT")" "$card"; fi
@@ -99,7 +100,9 @@ else
   for k in DESKTOP DOCUMENTS DOWNLOAD PICTURES VIDEOS MUSIC; do run_hook "$XU" "$k"
     case "$(printf '%s' "$HOOK_OUT" | tail -n1)" in "$SHARED"/*) ;; *) B8BAD="$B8BAD $k=$(printf '%s' "$HOOK_OUT" | tail -n1)" ;; esac; done
   if [ -n "$B8BAD" ]; then item B8 fail "家目录重定向未生效:$B8BAD;见 05-2" "05-2"; else item B8 pass "六项 XDG 目录都指向 $SHARED 下" "05-2"; fi; fi
-chk_cmd_all B9 "05-4" "RTC 走 UTC" "${DBK_TIMEDATECTL:-timedatectl}" 'RTC in local TZ: no'
+# B9 判据前强制 LC_ALL=C:timedatectl 会按 locale 输出本地化文本(中文 locale 下 RTC 行不是英文),
+#   否则真机上英文正则永远不命中 → 假 FAIL;同时保留中文口径正则作为回放件/异体输出的傍路。
+LC_ALL=C chk_cmd_all B9 "05-4" "RTC 走 UTC" "${DBK_TIMEDATECTL:-timedatectl}" 'RTC in local TZ: no|RTC 在本地时区: *否'
 item B10 manual "切换系统后蓝牙无需重新配对(三趟往返都能直连)" "05-5"
 chk_cmd_all B11 "05-12" "fwupd 能识别设备" "${DBK_FWUPDMGR:-fwupdmgr}" 'Device|设备|UEFI|NVMe|SSD|Firmware' get-devices
 G=C   # ===== C 双系统切换组(需实机切换) =====
@@ -158,6 +161,16 @@ BADF="$(awk '!/^[[:space:]]*#/ && NF>=4 { if ($2=="/") next; if ($2=="/boot/efi"
 if [ ! -r "$FSTAB" ]; then item F9 manual "读不到 $FSTAB;手动核对:非 root 条目都带 nofail,/boot/efi 不带" "05-1"
 elif [ -n "$BADF" ]; then item F9 fail "fstab 挂载选项不合判据:$(printf '%s' "$BADF" | tr '\n' ' ')" "05-1"
 else item F9 pass "fstab 非 root 条目均带 nofail,/boot/efi 未加 nofail" "05-1"; fi
+# ===== --step 过滤与计数(执行器语义:见脚本头;非法值 64,不落任何产物)=====
+KNOWN="$(printf '%s\n' "${R[@]}" | cut -d'|' -f5 | sort -u | tr '\n' ' ')"
+if [ -n "$STEP_SEL" ] && ! printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL "; then
+  dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-F = 六组全判(缺省)"; exit "$DBK_USAGE"
+fi
+for idx in "${!R[@]}"; do IFS='|' read -r i g s m c <<<"${R[$idx]}"
+  if [ -n "$STEP_SEL" ] && [ "$c" != "$STEP_SEL" ]; then s=skip; m="未选中(--step $STEP_SEL 只判卡 $STEP_SEL):$m"; fi
+  R[$idx]="$i|$g|$s|$m|$c"; case "$s" in fail) n_fail=$((n_fail + 1)) ;; manual) n_manual=$((n_manual + 1)) ;; pass) n_pass=$((n_pass + 1)) ;; *) n_skip=$((n_skip + 1)) ;; esac
+  if [ "${DBK_JSON:-0}" -ne 1 ]; then printf '[%s] %s %s\n' "$(tag_of "$s")" "$i" "$m"; fi
+done
 # ===== 汇总与落盘 =====
 if [ "$n_fail" -gt 0 ]; then OVER=fail; CONCL="不通过(自动判定失败 $n_fail 项;逐条见下表)"
 elif [ "$n_manual" -gt 0 ] && [ "$CONFIRM" -eq 0 ]; then OVER=manual; CONCL="待人工(无自动失败,但有 $n_manual 项需人工核对;逐条见下表)"
