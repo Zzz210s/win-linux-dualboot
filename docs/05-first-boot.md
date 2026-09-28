@@ -55,7 +55,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   5. nouveau 兜底:桌面起不来时不要长按电源,按 `07-2` 从 GRUB 提示符回 Windows;能在 GRUB 菜单选上一部署就用旧部署启动,或按 `05-9` 回滚到 stock 部署(回滚后由 nouveau 起桌面)
      看到:系统仍可用;处置顺序是"选上一部署 / 回滚 -> rebase 回 stock 部署 -> 才考虑发行版问题"
 脚本:sudo bash scripts/linux/graphics.sh --check / --apply --yes
-坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码均标待核实,以官方文档为准。
+坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码已于 2026-09-27 核实(见本卡第 2/3 步;上游端口或分支改名时以 ublue 发布页为准)。
 出错时:装完黑屏 -> 按 `10-1` 处置(显卡驱动专项见 `10-21`);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
 
 ### 05-4 时间(RTC 走 UTC)

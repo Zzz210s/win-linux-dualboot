@@ -131,7 +131,7 @@ finish_apply() {
     dbk_exit 需人工 "rebase 已提交,但有 ${#MANUAL[@]} 项判据读不到;逐条见 checks,请人工核对驱动来源与 Secure Boot 状态后重跑本脚本复核"
   fi
   if [ "$n" -gt 0 ]; then
-    dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后在 MOK 界面完成注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue,待核实),完成后再重跑本脚本复核"
+    dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后在 MOK 界面完成注册(会话内先执行 ujust enroll-secure-boot-key,MOK 密码 universalblue),完成后再重跑本脚本复核"
   fi
   dbk_exit PASS "已 rebase 到 ublue 的 NVIDIA 变体:需重启;重启后重跑本脚本复核"
 }

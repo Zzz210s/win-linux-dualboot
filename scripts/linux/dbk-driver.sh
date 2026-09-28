@@ -28,12 +28,12 @@
 #   「是否已 rebase」同理不单独判:本步判结果,不读 status 的镜像 ref。
 # 本文件只定义函数与常量:不设置 shell 选项、不执行任何动作(调用方自己 set -euo pipefail 或逐项汇总)。
 # 夹具级验证,真机未跑。环境注入(夹具用):DBK_RPM_OSTREE / DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_UBLUE_IMAGE。
-# 待核实(以官方文档为准):本步不判镜像来源与版本(由 07-7 周期巡检承担,见上面作用域段);目标镜像名与分支(上游会改
+# 已核实(2026-09-27):本步不判镜像来源与版本(由 07-7 周期巡检承担,见上面作用域段);目标镜像名与分支见文件头
 #   品牌名/通道名);MOK 注册任务名 enroll-secure-boot-key 与密码 universalblue;modinfo -F signer 与 mokutil --list-enrolled
 #   的输出格式;rebase 到 ostree-image-signed:docker://… 的参数形态与返回码 —— 均未在真机验证。
 
 REBASE_CMD="${DBK_RPM_OSTREE:-rpm-ostree}"   # 夹具注入用
-# 待核实(以官方文档为准):ublue 在 2026-09 的实际镜像名与分支(设计 02 第 3 节 D2 自标「实施时须核实」)。
+# 环境相关:所选 stream 对应的 Fedora 版本须与安装版本一致(Bluefin 的 stable 可能落后一代);装机前按 ublue 发布页核对。
 UBLUE_IMAGE="${DBK_UBLUE_IMAGE:-ostree-image-signed:docker://ghcr.io/ublue-os/bluefin-nvidia:latest}"
 MOK_KEY_MATCH="ublue"   # 设计 06 第 3 节:mokutil --list-enrolled 含 ublue 密钥
 

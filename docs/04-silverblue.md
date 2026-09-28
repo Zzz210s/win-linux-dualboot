@@ -32,7 +32,7 @@
   2. Anaconda 的手动分区页里把三块指定挂载点**并勾上格式化**:`/boot/efi`(ESP-Fedora)、`/boot`、`/`(btrfs)—— 三块都是新建分区,不勾装不出系统;Windows 各分区一律不挂载、不格式化、不改尺寸
      看到:分区列表新增三行且三块新分区都被标成"格式化";Windows 的 ESP / `C:` / `D:` 原值未被动过,没有任何一块被标成"格式化"
 脚本:scripts/linux/check-partition-plan.sh --track D --check
-坑:**绝不让 Anaconda 使用 Windows 的 ESP** —— 含既有 ESP 的盘上是它的已知失败模式(自 F34 起的上游 issue #284,**截至 2026-09 仍未关闭**;同类报告还有 Bugzilla 2439271「Failed to set new efi boot target」),把 Windows 的 2GiB ESP 设成 `/boot/efi` 更等于当场毁掉 Windows 引导(不变量 I3);Fedora 必须用独立 `ESP-Fedora` 且 `/boot` 独立(每个部署的内核与 initrd 在此),root 必须是 btrfs(ostree 部署与 `var` 子卷需要,ext4 不支持);**格式化只勾新建的三块**(ESP-Fedora / `/boot` / root 都是新建分区,按设计 4.4 要勾,不勾装不出系统)—— 反过来,**Windows 的任何分区绝不能勾**:勾了 Windows 的 ESP 等于当场毁掉 Windows 引导(违反不变量 I3),勾 `C:` / `D:` 等于清空数据;把三块建在预留区之外会挤压 Windows 分区。
+坑:**绝不让 Anaconda 使用 Windows 的 ESP** —— 含既有 ESP 的盘上是它的已知失败模式(自 F34 起的上游 issue #284,**截至 2026-09 仍未关闭**;同类报告还有 Bugzilla 2439271「Failed to set new efi boot target」(该单已作为重复项关闭,仅作现象参考)),把 Windows 的 2GiB ESP 设成 `/boot/efi` 更等于当场毁掉 Windows 引导(不变量 I3);Fedora 必须用独立 `ESP-Fedora` 且 `/boot` 独立(每个部署的内核与 initrd 在此),root 必须是 btrfs(ostree 部署与 `var` 子卷需要,ext4 不支持);**格式化只勾新建的三块**(ESP-Fedora / `/boot` / root 都是新建分区,按设计 4.4 要勾,不勾装不出系统)—— 反过来,**Windows 的任何分区绝不能勾**:勾了 Windows 的 ESP 等于当场毁掉 Windows 引导(违反不变量 I3),勾 `C:` / `D:` 等于清空数据;把三块建在预留区之外会挤压 Windows 分区。
 出错时:分区表对不上 -> 不要就地重排,按 `07-1` 判层后走救援;Anaconda 在写引导前中止(issue #284 的形态)-> 按 `07-1` 在 live 环境手工修,最坏退回轨道 W(`03-windows`)。
 
 ### 04-3 装完重启进入 Silverblue 并核对部署

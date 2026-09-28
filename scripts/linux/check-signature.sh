@@ -40,7 +40,7 @@ run_hook() {   # 执行钩子;结果放 HOOK_OUT/HOOK_RC(stderr 并入输出,不
   return 0
 }
 first_line() { printf '%s\n' "${1:-}" | grep -v '^[[:space:]]*$' | head -n1 || true; }
-GUIDE="补救指引:按 05-3 rebase 到 ublue 的 NVIDIA 变体后重启,进 MOK 界面执行一次 enroll-secure-boot-key(MOK 密码 universalblue,均待核实);接口不代跑。"
+GUIDE="补救指引:按 05-3 rebase 到 ublue 的 NVIDIA 变体后重启,进 MOK 界面执行一次 enroll-secure-boot-key(MOK 密码 universalblue);接口不代跑。"
 
 # 0) 环境与命令可用性(非 Linux 或命令缺失 → 9)
 run_hook "${DBK_UNAME:-uname -s}"; UNAME_OUT="$(first_line "$HOOK_OUT")"
