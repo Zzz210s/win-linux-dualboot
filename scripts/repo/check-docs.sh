@@ -5,6 +5,7 @@
 # 加 --repo 时即使只传单个文件,也追加仓库级 C9b/C9c/C9d(实现在同目录 check-docs-repo.sh,库在 check-docs-lib.sh)。
 # 计数口径两处不同:C1 的「## 开始前 3-5 行」不计空行与 --- 分隔线;C4 的「卡体 ≤25 行」计全部物理行。
 # C5 解析:优先引用方自身(文件名形如 NN-*.md),否则按编号到 docs/NN-*.md 里找承载该卡的手册。
+# C5 行级历史豁免:含「修订|历史|被否|已废弃|已删除|当时口径」的行不参与 C5(变更历史里的旧卡号是账本,不是活引用)。
 # 适用范围:01-07 查 C1-C5/C7/C8/C9a;08 查 C6/C9a;09/10 查 C6(速查卡只要求卡标题);
 # 00-overview、README、checklists 只查 C5/C7/C8;docs/design/* 与 baseline/README.md 只查 C5/C7/C8。
 set -uo pipefail
@@ -41,7 +42,13 @@ for f in "${files[@]}"; do
   # C5 卡编号引用:只认 -> NN-K 与反引号 `NN-K` 两种写法,目标文档必须含该卡
   while IFS=: read -r ln ref; do
     card_exists "$ref" "$f" || emit "$f" "$ln" C5 "卡编号引用无法解析: $ref"
-  done < <(grep -noE '(\-> |`)[0-9][0-9]-[0-9]+' "$f" | sed -E 's/^([0-9]+):.*([0-9][0-9]-[0-9]+)$/\1:\2/' | awk -F: '!seen[$0]++')
+  done < <(awk '
+      /修订|历史|被否|已废弃|已删除|当时口径/ { next }
+      { rest=$0
+        while (match(rest, /(-> |`)[0-9][0-9]-[0-9]+/)) {
+          ref=substr(rest, RSTART, RLENGTH); sub(/^(-> |`)/, "", ref)
+          key=NR":"ref; if (!seen[key]++) print key
+          rest=substr(rest, RSTART+RLENGTH) } }' "$f")
   # C7 禁止跨文件锚点链接
   while IFS=: read -r ln _; do emit "$f" "$ln" C7 "禁止跨文件锚点链接(改为 文档名 + 卡编号 引用)"; done \
     < <(grep -noE '\]\([^)]*\.md#[^)]*\)' "$f")
