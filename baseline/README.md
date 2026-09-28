@@ -18,7 +18,7 @@
 | `02-firmware-entries.txt` | L2 预检 | `bcdedit /enum firmware` 快照 + `BootOrder` |
 | `02-preflight-report.md` | L2 预检 | 闸门报告:红/黄/绿 + 是否允许进入 L3 |
 | `03-efi-layout.txt` | L3 Silverblue 安装 | `\EFI\` 目录树 + `efibootmgr -v` + `BootOrder` + `lsblk` |
-| `04-first-boot.md` | L4 首启收敛 | 会话类型、GPU 模块状态、ntfs3 挂载、时间、蓝牙 key 同步结果 |
+| `04-first-boot.md` | L4 首启收敛 | 发行版版本、会话类型、部署列表与 pin 状态、GPU 模块与签名、MOK 注册状态、共享盘挂载与写测试、`timedatectl`、**`/boot` 独立挂载** |
 | `04-robustness.md` | L4 首启收敛 | 健壮性核对:部署回滚与演练、journald 持久化、SSH 可达、更新策略、SMART 状态 |
 | `08-verification.md` | 验收 | 验收清单的**每台设备填写版**(A-F 六组勾选 + 证据 + "已知例外"清单);多设备时在 `baseline/<设备别名>/` 下 |
 

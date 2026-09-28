@@ -160,6 +160,7 @@ item_r9() {
   case "$rc" in
     0) record "$name" skip "需人工:smartmontools 已提交分层安装但尚未重启生效;重启后重跑本项复核"; return ;;
     2) record "$name" skip "需人工:读不到分层安装状态,无法判断是否已生效;重启后重跑本项复核"; return ;;
+    *) if [ "$rc" -ne 1 ]; then record "$name" skip "需人工:pkg_needs_reboot 返回未知状态 $rc(库层约定只可能是 0/1/2);重启后重跑本项复核"; return; fi ;;
   esac
   if ! systemctl enable --now smartd >/dev/null 2>&1; then record "$name" fail "systemctl enable --now smartd 失败"; return; fi
   while read -r dev; do

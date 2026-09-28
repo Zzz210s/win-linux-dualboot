@@ -148,6 +148,7 @@ apply_pkg() {
     case "$rc" in
       0) dbk_add_check "提示: 分层安装需重启 —— 已完成分层安装但当前系统尚未生效;先完成其余动作,统一重启后重跑本脚本复核" ;;
       2) MANUAL+=("读不到分层安装状态(需人工):无法判断 smartmontools 是否已生效;重启后重跑本脚本复核") ;;
+      *) if [ "$rc" -ne 1 ]; then MANUAL+=("pkg_needs_reboot 返回未知状态 $rc(库层约定只可能是 0/1/2):无法判断 smartmontools 是否已生效;重启后重跑本脚本复核"); fi ;;
     esac
   fi
   return 0
