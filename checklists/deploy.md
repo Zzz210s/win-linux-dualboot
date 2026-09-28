@@ -51,7 +51,7 @@
 - `[ ]` W-5 落 L1 产物 | 脚本:`scripts/windows/collect-l1.ps1`(加 `-Apply` 落盘) | 判据:`baseline/01-partitions.txt` 与 `baseline/01-activation.md` 在位 | 卡:`03-5`
 - `[ ]` W-6 L2 只读体检(管理员会话) | 脚本:`scripts/windows/preflight.ps1 -Check`(只读判定);`scripts/windows/preflight.ps1 -Apply -OutFile baseline\02-preflight-report.md`(落盘报告) | 判据:报告逐项有实测值,不出现红项;红项就地修复后重跑 | 卡:`03-6`
 - `[ ]` W-7 读闸门结论:L2 是唯一硬闸门 | 脚本:`scripts/windows/check-gate.ps1 -Check` | 判据:结论为"结论: 允许进入 L3"(不得手工改写判定列) | 卡:`03-7`
-- `[ ]` W-8 跑基线备份(ESP 文件树 + 清单 + 固件启动项 + 分区快照) | 脚本:`scripts/windows/backup-esp.ps1 -OutDir baseline`(复验用 `-Check`) | 判据:`baseline/02-esp-backup/manifest.sha256` 与三份快照在位 | 卡:`03-8`
+- `[ ]` W-8 跑基线备份(ESP 文件树 + 清单 + 固件启动项 + 分区快照) | 脚本:`scripts/windows/backup-esp.ps1 -OutDir baseline -Apply -Yes`(只读复验用 `-Check`) | 判据:`baseline/02-esp-backup/manifest.sha256` 与三份快照在位 | 卡:`03-8`
 - `[ ]` W-9 落 L2 产物并核对四件齐备(**与 L1 同一次会话内连续完成**,中途若 Windows 更新则基线失效须重做) | 脚本:`scripts/windows/collect-l2.ps1 -Check` | 判据:四件齐备且结论行为"允许进入 L3" | 卡:`03-9`
 
 ## 4. 轨道 L:L3 Fedora 44 Silverblue 安装(不侵犯 Windows 引导)

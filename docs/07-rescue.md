@@ -137,14 +137,15 @@
 ### 07-10 退役第二步:备份当前 NVRAM 与 ESP 现状(最后一道保险)
 
 做:在不动任何东西的前提下,把"动手前"的现场整份存到**仓库外**;这份备份没做完,就不要往下走。
-  1. 管理员会话把现状备份到数据盘(产物名沿用基线口径,但**不要**写进 `baseline/`)
+  1. 管理员会话跑 `backup-esp.ps1 -OutDir D:\dbk-l5-backup -Apply -Yes` 把现状备份到数据盘(缺 `-Apply -Yes` 时它只读,不会写盘;
+     产物名沿用基线口径,但**不要**写进 `baseline/`)
      看到:`D:\dbk-l5-backup\02-esp-backup\manifest.sha256`、`02-firmware-entries.txt`、`02-partitions.txt` 三份在位;备份树含 `EFI\Microsoft\` 与 `EFI\fedora\` 两棵子树
   2. 与 L2 基线比对,确认"动手前"现场未被改动
      看到:① `BootOrder` 首位、② `\EFI\Microsoft\` 逐文件、③ `{bootmgr}` 的 path 三项"通过";④ BitLocker 若与 L2 记录不同(L3 收尾已重新启用保护)属**预期差异**,记进备注
   3. 把只读取证输出(`efibootmgr -v`、`lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT`)也拷到共享盘或外置盘,别留在 `~/`
      看到:仓库外可读;本步没有任何写 ESP / 写 NVRAM / 改分区的动作
-脚本:scripts/windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup;scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline
-坑:用默认 `-OutDir baseline` 会覆盖 L2 基线(它正是本阶段的比对基准与回滚源);这批产物是**仓库外产物、不是基线**,不要拷进 `baseline/`(见 [baseline/README.md](../baseline/README.md))。另:`backup-esp.ps1` **默认模式就执行备份**,本卡不加 `-Check`(它只校验已有备份),该脚本也没有 `-Apply` 参数(写了会被 PowerShell 参数绑定拦下、退 1)。
+脚本:scripts/windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup -Apply -Yes;scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline
+坑:用默认 `-OutDir baseline` 会覆盖 L2 基线(它正是本阶段的比对基准与回滚源);这批产物是**仓库外产物、不是基线**,不要拷进 `baseline/`(见 [baseline/README.md](../baseline/README.md))。另:`backup-esp.ps1` **缺省只读**——本卡要写仓库外的现状备份,必须显式给 `-Apply -Yes`(缺 `-Yes` 由库层退 64 且零写);不给 `-Apply` 时它只复验已有备份(已有备份就逐文件比哈希,还没有就提示尚无备份),写不出任何文件。
 出错时:清单文件数与备份树对不上 -> 先解决磁盘/权限问题再继续;`verify-baseline.ps1` 退出码 1 但只有 ④ 有差异 -> 属预期,记备注后继续。
 
 ### 07-11 退役第三步:删 Fedora 分区(只按分区号 / GPT GUID 精确删)

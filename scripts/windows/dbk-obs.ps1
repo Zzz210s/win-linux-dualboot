@@ -10,6 +10,8 @@
 #   输出、Console.Out 尚未定型)统一设成 UTF-8 无 BOM,保证 -Json 被总控与验收汇总正确消费。
 # 失败可见的 Windows 侧做法:PS 没有 bash 的 ERR trap,库不装 trap(免得改变"失败不中断"脚本的默认语义);
 #   由使用 try/catch 的步骤脚本在 catch 里调 Enable-DbkErrTrap(opt-in)与 Write-DbkErrTrap。
+# 外部命令:统一走 Invoke-DbkExe(唯一把 $ErrorActionPreference 临时降为 Continue 的地方——PS 5.1 下原生命令
+#   往 stderr 写字 + `2>&1` 会抛 NativeCommandError,在 Stop 的步骤脚本里会当场终止;收尾的 mountvol /d 尤其致命)。
 # 夹具级验证,真机未跑。
 
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -49,6 +51,22 @@ function Set-DbkLogDefault {
   $base = $env:LOCALAPPDATA
   if (-not $base) { $base = $env:TEMP }
   $script:DbkLog = Join-Path (Join-Path $base 'dbk\logs') ("$Name.log")
+}
+
+# Invoke-DbkExe -Exe <命令> [-CmdArgs <参数数组>] [-Stdin <文本>]:外部命令的统一包装,返回 @{Out; Code}。
+#   内部临时把 $ErrorActionPreference 降成 Continue(见文件头:原生命令写 stderr + `2>&1` 在 Stop 下会抛
+#   NativeCommandError 并带走整个脚本);合并 stdout/stderr 后由调用方打印(不吞 stderr),并带回退出码。
+#   -Stdin 给需要标准输入的外部命令(如 diskpart 的脚本式输入)。失败不静默:Code 与 Out 交给调用方
+#   登记进 checks[]/报告,本函数不自己判成败。
+function Invoke-DbkExe {
+  param([string]$Exe, [string[]]$CmdArgs = @(), [string]$Stdin = '')
+  $o = ''; $c = 1; $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try {
+    if ($Stdin) { $o = [string]($Stdin | & $Exe @CmdArgs 2>&1 | Out-String) } else { $o = [string](& $Exe @CmdArgs 2>&1 | Out-String) }
+    $c = [int]$LASTEXITCODE
+  } catch { $o = [string]$_.Exception.Message; $c = 1 }
+  $ErrorActionPreference = $prev
+  return @{ Out = $o.Trim(); Code = $c }
 }
 
 # 判据/动作登记:普通判据是字符串;库层失败项(如 errtrap)用原始 JSON 对象登记,与字符串项一起进 checks[]。

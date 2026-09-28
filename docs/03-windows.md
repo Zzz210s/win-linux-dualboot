@@ -102,11 +102,11 @@
 ### 03-8 跑基线备份
 
 做:用脚本把 ESP 全量文件树 + 文件级清单 + 固件启动项与分区快照写进 `baseline/`(I4 基线的最低要求)。
-  1. 管理员会话跑 `backup-esp.ps1 -OutDir baseline`
+  1. 管理员会话跑 `backup-esp.ps1 -OutDir baseline -Apply -Yes`(脚本头声明了破坏性:缺 `-Yes` 由库层退 64 且零写)
      看到:`baseline\02-esp-backup\EFI\` 子树与 `manifest.sha256` 在位;`02-firmware-entries.txt` 与 `02-partitions.txt` 在位;收尾输出"ESP 已卸载"
-  2. 加 `-Check` 复验已有备份(逐文件重算 SHA256 比对,不重做备份)
-     看到:退出码 0,输出"备份校验通过:清单 N 行,已比对 N 个文件,逐文件哈希一致"
-脚本:scripts/windows/backup-esp.ps1 -OutDir baseline / -Check
+  2. 不带 `-Apply` 时脚本只读(缺省 = `-Check`):已有备份就逐文件重算 SHA256 比对(不重做备份),还没有备份只打印 `-Apply` 会做什么
+     看到:退出码 0,输出"备份校验通过:清单 N 行,已比对 N 个文件,逐文件哈希一致";尚无备份时退出码 1 并提示先跑 `-Apply -Yes`
+脚本:scripts/windows/backup-esp.ps1 -OutDir baseline -Check / -OutDir baseline -Apply -Yes
 坑:本脚本只写 `-OutDir`,**绝不改 ESP 内容**;`manifest.sha256` 是清单自身,既不进清单也不得复制回 ESP。旧手册里的"ESP 镜像"一律指这份文件树 + 清单。
 出错时:报"需要管理员权限" -> 用管理员会话重跑;报挂载点上没有 `EFI` 目录 -> 人工核对分区表后再重跑;复原流程见 `07-rescue.md`。
 
