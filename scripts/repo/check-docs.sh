@@ -5,8 +5,9 @@
 # 加 --repo 时即使只传单个文件,也追加仓库级 C9b/C9c/C9d(实现在同目录 check-docs-repo.sh,库在 check-docs-lib.sh)。
 # 计数口径两处不同:C1 的「## 开始前 3-5 行」不计空行与 --- 分隔线;C4 的「卡体 ≤25 行」计全部物理行。
 # C5 解析:优先引用方自身(文件名形如 NN-*.md),否则按编号到 docs/NN-*.md 里找承载该卡的手册。
-# C5 行级历史豁免:含「修订|历史|被否|已废弃|已删除|当时口径」的行不参与 C5(变更历史里的旧卡号是账本,不是活引用)。
-# 适用范围:01-07 查 C1-C5/C7/C8/C9a;08 查 C6/C9a;09/10 查 C6(速查卡只要求卡标题);
+# C5 历史豁免(窄口径):只跳过「## 变更历史」段内的行,以及「| YYYY-MM-DD |」变更历史表格行 —— 账本里的旧卡号不参与 C5;
+#   其余任何行(包括措辞里出现“历史/已废弃”等词的活引用行)一律照常检查,不做关键词整行豁免。
+# 适用范围:01-07 查 C1-C5/C7/C8/C9a;08 查 C6/C9a(并照常查 C5/C7/C8);09/10 查 C6(速查卡只要求卡标题,并照常查 C5/C7/C8);
 # 00-overview、README、checklists 只查 C5/C7/C8;docs/design/* 与 baseline/README.md 只查 C5/C7/C8。
 set -uo pipefail
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -43,7 +44,9 @@ for f in "${files[@]}"; do
   while IFS=: read -r ln ref; do
     card_exists "$ref" "$f" || emit "$f" "$ln" C5 "卡编号引用无法解析: $ref"
   done < <(awk '
-      /修订|历史|被否|已废弃|已删除|当时口径/ { next }
+      /^## / { in_hist = ($0 ~ /变更历史/) }
+      in_hist { next }
+      /^\|[[:space:]]*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9][[:space:]]*\|/ { next }
       { rest=$0
         while (match(rest, /(-> |`)[0-9][0-9]-[0-9]+/)) {
           ref=substr(rest, RSTART, RLENGTH); sub(/^(-> |`)/, "", ref)

@@ -168,7 +168,8 @@ t "C2 两位卡号不与 01-1 混淆" C2 1 docs/01-firmware.md <<'EOF'
 EOF
 has "C2 卡号跳号报错信息" "卡号应为 01-2"
 t "C5 反引号写法同样受检" C5 1 docs/01-firmware.md < <(mk01 3 '### 01-1 甲' '见 `01-9`。')
-t "C5 历史行豁免(修订/已废弃等)" OK 0 docs/01-firmware.md < <(mk01 3 '### 01-1 甲' '修订八:当时末张卡是 `01-9`,已被 01-2 取代。')
+t "C5 豁免:变更历史表格行(日期行)" OK 0 docs/01-firmware.md < <(mk01 3 '### 01-1 甲' '| 2026-09-25 | 修订八:当时末张卡 `01-9` |')
+t "C5 不豁免:活引用同行含历史措辞" C5 1 docs/01-firmware.md < <(mk01 3 '### 01-1 甲' '旧方案已废弃,先看 -> 01-9。')
 t "C8 emoji 与坏链接各一条" C8 2 docs/notes.md < <(printf '# 夹具:C8\n\n这行有 %b 与坏链接 [坏](nope.md)。\n' '\xf0\x9f\x98\x80')
 printf '
 PASS=%s FAIL=%s
