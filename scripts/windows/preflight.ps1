@@ -85,7 +85,7 @@ if ($disk -and $parts.Count -gt 0) {
   if (([int64]$disk.Size - $prev) -gt 0) { $gaps += ([int64]$disk.Size - $prev) }
   $maxGapGiB = [math]::Round(((($gaps | Measure-Object -Maximum).Maximum / 1GB)), 1); $tailGapGiB = [math]::Round((([int64]$disk.Size - $prev) / 1GB), 1)
   $gapVal = '最大连续未分配 ' + $maxGapGiB + ' GiB;盘尾未分配 ' + $tailGapGiB + ' GiB'
-  if ($maxGapGiB -lt 115) { Add-Row '磁盘 0 未分配空间' ($gapVal + '(Linux 侧需 115GiB 连续 = root 100 + 快照 15;盘尾归 WinRE)') $RED }
+  if ($maxGapGiB -lt 115) { Add-Row '磁盘 0 未分配空间' ($gapVal + '(Linux 侧需 115GiB 连续 = ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB;不含快照分区,快照体系已否决;盘尾归 WinRE)') $RED }
   else { Add-Row '磁盘 0 未分配空间' $gapVal $GREEN }
 } else { Add-Row '磁盘 0 未分配空间' '读不到(Get-Disk/Get-Partition 失败或需管理员权限)' $YELLOW }
 $esp = @($parts | Where-Object { $_.GptType -eq '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}' }); if ($esp.Count -eq 0) { $esp = @($parts | Where-Object { $_.Type -eq 'System' }) }

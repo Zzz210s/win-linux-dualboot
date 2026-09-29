@@ -9,6 +9,9 @@
   ③ {bootmgr} 的 path 是否与基线一致;④ BitLocker 状态是否与 02-preflight-report.md 的记录一致(变化即提示人工介入)。
   **只读**:不修改任何内容(挂载 ESP 只为读取,收尾必然卸载);唯一输出是控制台文本与 -Json 的单行 JSON。
   CLI 契约(设计 03 第 2 节):-Check 是**缺省**且只读;本脚本没有任何写动作,故 -Apply 与 -Check **同义**(都只做只读巡检),但显式接受该开关;两者同时给按用法错误 64(与全仓一致)。
+  夹具钩子(仅离线验证,真机留空):DBK_IS_ADMIN=1/0(强制管理员判定)、DBK_MOUNTVOL_EXE(假 mountvol,
+    自己把调用写进 $env:DBK_CALLS);挂载与收尾卸载都走库层 Invoke-DbkExe——PS 5.1 下原生命令往 stderr 写字
+    + `2>&1` 会抛 NativeCommandError 并带走整个脚本,卸载失败不静默:单列一条“② ESP 卸载”需人工判据。
   本文件必须保存为 UTF-8 with BOM(Windows PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI 解码,中文会解析失败)。
   用法(仓库根目录、以管理员身份运行 Windows PowerShell;多设备时 -BaselineDir 指到 baseline\<设备别名>):
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -Check -BaselineDir baseline
@@ -70,7 +73,8 @@ function Get-PathLine {
 }
 
 $isAdmin = $false
-try { $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { $isAdmin = $false }
+if ($env:DBK_IS_ADMIN -eq '1') { $isAdmin = $true }
+elseif ($env:DBK_IS_ADMIN -ne '0') { try { $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) } catch { $isAdmin = $false } }
 
 # 基线产物:固件启动项快照(①③)、ESP 清单(②)、L2 预检报告(④)
 $baseFwPath = Join-Path $BaselineDir '02-firmware-entries.txt'
@@ -106,14 +110,15 @@ $want = @{}; $diff = @(); $espErr = ''
 if (-not (Test-Path -LiteralPath $man)) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('缺基线清单 ' + $man + ';先跑 scripts\windows\backup-esp.ps1 生成 L2 基线') }
 elseif (-not $isAdmin) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false '非管理员会话,无法挂载 ESP 做逐文件比对(mountvol /s 需要管理员)' }
 else {
-  $mp = ''; $mounted = $false
+  $mp = ''; $mounted = $false; $unmountErr = ''
+  $mountvol = 'mountvol'; if ($env:DBK_MOUNTVOL_EXE) { $mountvol = $env:DBK_MOUNTVOL_EXE }
   try {
     if ($EspLetter) { $mp = ($EspLetter.TrimEnd(':') + ':') }
     else { foreach ($c in @('S', 'T', 'U', 'V', 'W')) { if (-not (Test-Path -LiteralPath ($c + ':\'))) { $mp = ($c + ':'); break } } }
     if (-not $mp) { throw '找不到空闲盘符,请用 -EspLetter 指定' }
     if (-not (Test-Path -LiteralPath ($mp + '\'))) {
-      $null = (& mountvol $mp /s 2>&1); $mounted = $true
-      if (-not (Test-Path -LiteralPath ($mp + '\EFI'))) { throw ('挂载 ' + $mp + ' 后看不到 \EFI,可能不是 ESP') }
+      $rs = Invoke-DbkExe $mountvol @($mp, '/s'); $mounted = $true
+      if (-not (Test-Path -LiteralPath ($mp + '\EFI'))) { throw ('挂载 ' + $mp + ' 后看不到 \EFI(可能不是 ESP;mountvol /s 退出码 ' + $rs.Code + ':' + $rs.Out + ')') }
     }
     $espRoot = $mp + '\'
     foreach ($line in (Get-Content -LiteralPath $man -Encoding UTF8)) {
@@ -129,8 +134,13 @@ else {
       if (-not $want.ContainsKey($rel)) { $diff += ('新增 ' + $rel) }
     }
   } catch { $espErr = $_.Exception.Message } finally {
-    if ($mounted -and $mp) { $null = (& mountvol $mp /d 2>&1) }
+    if ($mounted -and $mp) {
+      $rd = Invoke-DbkExe $mountvol @($mp, '/d')
+      if ($rd.Code -ne 0) { $unmountErr = ('mountvol ' + $mp + ' /d 卸载失败(退出码 ' + $rd.Code + '):' + $rd.Out + ';ESP 盘符可能仍挂着,请手工执行 mountvol ' + $mp + ' /d') }
+      else { Write-DbkLog ('mountvol ' + $mp + ' /d 退出码 0') }
+    }
   }
+  if ($unmountErr) { Add-Result '② ESP 卸载' $false $unmountErr }
   if ($espErr) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('ESP 比对失败:' + $espErr) }
   elseif ($want.Count -eq 0) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('基线清单里没有 EFI/Microsoft/ 条目,清单可能不完整:' + $man) }
   elseif ($diff.Count -eq 0) { Add-Result '② ESP\EFI\Microsoft\ 比对' $true ('\EFI\Microsoft\ 下 ' + $want.Count + ' 个文件与基线逐文件一致;ESP 上无新增文件') }

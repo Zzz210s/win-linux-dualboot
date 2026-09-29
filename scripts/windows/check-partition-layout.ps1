@@ -150,9 +150,9 @@ if ($Track -eq 'L') {
   if ($boot.Count -eq 0) { $failN++; $failItems += '/boot'; Add-DbkCheck ('失败项:/boot 期望 ' + $TR.BootMB + 'MB(ext4,必须独立),实际 ' + (Show-Parts $linux)) }
   else { Add-DbkCheck ('/boot:' + (Format-Part $boot[0]) + '(期望 ' + $TR.BootMB + 'MB)') }
   $big = @($linux | Sort-Object { -$_.SizeMB })
-  if ($big.Count -eq 0 -or $big[0].SizeMB -lt ($TR.RootMinMB - $TOL)) { $failN++; $failItems += 'root'; Add-DbkCheck ('失败项:root 期望 >= ' + $TR.RootMinMB + 'MB(约 113GiB,ext4),实际 ' + (Show-Parts $linux)) }
+  if ($big.Count -eq 0 -or $big[0].SizeMB -lt ($TR.RootMinMB - $TOL)) { $failN++; $failItems += 'root'; Add-DbkCheck ('失败项:root 期望 >= ' + $TR.RootMinMB + 'MB(约 113GiB,btrfs),实际 ' + (Show-Parts $linux)) }
   else { Add-DbkCheck ('root:' + (Format-Part $big[0]) + '(期望 >= ' + $TR.RootMinMB + 'MB,约 113GiB)') }
-  Add-DbkAction '文件系统与挂载点(/boot 与 root 的 ext4)在 Windows 侧读不到:进 live 后按 04-2 的手动分区核对(用 check-partition-plan.sh)'
+  Add-DbkAction '文件系统与挂载点(/boot 的 ext4 与 root 的 btrfs)在 Windows 侧读不到:进 live 后按 04-2 的手动分区核对(用 check-partition-plan.sh)'
 }
 if ($Track -eq 'D') { Add-DbkAction '两块 ESP 的固件可见性(固件能否枚举/从第二块盘引导)读不到,只能人工:按 00-overview.md 的偏离项处置表记录' }
 if ($failN -gt 0) { Write-DbkExit -Status FAIL -Message ('轨道 ' + $Track + ' 布局核对失败 ' + $failN + ' 项:' + ($failItems -join '、') + ';期望值与实际值见 checks;尺寸与目标不符时不要事后缩容,整盘重排(02-4)后重跑') }

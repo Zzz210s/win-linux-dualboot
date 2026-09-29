@@ -12,7 +12,7 @@ rem   3     Windows(系统)    204800    200GiB      NTFS      C: 系统与程�
 rem   4     Data(数据)       650240    ≈635GiB     NTFS      D: 数据盘 / 双系统共享盘(Fedora 侧 ntfs3 读写)
 rem   5     ESP-Fedora       1024      1GiB        FAT32     留给 L3:Fedora 独立 ESP,只放 \EFI\fedora\
 rem   6     /boot            1024      1GiB        ext4      留给 L3:独立分区,重装 root 时可保留内核与 GRUB 模块
-rem   7     Ubuntu root      -         约 113GiB   ext4      留给 L3:/ 与用户数据(/home 就是真目录,不做符号链接)
+rem   7     Fedora root      -         约 113GiB   btrfs     留给 L3:/ 与用户数据(/home 就是真目录,不做符号链接)
 rem   --    WinRE            约 1024   约 1GiB     Recovery  Windows 恢复环境(由安装程序创建,盘尾或预留段内)
 rem
 rem 两块 ESP:Windows 2GiB 归 Windows,Fedora 1GiB 归 Linux,各自只放自己的分支目录。
@@ -57,10 +57,10 @@ format quick fs=ntfs label="Data"
 
 rem 5. 剩余约 115GiB 必须保持未分配,不许在此处再建分区:
 rem    它是 L3 安装 Fedora 时三块分区的位置
-rem    (ESP-Ubuntu 1GiB + /boot 1GiB + root 约 113GiB)。
+rem    (ESP-Fedora 1GiB + /boot 1GiB + root 约 113GiB)。
 rem    不要用不带 size 的 create partition(会吃满整盘,导致 L3 无空间可用)。
 rem
 rem WinRE 由 Windows 安装程序在安装系统时自行创建(可能在磁盘末尾);
 rem 若它落在上面这段预留空间内,按 docs/03-windows.md 的 03-1(WinRE 偏差判据)处置:
-rem 只要两块 ESP 尺寸未被削减、Ubuntu root 与预留空间仍不少于 115GiB 即接受,并把偏差
+rem 只要两块 ESP 尺寸未被削减、Fedora root 与预留空间仍不少于 115GiB 即接受,并把偏差
 rem 记录进 baseline/01-partitions.txt。
