@@ -144,7 +144,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 - `--step`/`-Step` 取**验收条目所关联的卡号**(`NN-K`;`08` 是 08-verification.md 自身的记录项)。可用集合 = 执行器自带条目表里出现过的卡号(去重排序),**非法取值时打印可用集合并以 64 退出**(不再静默忽略)。
 - 给了合法 `-Step` 时**只判定关联到该卡号的条目**,其余条目记「跳过」、不计入退出码;退出码语义不变:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 `--confirm-manual`/`-ConfirmManual` 后人工项不再计入退出码)。
 - 不给 `-Step` 时判定全部条目;显式写 `08-A-F` 与缺省等价(“六组全判”),它是唯一不以卡号取值的合法写法。
-- 两侧现状:`scripts/windows/verify-all.ps1` 已按上述语义实现;**Silverblue 侧 `scripts/linux/verify-all.sh` 尚未做过滤与校验**(只认 `08-A-F` 的“六组全判”,其它取值按全判处理),其 `-Step` 过滤待后续批次同步——在此明写以免当成“已豁免”。
+- 两侧现状:**两侧都已实现** —— `scripts/windows/verify-all.ps1` 与 `scripts/linux/verify-all.sh` 均支持步骤/组过滤:非法取值 → 64,合法取值只判该卡/该组(2026-09-28 修复了 Linux 侧"静默覆盖 `--step`"的缺陷)。
 
 步骤索引文件:`scripts/windows/steps.tsv`、`scripts/linux/steps.tsv`(列:步骤号、脚本路径、是否破坏性、说明)。总控读它分发,C9d 也校验它的一致性:脚本路径必须存在且属本侧、本侧步骤脚本必须登记进索引、破坏性列 ∈ {0,1}、索引步骤号必须落在脚本头卡号集合里、同一 (步骤号, 脚本路径) 对不得重复(同一步骤号可以有多行 = 一张卡对应多个脚本;一脚本服务多张卡时按步骤号各占一行,同一脚本路径也允许出现多行)。**索引行不是装饰**:它既是总控的分发表,也是“这一步会不会改系统”的第二道记录。
 
@@ -266,3 +266,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 2026-09-25 | **S-1 修复轮 1(任务 6 审查 I-1/I-2)**:① **模式收紧**:`\b(apt-get|apt|dpkg|dnf|snap|rpm-ostree)\b` -> `(^|[^A-Za-z0-9_])apt(-get)?|aptitude|dpkg|dnf|snap(d)?|rpm-ostreed?`——按字面量匹配,补上 `rpm-ostreed.conf`、`snapd.socket`、`aptitude`、`snap_begin`、`snapper` 等词内形态;`apt` 分支保留词首守卫以免英文单词误报(否则 `SCSIAdapter`/`Caption` 使清零不可达)。② **范围扩到 Windows 侧**:`scripts/windows/*.ps1` 一并扫,豁免追加四个 Windows 契约库(`dbk.ps1`/`dbk-cli.ps1`/`dbk-obs.ps1`/`dbk-win-probe.ps1`)。命中文件数 14 -> 17(`scripts/linux/*.sh` 16 个 + `scripts/windows/verify-all.ps1` 1 个) |
 | 2026-09-25 | **计数行按仓库实际重算(实施计划任务 17)**:第 6 节合计与第 8 节代价表统一为 **47 张动作卡 + 45 个步骤脚本 + 15 个库与接口**(口径:卡 = 各手册 `### NN-K` 标题总数,`docs/10-faq.md` 的 `### 10-K` 不计;步骤脚本 = `scripts/{linux,windows}/steps.tsv` 脚本条目去重数;库与接口 = 不带 `# 对应卡:` 的库文件数),仓库脚本类文件总数 **66 个**(45 + 15 + 4 仓库自检 + 2 步骤索引);删掉"设计口径 47 / 手册实测 48,差 1 张待删 snap 卡"与"当前含待删的 `step-snap-free.sh` / `rollback-pkg.sh`"两处中间态说明(两卡已随任务 12/14 删除) |
 | 2026-09-27 | **C5 豁免收窄 + 脚本头契约拆分(v0.2.1 复审修正)**:C5 的历史豁免改为**窄口径**(仅「## 变更历史」段与「| YYYY-MM-DD |」表格行;宽词表豁免因实测白丢 13 条活引用而回退);`dbk_header_*` 三函数拆出 `scripts/linux/dbk-head.sh`,c9d 白名单 18 -> **19 项**、库与总控入口 14 -> **15 个**、仓库脚本文件总数 65 -> **66 个**;新增夹具「活引用同行含历史措辞必须报 C5」 |
+| 2026-09-28 | **独立审查后的两批修复**:① Linux 侧 5 个写系统脚本补 `# 破坏性:1` 与 `--yes` 门槛(`reboot-to-windows` / `set-time` / `set-journald` / `set-updates` / `set-remote-health`,`steps.tsv` 破坏性列 0→1);② `pkg_needs_reboot` 补 `"staged"` 键存在性护栏(键缺失 → 2,与 `dbk-rollback` 对称);③ `check-partition-plan` 的"检查跳过"改"需人工";④ `collect-l4` 不再吞接口 stderr;⑤ `verify-all.sh` 实现 `--step` 校验/过滤 + B9 判据中英双口径;⑥ Windows 侧 `backup-esp.ps1` 补全 CLI 契约并改缺省只读、`mountvol /d` 走 `Invoke-DbkExe` 容错、`preflight.ps1` 的 115GiB 文案与 root fstype 期望回切 btrfs |
