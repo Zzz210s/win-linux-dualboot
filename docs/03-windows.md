@@ -17,7 +17,7 @@
   1. 安装界面里只选 200GiB 那个分区(卷标 `Windows`),**不点"删除""新建""格式化"**
      看到:进桌面后 `Get-Partition -DiskNumber 0` 的序为 ESP 2048MB -> MSR 16MB -> `C:` 204800MB(轨道 D 之后还有 `D:` 650240MB)
   2. 管理员会话跑核对脚本(双系统用 `-Track D`,只 Windows 用 `-Track W`)
-     看到:退出码 0,脚本判定系统版本为 Windows 11 IoT Enterprise LTSC 2024(build 26100 及以上;脚本按 LTSC 家族判定,消费版与评估版均判 FAIL);同时列出 WinRE 落点与"最大连续未分配"实测值
+     看到:退出码 0,脚本判定系统版本为 Windows 11 IoT Enterprise LTSC 2024(LTSC 家族且 build ≥ 22000 的 Win11 基线 —— 本方案选定的 LTSC 2024 为 26100;脚本按 LTSC 家族判定,消费版与评估版均判 FAIL);同时列出 WinRE 落点与"最大连续未分配"实测值
 脚本:scripts/windows/verify-windows-baseline.ps1 -Check -Track D
 坑:让安装器自动分区会建 100MB 级 ESP,与定稿表不符(设计 3.4);WinRE 可能落进预留段,只要 ESP 未被削减且未分配仍 ≥115GiB 就接受并把偏差记进产物(设计 4.2)。
 出错时:版本或分区不符 -> 回 `02-4` 整盘重排后重装,不做逐分区微调、不做事后缩容;激活未完成 -> `03-4`。
