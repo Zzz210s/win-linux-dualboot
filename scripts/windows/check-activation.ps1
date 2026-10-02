@@ -7,11 +7,14 @@
   本脚本只读状态,**不含也不分发任何激活脚本本体**,不写购买路径,不引入自建 KMS;激活走上游项目的官方入口,步骤见 03-windows.md 的 03-4。
   判据(依据 design 3.10):
     1) Get-CimInstance SoftwareLicensingProduct(PartialProductKey 非空、名称含 Windows)的 LicenseStatus = 1(已授权);
-    2) GracePeriodRemaining 记录本次周期剩余时间(Online KMS 为 180 天周期,续期任务由上游流程创建,本脚本只记录状态)。
+    2) GracePeriodRemaining 记录本次周期剩余时间(Online KMS 为 180 天周期,续期任务由上游流程创建,本脚本只记录状态);
+       取不到时记「需人工:读不到 KMS 剩余期」,不静默。
+    3) 评估版断言:产品名/Caption 含 Eval 即判 FAIL(评估版不可在评估期外激活,本方案的 KMS 路线要求正式 LTSC 镜像)。
   首次激活失败**不阻塞** L1(design 第 7 节 L1 行):未授权时退出码 2(需人工),把报错与失败记进 01-activation.md(03-5)即可继续。
+  评估版是**错误状态**,退出码 1(优先于「已授权」判定):必须换正式 LTSC 镜像。
   只读:不写任何系统状态与文件;唯一写动作是 -Apply 时的日志(本卡无自动改系统的动作)。
-  退出码:0 已授权 / 1 读不到授权状态(需管理员或 WMI 不可用) / 2 未授权(激活动作人工) / 9 跳过(非 Windows) / 64 用法错误。
-  夹具钩子(仅离线验证,真机留空):DBK_ACT_DUMP=<文件,每行 key=value:name/licenseStatus/gracePeriodRemaining/description>。
+  退出码:0 已授权 / 1 评估版或读不到授权状态(需管理员或 WMI 不可用) / 2 未授权(激活动作人工) / 9 跳过(非 Windows) / 64 用法错误。
+  夹具钩子(仅离线验证,真机留空):DBK_ACT_DUMP=<文件,每行 key=value:name/caption/licenseStatus/gracePeriodRemaining/description>。
   本文件必须保存为 UTF-8 with BOM。夹具级验证,真机未跑。用法:
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\check-activation.ps1 -Check
 #>
@@ -41,7 +44,7 @@ function Get-LicStatusText {
   }
 }
 
-$o = @{ Name = ''; LicenseStatus = ''; GracePeriodRemaining = ''; Description = ''; Source = '本机' }
+$o = @{ Name = ''; Caption = ''; LicenseStatus = ''; GracePeriodRemaining = ''; Description = ''; Source = '本机' }
 if ($env:DBK_ACT_DUMP) {
   if (-not (Test-Path -LiteralPath $env:DBK_ACT_DUMP)) {
     Write-DbkNote ('用法错误: DBK_ACT_DUMP 指向的文件不存在: ' + $env:DBK_ACT_DUMP); exit $script:DBK_USAGE
@@ -50,6 +53,7 @@ if ($env:DBK_ACT_DUMP) {
     if ($line -match '^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$') {
       $k = $Matches[1]; $val = $Matches[2].Trim()
       if ($k -match '^(?i)name$') { $o.Name = $val }
+      if ($k -match '^(?i)caption$') { $o.Caption = $val }
       if ($k -match '^(?i)licenseStatus$') { $o.LicenseStatus = $val }
       if ($k -match '^(?i)gracePeriodRemaining$') { $o.GracePeriodRemaining = $val }
       if ($k -match '^(?i)description$') { $o.Description = $val }
@@ -68,6 +72,7 @@ if ($env:DBK_ACT_DUMP) {
   }
   if ($rec) {
     $o.Name = [string]$rec.Name
+    $o.Caption = [string]$rec.Caption
     $o.LicenseStatus = [string]$rec.LicenseStatus
     $o.GracePeriodRemaining = [string]$rec.GracePeriodRemaining
     $o.Description = [string]$rec.Description
@@ -79,11 +84,21 @@ if (-not $o.LicenseStatus) {
   Write-DbkExit -Status FAIL -Message '读不到授权状态(Get-CimInstance SoftwareLicensingProduct 无结果):用管理员身份重跑;WMI 服务被禁时需先恢复 Software Protection 服务'
 }
 $statusText = Get-LicStatusText $o.LicenseStatus
+# 待核实(以官方文档为准):GracePeriodRemaining 在 KMS/数字许可下的确切语义与单位(官方文档记单位为分钟,
+#   本脚本按 1440 分钟/天换算天数;与「剩余宽限期」的对应关系以官方文档为准)。
 $days = ''
 if ($o.GracePeriodRemaining -match '^[0-9]+$') { $days = [string][math]::Floor([double]$o.GracePeriodRemaining / 1440) }
 Add-DbkCheck ('授权对象:' + $(if ($o.Name) { $o.Name } else { '(名称读不到)' }) + ';LicenseStatus = ' + $o.LicenseStatus + '(' + $statusText + ')')
 if ($days) { Add-DbkCheck ('本周期剩余:' + $days + ' 天(GracePeriodRemaining = ' + $o.GracePeriodRemaining + ' 分钟;Online KMS 周期 180 天)') }
+else { Add-DbkCheck '需人工:读不到 KMS 剩余期(GracePeriodRemaining 缺失或不是整数分钟),请在 SoftwareLicensingProduct 里人工核对' }
 if ($o.Description) { Add-DbkCheck ('描述:' + $o.Description) }
+
+# 评估版断言(优先于「已授权」判定):评估版不可在评估期外激活,本方案的 KMS 路线要求正式 LTSC 镜像。
+$evalText = (@($o.Name, $o.Caption, $o.Description) | Where-Object { $_ }) -join ' '
+if ($evalText -match '(?i)Eval') {
+  Add-DbkAction '换用正式(非评估)LTSC 镜像重装后,再跑本脚本'
+  Write-DbkExit -Status FAIL -Message ('评估版(Evaluation SKU,' + $(if ($o.Name) { $o.Name } else { '名称读不到' }) + '):评估版不可在评估期外激活,本方案的 KMS 路线要求正式 LTSC 镜像,须换正式版重装')
+}
 
 if ($o.LicenseStatus.Trim() -eq '1') {
   Add-DbkAction '把本脚本输出(含执行日期)写进 01-activation.md(03-5);续期任务与 KMS 主机 1688 端口可达性按 03-4 人工核对'

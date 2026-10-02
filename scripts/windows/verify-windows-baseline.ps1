@@ -5,7 +5,10 @@
   轨道 W:Windows 安装基线核对(安装本身为人工)。缺省 -Check 只读比对版本/内部版本与分区布局;templates/partitions.txt 是目标值真源。
 .DESCRIPTION
   三条判据(依据 03-windows.md 的 03-1 与 design 5.1):
-    1) 版本:Caption/ProductName 是 Windows 11 专业版且 CurrentBuild >= 22000(DisplayVersion 与 UBR 一并记录)。
+    1) 版本:Windows 11 LTSC 家族(IoT Enterprise LTSC / Enterprise LTSC,匹配 LTSC、大小写不敏感)且 CurrentBuild >= 22000
+       (DisplayVersion 与 UBR 一并记录)。主判据是 CIM Caption(注册表 ProductName 在 Win11 上仍显示 "Windows 10 Pro",
+       故不作主判据);非 LTSC 的消费版(Pro/Home 等)判失败;Caption/ProductName/EditionID 含 Eval 的评估版判失败
+       (评估版不可用于本方案的 KMS 路线)。
     2) 分区:按模板 create partition 行取目标值,与实测按偏移顺序逐项比对(容差 ±2MB)。-Track W 只比前 3 行(ESP/MSR/C:),
        -Track D 比 4 行(含 D: 650240MB)。
     3) WinRE 偏差(只记录、不修布局):恢复分区可能在盘尾另建或吃掉预留段;**ESP 尺寸未被削减**且**最大连续未分配 >= 115GiB**
@@ -46,15 +49,24 @@ if ($Track -eq 'D') { $wantN = 4 }
 $failN = 0; $failItems = @()
 
 # --- 1. 版本与内部版本 ---
+# 主判据 = CIM Caption;注册表 ProductName 在 Win11 上仍显示 "Windows 10 Pro",只作补充,不作唯一/主判据。
 $v = Get-DbkWinVersion
-$verText = [string]$v.Caption
-if (-not $verText) { $verText = [string]$v.ProductName }
+$capText = [string]$v.Caption
+$prodText = [string]$v.ProductName
+$ediText = [string]$v.EditionID
+$skuText = [string]$v.OperatingSystemSKU
+$verText = $capText
+if (-not $verText) { $verText = $prodText }
 $buildN = 0
 if ([string]$v.CurrentBuild -match '^[0-9]+') { $buildN = [int]$Matches[0] }
 $verLine = $verText + ' / DisplayVersion ' + [string]$v.DisplayVersion + ' / Build ' + [string]$v.CurrentBuild + '.' + [string]$v.UBR
+$ltcText = (@($capText, $prodText) | Where-Object { $_ }) -join ' '
+$evalText = (@($capText, $prodText, $ediText, $skuText) | Where-Object { $_ }) -join ' '
 if ($buildN -lt 22000) { $failN++; $failItems += '系统版本'; Add-DbkCheck ('失败项:不是 Windows 11(内部版本需 >= 22000),实测 ' + $verLine) }
-elseif ($verText -notmatch '专业版|Pro') { $failN++; $failItems += '系统版本'; Add-DbkCheck ('失败项:不是 Windows 专业版,实测 ' + $verLine) }
-else { Add-DbkCheck ('系统版本:' + $verLine) }
+elseif ($evalText -match '(?i)Eval') { $failN++; $failItems += '系统版本'; Add-DbkCheck ('失败项:评估版(Evaluation SKU),实测 ' + $verLine + ';评估版不可用于本方案的 KMS 路线,须换正式 LTSC 镜像重装') }
+elseif ($ltcText -match '(?i)LTSC') { Add-DbkCheck ('系统版本:' + $verLine + '(LTSC 家族)') }
+else { $failN++; $failItems += '系统版本'; Add-DbkCheck ('失败项:不是 Windows 11 LTSC(本方案已改选 Windows 11 IoT Enterprise LTSC 2024,消费版 Pro/Home 等不在目标内),实测 ' + $verLine) }
+if (-not $ediText) { Add-DbkCheck '需人工:读不到 EditionID,评估版判据只覆盖 Caption/ProductName,请人工确认镜像不是评估版' }
 
 # --- 2. 目标值(模板)与实测布局 ---
 $exp = @(Get-DbkTargetLayout -Template $Template)
@@ -101,4 +113,4 @@ if ($Track -eq 'D') {
 if ($failN -gt 0) {
   Write-DbkExit -Status FAIL -Message ('Windows 基线核对失败 ' + $failN + ' 项:' + ($failItems -join '、') + ';版本或分区不符时不要就地微调,按 02-4 整盘重排后重装')
 }
-Write-DbkExit -Status PASS -Message ('Windows 11 专业版基线通过:' + $verLine + ';Windows 侧 ' + $got.Count + ' 块分区与模板一致(允许的 WinRE 偏差已记录)')
+Write-DbkExit -Status PASS -Message ('Windows 11 LTSC 基线通过(' + $verText + '):' + $verLine + ';Windows 侧 ' + $got.Count + ' 块分区与模板一致(允许的 WinRE 偏差已记录)')

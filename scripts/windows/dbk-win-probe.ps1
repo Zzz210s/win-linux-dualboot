@@ -8,7 +8,7 @@
 # 契约:调用方必须先 dot-source dbk-cli.ps1(本库用 Write-DbkNote 与 $script:DBK_USAGE 报用法错误),并保持 $ErrorActionPreference='Stop'。
 # 只读:本文件只定义函数,不主动执行动作、不写任何系统状态与文件。
 # 夹具钩子(仅离线验证,真机留空):DBK_PART_LAYOUT=<JSON>(形状见 check-partition-layout.ps1 的文件头);
-#   DBK_WIN_VERSION=<文件,每行 key=value:caption/productname/displayversion/currentbuild/ubr>;
+#   DBK_WIN_VERSION=<文件,每行 key=value:caption/productname/editionid/operatingsystemsku/displayversion/currentbuild/ubr>;
 #   DBK_WIN_PROBE_FAIL=<原因文本> 让 Get-DbkPartsLayout 直接返回读不到(仅离线夹具,用来验证调用方的失败路径);
 #   DBK_FW_TEXT / DBK_FW_TEXT_AFTER=<文件> 替代 bcdedit /enum firmware 的执行前/后文本;
 #   DBK_BM_TEXT / DBK_BM_TEXT_AFTER=<文件> 替代 bcdedit /enum {bootmgr} 的执行前/后文本(以上四个只被固件函数使用)。
@@ -79,9 +79,10 @@ function Get-DbkMaxGapMB {
   return [double](($gaps | Measure-Object -Maximum).Maximum)
 }
 
-# Get-DbkWinVersion:返回 @{ Caption; ProductName; DisplayVersion; CurrentBuild; UBR };夹具钩子优先,否则读 CIM 与注册表。
+# Get-DbkWinVersion:返回 @{ Caption; ProductName; EditionID; OperatingSystemSKU; DisplayVersion; CurrentBuild; UBR };夹具钩子优先,否则读 CIM 与注册表。
+#   Caption 是版本判据的主来源;EditionID/OperatingSystemSKU 供评估版(Eval)判定;注册表 ProductName 只作补充。
 function Get-DbkWinVersion {
-  $o = @{ Caption = ''; ProductName = ''; DisplayVersion = ''; CurrentBuild = ''; UBR = '' }
+  $o = @{ Caption = ''; ProductName = ''; EditionID = ''; OperatingSystemSKU = ''; DisplayVersion = ''; CurrentBuild = ''; UBR = '' }
   if ($env:DBK_WIN_VERSION) {
     if (-not (Test-Path -LiteralPath $env:DBK_WIN_VERSION)) {
       Write-DbkNote ('用法错误: DBK_WIN_VERSION 指向的文件不存在: ' + $env:DBK_WIN_VERSION); exit $script:DBK_USAGE
@@ -91,9 +92,12 @@ function Get-DbkWinVersion {
     }
     return $o
   }
-  try { $o.Caption = [string](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).Caption } catch { $o.Caption = '' }
+  try {
+    $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+    $o.Caption = [string]$os.Caption; $o.OperatingSystemSKU = [string]$os.OperatingSystemSKU
+  } catch { $o.Caption = ''; $o.OperatingSystemSKU = '' }
   $p = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
-  foreach ($n in @('ProductName', 'DisplayVersion', 'CurrentBuild', 'UBR')) {
+  foreach ($n in @('ProductName', 'EditionID', 'DisplayVersion', 'CurrentBuild', 'UBR')) {
     try { $o[$n] = [string]((Get-ItemProperty -Path $p -Name $n -ErrorAction Stop).$n) } catch { $o[$n] = '' }
   }
   return $o
