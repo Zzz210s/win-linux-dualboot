@@ -26,7 +26,7 @@
 - `[ ]` L0-1 先抄原值再改设置(存储控制器模式、Secure Boot、Fast Boot、启动顺序) | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:改动前的原值已落盘 | 卡:[01-firmware.md](../docs/01-firmware.md) 的 `01-1`
 - `[ ]` L0-2 存储控制器设为 AHCI / NVMe(VMD / RAID On 关闭),**必须在安装任何系统之前** | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:固件界面显示 AHCI 或 NVMe | 卡:`01-1`
 - `[ ]` L0-3 Secure Boot 保持开启、Fast Boot 关闭、仅 UEFI(CSM 关闭) | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:三项目标状态已记录 | 卡:`01-1`
-- `[ ]` L0-4 做两个安装介质并校验:Fedora ISO 按官方 `CHECKSUM` 文件比对;Windows ISO 官方未发布镜像哈希,只做"官方下载域 + 官方安装器校验" | 脚本:`scripts/windows/verify-install-media.ps1 -Check` | 判据:校验结论写进产物 | 卡:`01-2`
+- `[ ]` L0-4 做两个安装介质并校验:Windows 侧须用**正式版** Windows 11 IoT Enterprise LTSC 2024 镜像(公开下载只有 90 天评估版);Fedora ISO 按官方 `CHECKSUM` 文件比对,Windows ISO 官方未发布镜像哈希,只做"官方或授权渠道 + 官方安装器校验" | 脚本:`scripts/windows/verify-install-media.ps1 -Check` | 判据:校验结论写进产物 | 卡:`01-2`
 - `[ ]` L0-5 安装前核对目标磁盘(`DISK_MODEL` / `DISK_SIZE`),防装错盘 | 脚本:`scripts/windows/preflight.ps1 -Only target-disk`(只打印磁盘段,零写) | 判据:实测值与设备参数表一致 | 卡:`01-3`
 - `[ ]` L0-6 记下厂商启动菜单键 `BOOT_MENU_KEY`(它替代"改启动顺序") | 脚本:`scripts/windows/check-firmware.ps1 -Check` | 判据:写进产物 | 卡:`01-1`
 - `[ ]` L0-7 生成 `baseline/00-firmware.md` | 脚本:`scripts/windows/collect-l0.ps1`(默认只打印,加 `-Apply` 落盘) | 判据:字段无空缺,且含"启动顺序(`BootOrder` 首位)原值"一行 | 卡:`01-4`
@@ -44,10 +44,10 @@
 
 **本阶段产物**:`baseline/01-partitions.txt`、`baseline/01-activation.md`、`baseline/02-preflight-report.md`、`baseline/02-esp-backup/`(含 `manifest.sha256`)、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` W-1 只在 200GiB 分区上安装 Windows 11 专业版,并记录 WinRE 落点 | 脚本:`scripts/windows/verify-windows-baseline.ps1 -Check -Track D` | 判据:两块 ESP 尺寸未被削减、Fedora root 与预留空间不少于 115GiB;偏差据实记入产物 | 卡:[03-windows.md](../docs/03-windows.md) 的 `03-1`
+- `[ ]` W-1 只在 200GiB 分区上安装 Windows 11 IoT Enterprise LTSC 2024,并记录 WinRE 落点 | 脚本:`scripts/windows/verify-windows-baseline.ps1 -Check -Track D` | 判据:两块 ESP 尺寸未被削减、Fedora root 与预留空间不少于 115GiB;偏差据实记入产物 | 卡:[03-windows.md](../docs/03-windows.md) 的 `03-1`
 - `[ ]` W-2 首次进桌面:关闭 Fast Startup 与休眠 | 脚本:`scripts/windows/disable-faststartup.ps1 -Check`(执行时加 `-Apply -Yes`) | 判据:`powercfg /a` 显示休眠不可用;两项均已关闭 | 卡:`03-2`
 - `[ ]` W-3 系统盘隔离:六个已知文件夹(桌面/文档/下载/图片/视频/音乐)与游戏库、容器镜像全部重定向到 `D:` | 脚本:`scripts/windows/redirect-known-folders.ps1 -Check`(执行时加 `-Apply -Yes`) | 判据:六个已知文件夹的路径值全部以 `D:\` 开头,`D:\Shared\` 存在 | 卡:`03-3`
-- `[ ]` W-4 完成激活并落盘状态 | 脚本:`scripts/windows/check-activation.ps1 -Check` | 判据:状态已记录(激活失败不阻塞,但必须记下报错) | 卡:`03-4`
+- `[ ]` W-4 完成激活并落盘状态 | 脚本:`scripts/windows/check-activation.ps1 -Check` | 判据:状态已记录(激活失败不阻塞,但必须记下报错);镜像须为**正式版 LTSC**(评估版判 FAIL) | 卡:`03-4`
 - `[ ]` W-5 落 L1 产物 | 脚本:`scripts/windows/collect-l1.ps1`(加 `-Apply` 落盘) | 判据:`baseline/01-partitions.txt` 与 `baseline/01-activation.md` 在位 | 卡:`03-5`
 - `[ ]` W-6 L2 只读体检(管理员会话) | 脚本:`scripts/windows/preflight.ps1 -Check`(只读判定);`scripts/windows/preflight.ps1 -Apply -OutFile baseline\02-preflight-report.md`(落盘报告) | 判据:报告逐项有实测值,不出现红项;红项就地修复后重跑 | 卡:`03-6`
 - `[ ]` W-7 读闸门结论:L2 是唯一硬闸门 | 脚本:`scripts/windows/check-gate.ps1 -Check` | 判据:结论为"结论: 允许进入 L3"(不得手工改写判定列) | 卡:`03-7`

@@ -4,12 +4,12 @@
 
 本文件同时是整套手册的**命名契约**:四条不变量 I1-I4、设备参数表的字段名、各阶段产物名都在这里定义,手册与脚本引用这些名字时不得改名。
 
-方案依据(目标、决策记录、事实清单、34 条风险)在 [设计文档](design/00-design.md);由 04 号变体设计回切 Fedora 44 Silverblue 的决定与实施方式在 [回切设计](design/06-atomic-restore-design.md)(它取代 04 号,后者已标废止),原子版的内容真源是 [02 号变体设计](design/02-fedora-atomic-variant-design.md),本页不复述。
+方案依据(目标、决策记录、事实清单、38 条风险)在 [设计文档](design/00-design.md);由 04 号变体设计回切 Fedora 44 Silverblue 的决定与实施方式在 [回切设计](design/06-atomic-restore-design.md)(它取代 04 号,后者已标废止),原子版的内容真源是 [02 号变体设计](design/02-fedora-atomic-variant-design.md),本页不复述。
 
 **必须同时满足**(缺一项先按下方偏离表处置):
 
 - 单块 NVMe SSD,标称 1TB 级(UEFI + GPT 引导);**容量口径**:1024GB 型号可用约 **953.7GiB**(方案分区表按此制定),1000GB 型号仅约 **931.3GiB**(此时把 `D:` 从 ≈635GiB 减到 ≈613GiB,其余七项不动 —— 详见设计 5.1 的容量偏离分支);混合显卡(集成显卡 + 独立显卡);允许整盘格式化(两个系统都是全新安装)。
-- 目标系统:**Windows 11 专业版 + Fedora 44 Silverblue**(原子版,GNOME 50、**Wayland-only**、**Anaconda 安装器**、支持窗口约 13 个月;发行版升级 = `rpm-ostree rebase`;事实与来源等级见设计 06 第 2 节 D1 与 02 号设计第 2 节)。
+- 目标系统:**Windows 11 IoT Enterprise LTSC 2024**(底版 24H2 / build 26100,支持到 2034-10;镜像需自备正式版,评估版不可用)+ **Fedora 44 Silverblue**(原子版,GNOME 50、**Wayland-only**、**Anaconda 安装器**、支持窗口约 13 个月;发行版升级 = `rpm-ostree rebase`;LTSC 事实与来源等级见设计 3.20,Linux 侧见设计 06 第 2 节 D1 与 02 号设计第 2 节)。
 - 覆盖范围:三轨道 **W**(只 Windows)/ **L**(只 Silverblue)/ **D**(双系统)+ 共用底座;机器动作量约 9 / 10 / 19 步。
 
 **偏离项处置**:
@@ -106,7 +106,7 @@
 
 | 轨道 | 步骤(做什么) | 去哪份文档 | 产出什么 |
 |---|---|---|---|
-| **共用底座**(三条轨道都要) | 固件设置 -> 做两个安装介质(Windows 11 ISO + Fedora 44 Silverblue ISO)-> 核对目标盘 -> 落 L0 产物 | [01-firmware.md](01-firmware.md) | `baseline/00-firmware.md`(含 `BootOrder` 首位原值) |
+| **共用底座**(三条轨道都要) | 固件设置 -> 做两个安装介质(Windows 11 IoT Enterprise LTSC 2024 正式版 ISO + Fedora 44 Silverblue ISO)-> 核对目标盘 -> 落 L0 产物 | [01-firmware.md](01-firmware.md) | `baseline/00-firmware.md`(含 `BootOrder` 首位原值) |
 | **共用底座之二** | 分盘:认下本机轨道的目标布局 -> 按轨道分盘(整盘重排、一次分好,禁止事后缩容) | [02-partitioning.md](02-partitioning.md) | 分区记录进 `baseline/`(W/D 落 `01-partitions.txt`;L 落 `03-efi-layout.txt` 的分区段) |
 | **W** L1 | 装 Windows -> 关快速启动与休眠 -> 已知文件夹重定向 -> 激活 -> 落 L1 产物 | [03-windows.md](03-windows.md) | `baseline/01-partitions.txt`、`baseline/01-activation.md` |
 | **W** L2 闸门 | 只读体检 -> 读闸门结论(红项停)-> 基线备份 -> 落 L2 产物 | [03-windows.md](03-windows.md) | `baseline/02-preflight-report.md`、`baseline/02-esp-backup/`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt` |
@@ -114,7 +114,7 @@
 | **L / D** L4 | 首启收敛:共享盘挂载 / 家目录重定向 / 显卡与 Secure Boot(ublue 预签名镜像 + 一次性 MOK 注册)/ 时间 / 蓝牙 / zram 与 swapfile / journald 与更新策略 / SSH 与 SMART / **部署级回滚与变更前 pin** / 发行版升级(`rebase`)/ 回 Windows 入口 / 落 L4 产物 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`baseline/04-robustness.md` |
 | **D** 共存增量 4 步 | 115GiB 预留(在 `02-partitioning` 做)/ 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 | 落在 [02-partitioning.md](02-partitioning.md)、[03-windows.md](03-windows.md)、[05-first-boot.md](05-first-boot.md)、[07-rescue.md](07-rescue.md) | 见对应轨道的产物 |
 | **D** L5 | 退役与救援:判层 / 从 grub 提示符回去 / Windows 侧修引导 / 只重装某一系统 / 基线回滚 / 周期巡检 / 应急纪律 / 退役五步 | [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |
-| 验收 / 查询 | A-F 六组勾选(唯一判据);症状速查 + 分阶段风险(34 条风险总表在 [设计文档](design/00-design.md) 第 9 节) | [08-verification.md](08-verification.md)、[10-faq.md](10-faq.md) | 每台设备填写版落 `baseline/` |
+| 验收 / 查询 | A-F 六组勾选(唯一判据);症状速查 + 分阶段风险(38 条风险总表在 [设计文档](design/00-design.md) 第 9 节) | [08-verification.md](08-verification.md)、[10-faq.md](10-faq.md) | 每台设备填写版落 `baseline/` |
 
 - **共用卡 vs 专属卡**:固件、安装介质、目标盘核对、KMS 激活与"部署回滚演练"属共用或双轨复用;**双系统专属**只有 4 条 —— 115GiB 预留、引导不变量核查(`BootOrder` 首位 = Windows Boot Manager)、`ntfs3` 共享盘、退役与救援。
 - 逐项勾选:L0-L4 用 [checklists/deploy.md](../checklists/deploy.md),L5 用 [checklists/rollback.md](../checklists/rollback.md)。交接规则:没有产物的阶段视为未完成,不得进入下一阶段;`baseline/` 不入库(含单机信息,每台设备一个子目录);L2 是唯一硬闸门(红项禁止进 L3);L1 与 L2 必须在同一次会话内连续完成;L4 任何驱动 / 分层 / 升级变更之前先确认"回 Windows 的入口"可用,并按 `05-9` 固定(pin)当前部署、记下部署号与驱动版本。

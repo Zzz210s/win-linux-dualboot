@@ -7,17 +7,17 @@
 ## 开始前
 
 - 前提:已完成 `02-partitioning.md` 里本机轨道对应的那一张分盘卡;`baseline/00-firmware.md` 已在位且固件是 UEFI + AHCI/NVMe、Secure Boot 开启、Fast Boot 关闭。
-- 需要的东西:Windows 11 专业版官方安装 U 盘(来自微软官方下载域,官方未发布该镜像哈希,故不做 SHA256 比对)、参数表 `DISK_MODEL` / `DISK_SIZE`、厂商 `BOOT_MENU_KEY`。
+- 需要的东西:**正式版** Windows 11 IoT Enterprise LTSC 2024 安装 U 盘(公开下载只有 90 天评估版,正式镜像走 VLSC / 合作渠道;官方未发布该镜像哈希,故不做 SHA256 比对)、参数表 `DISK_MODEL` / `DISK_SIZE`、厂商 `BOOT_MENU_KEY`;**评估版镜像判 FAIL**(到期后无法按 KMS 路线激活)。
 - 产物落点:L1 两份 `baseline/01-partitions.txt` 与 `baseline/01-activation.md`;L2 四件 `baseline/02-preflight-report.md`、`baseline/02-esp-backup/`、`baseline/02-firmware-entries.txt`、`baseline/02-partitions.txt`。多设备时放 `baseline/<设备别名>/` 下,全部不入库(见 [baseline/README.md](../baseline/README.md))。
 - 纪律:L1 与 L2 必须在同一次会话内连续完成(中途若 Windows 完成过一次更新,基线即失效);全程不改 `BootOrder`、不执行 `efibootmgr -o`(I1、I2)。
 
 ### 03-1 装 Windows(安装为人工,脚本核对基线)
 
-做:从安装 U 盘以 UEFI 模式启动(菜单里选带 `UEFI:` 前缀的条目),只在 200GiB 的 `C:` 分区上装 Windows 11 专业版;装完进桌面用只读脚本核对版本与分区。分区表已在 `02-partitioning.md` 定稿(ESP 2048 / MSR 16 / `C:` 204800 / `D:` 650240,预留 115GiB 未分配)。
+做:从安装 U 盘以 UEFI 模式启动(菜单里选带 `UEFI:` 前缀的条目),只在 200GiB 的 `C:` 分区上装 **Windows 11 IoT Enterprise LTSC 2024**;装完进桌面用只读脚本核对版本与分区。分区表已在 `02-partitioning.md` 定稿(ESP 2048 / MSR 16 / `C:` 204800 / `D:` 650240,预留 115GiB 未分配)。
   1. 安装界面里只选 200GiB 那个分区(卷标 `Windows`),**不点"删除""新建""格式化"**
      看到:进桌面后 `Get-Partition -DiskNumber 0` 的序为 ESP 2048MB -> MSR 16MB -> `C:` 204800MB(轨道 D 之后还有 `D:` 650240MB)
   2. 管理员会话跑核对脚本(双系统用 `-Track D`,只 Windows 用 `-Track W`)
-     看到:退出码 0,输出"Windows 11 专业版基线通过";同时列出 WinRE 落点与"最大连续未分配"实测值
+     看到:退出码 0,脚本判定系统版本为 Windows 11 IoT Enterprise LTSC 2024(build 26100 及以上;脚本按 LTSC 家族判定,消费版与评估版均判 FAIL);同时列出 WinRE 落点与"最大连续未分配"实测值
 脚本:scripts/windows/verify-windows-baseline.ps1 -Check -Track D
 坑:让安装器自动分区会建 100MB 级 ESP,与定稿表不符(设计 3.4);WinRE 可能落进预留段,只要 ESP 未被削减且未分配仍 ≥115GiB 就接受并把偏差记进产物(设计 4.2)。
 出错时:版本或分区不符 -> 回 `02-4` 整盘重排后重装,不做逐分区微调、不做事后缩容;激活未完成 -> `03-4`。
@@ -52,18 +52,18 @@
 | 办公约定目录 | `D:\Shared\` | (无;由脚本建目录) |
 
 脚本:scripts/windows/redirect-known-folders.ps1 -Check / -Apply -Yes
-坑:把整个 `C:\Users\<用户名>` 搬到 `D:`(或改 `ProfileList`)会破坏"只格式化 `C:` 即可原地重装"这条前提(设计 4.8);游戏库与容器镜像的目录也一并留在 `D:`。
+坑:把整个 `C:\Users\<用户名>` 搬到 `D:`(或改 `ProfileList`)会破坏"只格式化 `C:` 即可原地重装"这条前提(设计 4.8);游戏库与容器镜像的目录也一并留在 `D:`。LTSC 默认不含 Microsoft Store;**若手工添加了 Store**,才谈得上把 Store 应用也搬到 `D:`(默认无此路径,不要把它写进前置条件)。
 出错时:个别程序不认新路径 -> 把它的工作目录改到 `D:` 下对应子目录;要回退就按 [回滚清单](../checklists/rollback.md) 把该文件夹改回默认路径并更新 `03-5` 的注记。
 
 ### 03-4 KMS 激活(人工 + 外链)
 
-做:只读核对授权状态;**激活动作人工**——按上游项目 `massgravel/Microsoft-Activation-Scripts` 的官方入口 https://github.com/massgravel/Microsoft-Activation-Scripts 走 Online KMS 路径。本仓库不含也不分发任何激活脚本本体,不写购买路径,不引入自建 KMS;合规责任由操作者自担(设计 3.10)。
+做:只读核对授权状态;**激活动作人工**——按上游项目 `massgravel/Microsoft-Activation-Scripts` 的官方入口 https://github.com/massgravel/Microsoft-Activation-Scripts 走 Online KMS 路径。本仓库不含也不分发任何激活脚本本体,不写购买路径,不引入自建 KMS;合规责任由操作者自担(设计 3.10)。镜像必须是**正式版 LTSC**,评估版不适用(到期后无法按 KMS 路线激活);GVLK 随版本走,以微软官方 KMS client keys 页为唯一真源,脚本与文档不硬编码任何密钥。
   1. 跑只读脚本核对状态
-     看到:已授权时退出码 0(`LicenseStatus = 1`,`GracePeriodRemaining` 给出本周期剩余);未授权时退出码 2(需人工)并给出原因
+     看到:已授权时退出码 0(`LicenseStatus = 1`,`GracePeriodRemaining` 给出本周期剩余);未授权时退出码 2(需人工)并给出原因;评估版镜像退出码 1(判 FAIL,须换正式版重装)
   2. 激活后核对续期与可达性:打开 `taskschd.msc` 看上游流程创建的续期任务,并确认能访问 KMS 主机的 1688 端口
      看到:续期任务存在且处于启用;端口可达(企业网、校园网与代理环境常在此被拦)
 脚本:scripts/windows/check-activation.ps1 -Check
-坑:首次激活失败**不阻塞** L1(设计第 7 节 L1 行),但必须把失败状态与报错记进 `01-activation.md`(`03-5`);KMS38 与自建 KMS 都明确排除。
+坑:首次激活失败**不阻塞** L1(设计第 7 节 L1 行),但必须把失败状态与报错记进 `01-activation.md`(`03-5`);KMS38 与自建 KMS 都明确排除;**不得使用评估版镜像**(评估版到期后无法按 KMS 路线激活,判 FAIL)。
 出错时:180 天周期内失效 -> 检查续期任务与 KMS 可达性后重跑一次在线激活流程;仍失败按 `10-faq.md` 登记已知例外。
 
 ### 03-5 落 L1 产物

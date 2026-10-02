@@ -7,7 +7,7 @@
 ## 开始前
 
 - 前提:单块 1TB 级 NVMe 的 Windows 机器;固件为 UEFI(CSM 关闭)、`Secure Boot` 可用,且存储控制器模式可以改。
-- 需要的东西:厂商 Setup 键与一次性启动菜单键(见入口页参数表 `VENDOR` / `BOOT_MENU_KEY`)、两个官方安装 ISO(Windows 11 + Fedora 44 Silverblue)、一个 ≥8GB 的 U 盘(先备份其中数据)。
+- 需要的东西:厂商 Setup 键与一次性启动菜单键(见入口页参数表 `VENDOR` / `BOOT_MENU_KEY`)、两个官方安装 ISO(Windows 11 IoT Enterprise LTSC 2024 **正式版** + Fedora 44 Silverblue)、一个 ≥8GB 的 U 盘(先备份其中数据);**前置条件:已备妥正式版 LTSC 镜像**(微软公开渠道只给 90 天评估版,评估版不得用于本方案的 KMS 路线)。
 - 产物落点:`baseline/00-firmware.md`(字段清单与写法见 `01-4`;多设备放 `baseline/<设备别名>/`)。
 
 ### 01-1 改固件设置(先抄原值,再把三组开关改到目标状态)
@@ -25,21 +25,21 @@
 坑:VMD / RAID On 必须在装 Windows 之前关闭(设计 4.1);装好系统后再改会无法启动。不要为绕过介质报错而关闭 `Secure Boot`。
 出错时:固件里没有 AHCI / NVMe 选项或该项置灰 -> 按 `00-overview.md` 的偏离项处置表处理;开机报 `INACCESSIBLE_BOOT_DEVICE` -> 走文末的 RAID On 附录分支。
 
-### 01-2 做两个安装介质(Fedora 44 Silverblue ISO + Windows 11 ISO)
+### 01-2 做两个安装介质(Fedora 44 Silverblue ISO + Windows 11 IoT Enterprise LTSC 2024 ISO)
 
-做:从官方渠道下载两个 ISO,校验后写入 U 盘(GPT + UEFI);国内镜像站只作下载加速,不作信任源。
+做:从官方渠道下载两个 ISO,校验后写入 U 盘(GPT + UEFI);国内镜像站只作下载加速,不作信任源。Windows 侧必须用**正式版** Windows 11 IoT Enterprise LTSC 2024 镜像,不得用评估版。
   1. 从 Fedora 官方发布页(https://fedoraproject.org/atomic-desktops/ 与其镜像目录)下载 Fedora 44 Silverblue 安装 ISO,连同同目录的官方 `*-CHECKSUM` 与它的 GPG 签名(`*-CHECKSUM.asc`)一起下载
      看到:`CHECKSUM` 文件里有 `SHA256 (Fedora-Silverblue-44-<构建号>-x86_64.iso) = <64 位十六进制>` 一行
-  2. 从微软官方下载页 https://www.microsoft.com/software-download/windows11 取 Windows 11 ISO,记录来源与实测 SHA256 留档(微软不发布该镜像哈希,设计 5.3)
-     看到:ISO 取自微软官方下载域、未经第三方盘中转;它的 SHA256 已记下
+  2. Windows 侧自备**正式版** Windows 11 IoT Enterprise LTSC 2024 镜像(微软公开下载页 https://www.microsoft.com/software-download/windows11 只给 90 天评估版,正式版走 VLSC 或合作渠道),记录来源与实测 SHA256 留档(微软不发布该镜像哈希,设计 5.3)
+     看到:镜像是**正式版**(非评估版)、取自微软官方或授权渠道、未经第三方盘中转;它的 SHA256 已记下
   3. 校验:ISO 与官方 `CHECKSUM` 放同一目录后跑脚本(`-IsoChecksum` 指向官方校验值文件;旧名 `-FedoraChecksum` 是已废弃别名,仍可用但会打印提示)
-     看到:Fedora ISO 的 SHA256 与官方值逐字符一致、`gpg --verify` 签名通过;Windows ISO 只按"官方下载域 + 官方安装器校验"两条确认
+     看到:Fedora ISO 的 SHA256 与官方值逐字符一致、`gpg --verify` 签名通过;Windows ISO 只按"官方或授权渠道 + 官方安装器校验"两条确认,且为**正式版**(非评估版)
   4. 写入 U 盘:分盘写用 Rufus(https://rufus.ie/,分区类型 GPT、目标系统 UEFI);一盘多 ISO 用 Ventoy(https://www.ventoy.net/)
      看到:一次性启动菜单里出现带 `UEFI:` 前缀的 U 盘条目
 
-脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -IsoChecksum <官方 CHECKSUM 路径>;确认 Windows ISO 来自官方下载域后加 -WindowsOfficial 重跑(本卡无自动写动作)
-坑:`CHECKSUM` 与签名必须取自官方发布页,镜像站的文件可能滞后;Ventoy 在 `Secure Boot` 下须先完成一次密钥注册,否则报 `Verification failed`。
-出错时:哈希不一致 -> 重新下载或换镜像站重下;U 盘引导被 `Secure Boot` 拒绝 -> 先确认是不是 Ventoy,不要关闭 `Secure Boot`(见 `01-1`)。
+脚本:scripts/windows/verify-install-media.ps1 -Check -IsoDir <ISO 目录> -IsoChecksum <官方 CHECKSUM 路径>;确认 Windows ISO 来自官方或授权渠道后加 -WindowsOfficial 重跑(本卡无自动写动作)
+坑:`CHECKSUM` 与签名必须取自官方发布页,镜像站的文件可能滞后;Windows 侧必须用正式版 LTSC 镜像:公开下载只有 90 天评估版,评估版到期后无法按 KMS 路线激活(上游明确警告不要用评估版);Ventoy 在 `Secure Boot` 下须先完成一次密钥注册,否则报 `Verification failed`。
+出错时:哈希不一致 -> 重新下载或换镜像站重下;拿到的是评估版 -> 换正式版镜像重做介质(见 `10-27`);U 盘引导被 `Secure Boot` 拒绝 -> 先确认是不是 Ventoy,不要关闭 `Secure Boot`(见 `01-1`)。
 
 ### 01-3 核对目标磁盘(只核对型号与容量,防选错盘)
 

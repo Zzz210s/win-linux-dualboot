@@ -4,13 +4,13 @@
 
 ## 怎么用
 
-1. 先在下面的症状速查表里按现象定位卡号(`10-1` … `10-25`);
+1. 先在下面的症状速查表里按现象定位卡号(`10-1` … `10-28`);
 2. 读该卡的 3 行处置;卡尾的 `脚本:` 行给出能一条 `--check` 判定的脚本(全部默认只读,`--apply` / `-Apply` / `-Yes` 才动手);
 3. 按卡尾 `->` 的指向回阶段手册的操作卡执行,再回 [08-verification.md](08-verification.md) 复判。
 
 三条边界:
 
-- **风险总表不在这里。** 34 条风险(风险 / 后果 / 缓解)的唯一真源是 [design/00-design.md](design/00-design.md) 第 9 节,原子版增补的风险(Anaconda 双系统安装、akmods/MOK、ublue 镜像名漂移)在 [design/02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md) 第 9 节;本文档只给按阶段的速查(5 张),不复制第二份真源。
+- **风险总表不在这里。** 38 条风险(风险 / 后果 / 缓解)的唯一真源是 [design/00-design.md](design/00-design.md) 第 9 节,原子版增补的风险(Anaconda 双系统安装、akmods/MOK、ublue 镜像名漂移)在 [design/02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md) 第 9 节;本文档只给按阶段的速查(5 张),不复制第二份真源。
 - **先分清阶段。** 同一句"黑屏"在 L3(安装)、L4(首启)、L5(退役与救援)成因与处置不同;拿不准先跑 `scripts/linux/triage.sh --check`,或回 `07-1` 判层。
 - **本文档不给新动作。** 每条处置都在对应手册的卡里有回退方式;动手前的最低保险是:进得去系统就先按 `05-9` 固定(pin)当前部署并记下部署号,进不去就先确认 `baseline/` 可读、救援 U 盘在位。
 
@@ -43,8 +43,11 @@
 | `10-23` | 分层安装为什么要重启 | `scripts/linux/set-remote-health.sh --check` |
 | `10-24` | 回滚还是重装 | `scripts/linux/rollback-deploy.sh --check` |
 | `10-25` | `rebase` 会不会丢数据 / 会不会变慢 | `scripts/linux/rollback-deploy.sh --check` |
+| `10-26` | Windows 侧为什么用 LTSC 而不是专业版 | `scripts/windows/verify-windows-baseline.ps1 -Check -Track D` |
+| `10-27` | 为什么不能用评估版 LTSC ISO | `scripts/windows/verify-install-media.ps1 -Check` |
+| `10-28` | LTSC 没有 Microsoft Store 怎么办 | 无(用 `Get-AppxPackage -Name Microsoft.WindowsStore` 看是否已装) |
 
-## 症状卡(25 张)
+## 症状卡(28 张)
 
 ### 10-1 装完黑屏 / 进不去桌面(只有鼠标指针)
 
@@ -177,7 +180,7 @@
 ### 10-17 国内下载慢,能不能用镜像站
 
 - 可以:镜像站只当下载加速器,不当信任源。Fedora Silverblue ISO 必须按官方 `CHECKSUM` 文件比对(并 `gpg --verify` 验签)。
-- Windows ISO 官方未发布镜像哈希,只做"来自微软官方下载域 + 官方安装器校验"(见 `01-2`)。
+- Windows 侧须用**正式版** LTSC 镜像(公开下载只有 90 天评估版);Windows ISO 官方未发布镜像哈希,只做"来自微软官方或授权渠道 + 官方安装器校验"(见 `01-2`、`10-27`)。
 - 校验结论写进 `baseline/00-firmware.md` 的介质段;校验不过就重下,不要"先装装看"。
 -> `01-2`、`01-4`;设计 9 第 20 条
 脚本:`scripts/windows/verify-install-media.ps1 -Check`
@@ -246,16 +249,41 @@
 -> `05-3`、`05-9`、`05-10`;设计 02 第 4 节、设计 06 第 2 节 D4
 脚本:`scripts/linux/rollback-deploy.sh --check`
 
+### 10-26 Windows 侧为什么用 LTSC(IoT Enterprise LTSC 2024)而不是专业版
+
+- 差别:LTSC 只收安全更新、不做每年功能更新,默认不含 Copilot / Recall / 消费组件;底版仍是 24H2(build 26100),支持窗口长得多(主流到 2029-10,扩展到 2034-10,设计 3.20)。
+- 代价:默认没有 Microsoft Store,少数 OEM 调优工具与媒体编解码器要按需手工补(见 `10-28`);这些在装机前先评估是否必需。
+- 认准版本名:`Windows 11 IoT Enterprise LTSC 2024`(不是 `Windows 11 Enterprise LTSC 2024` —— 两者支持窗口与 SKU 不同);`03-1` 的版本判据按前者。
+-> `03-1`;设计 3.1、3.20
+脚本:`scripts/windows/verify-windows-baseline.ps1 -Check -Track D`
+
+### 10-27 为什么不能用评估版 ISO
+
+- 微软公开下载的 LTSC 只有 90 天评估版;上游明确警告"评估版在评估期结束后无法激活,不要用,请下载完整版"。
+- 本方案 Windows 激活是 Online KMS(180 天周期 + 每 7 天自动续期),评估版到期后无法按这条路线长期激活,等于白装一次。
+- 用**正式版**镜像(VLSC / 合作渠道)重做介质;`01-2` 与 `03-4` 都把评估版判 FAIL,校验结论写进 `baseline/`。
+-> `01-2`、`03-4`;设计 3.10、设计 9 第 35 条
+脚本:`scripts/windows/verify-install-media.ps1 -Check`
+
+### 10-28 LTSC 没有 Microsoft Store 怎么办
+
+- LTSC 默认不含 Store,微软官方也声明"对 LTSC 的应用与工具支持可能有限";需要 Store 时用社区项目手工添加(本仓库不内置该步骤)。
+- 替代路径优先:多数应用有 Flatpak / winget / 官方独立安装包;视频缺 HEVC / AV1 / Dolby 扩展时用自带解码的第三方播放器。
+- OEM 调优工具(依赖 Store / UWP / .NET 的厂商控制中心)可能装不上:BIOS 里的开关不受影响,拿不到的功能按实测登记为偏差(设计 9 第 36/37/38 条)。
+-> `03-3`;设计 9 第 36/37/38 条
+脚本:无(用 `Get-AppxPackage -Name Microsoft.WindowsStore` 看是否已装)
+
 ## 分阶段风险速查(5 张)
 
-**总表在 [design/00-design.md](design/00-design.md) 第 9 节(34 条),原子版增补的风险在 [design/02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md) 第 9 节。** 下面每张卡只给"本阶段最可能踩的坑 + 一句话缓解",首列条目号与总表逐条对应,不复制后果列。
+**总表在 [design/00-design.md](design/00-design.md) 第 9 节(38 条),原子版增补的风险在 [design/02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md) 第 9 节。** 下面每张卡只给"本阶段最可能踩的坑 + 一句话缓解",首列条目号与总表逐条对应,不复制后果列。
 
 ### 阶段风险 1:共用底座与分盘(L0 + 02)
 
 | 设计 9 | 本阶段的坑 | 一句话缓解 | 相关卡 |
 |---|---|---|---|
 | 1 / 18 / 19 | VMD 未关、装错盘、ESP 放错盘 | 装 Windows 之前先关 VMD;用 `DISK_MODEL`/`DISK_SIZE` 逐盘核对;两块 ESP 都必须在第一块盘 | `01-1`、`01-3`、`02-1` |
-| 20 | 国内镜像未校验 | 镜像站只当加速器:Fedora 按官方 `CHECKSUM`(并验签),Windows 只认官方域 + 安装器校验 | `01-2` |
+| 20 | 国内镜像未校验 | 镜像站只当加速器:Fedora 按官方 `CHECKSUM`(并验签),Windows 只认官方或授权渠道 + 安装器校验 | `01-2` |
+| 35 | 拿到的是评估版 LTSC 镜像 | L0 前置"已备妥正式版镜像";评估版到期无法按 KMS 激活,换正式版(VLSC / 合作渠道)重做介质 | `01-2` |
 | 30 | 固件只认第一个 ESP | 两块 ESP 互不干扰是 A 组实测项;机型不支持就记偏离并评估共用 ESP 分支 | `02-1`、`08-verification.md` |
 | 29 | Anaconda 误把 Windows 的 ESP 设成 `/boot/efi`(含上游 `#284` 的失败路径) | `04-2` 卡内显式核对 `/boot/efi` 指向 ESP-Fedora,并由 `check-partition-plan.sh` 断言 | `02-4`、`04-2` |
 
@@ -273,6 +301,9 @@
 | 10 | KMS 续期失败 | 保留续期任务并定期核对激活状态;失效时重跑一次在线激活 | `03-4`、`03-5` |
 | 23 | 激活方案的合规风险 | 仓库只做外链与流程说明,不分发任何激活脚本本体 | `03-4` |
 | 26 / 28 | 重装误格分区 / 重定向遗漏 | 只格 `C:`;L1 完成后逐项核对六个已知文件夹 | `03-3`、`07-4` |
+| 36 | LTSC 默认无 Store | 需要 Store 应用时用社区项目手工添加,或改用 Flatpak / winget / 独立安装包 | `10-28` |
+| 37 | OEM 调优工具装不上 | BIOS 里的开关不受影响;拿不到的功能按实测登记偏差 | `10-28` |
+| 38 | 媒体编解码器缺失 | 手工添加扩展或用自带解码的播放器;登记为已知偏差 | `10-28` |
 
 脚本:`scripts/windows/check-gate.ps1`;`scripts/windows/backup-esp.ps1 -OutDir baseline -Check`;`scripts/windows/check-activation.ps1 -Check`
 

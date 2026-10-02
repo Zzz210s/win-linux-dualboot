@@ -2,11 +2,11 @@
 
 [English](README.md) | 简体中文
 
-一套可复现、可安全撤除的 Windows 11 专业版 + Fedora 44 Silverblue 双系统部署手册,面向同规格的全新设备。
+一套可复现、可安全撤除的 Windows 11 IoT Enterprise LTSC 2024 + Fedora 44 Silverblue 双系统部署手册,面向同规格的全新设备。
 
 本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**47 张动作卡、45 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
 
-材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 34 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
+材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 38 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
 
 注意:**本仓库里的任何命令都还没有在真机上跑过**——所有脚本只到夹具级验证。动手之前请先看[当前状态](#当前状态)。
 
@@ -108,7 +108,7 @@ I3 在本方案里还有**结构**上的保障:Windows 与 Silverblue 各用一�
 - 单块 NVMe SSD,**标称 1TB 级**,UEFI + GPT 引导。容量口径要说清:1024GB 型号实际可用约 **953.7GiB**,方案分区表按此制定;1000GB 型号只有约 **931.3GiB**,此时把 `D:` 从约 635GiB 减到约 613GiB,其余七项不动;
 - 混合显卡(集成显卡 + 独立显卡);
 - 允许整盘格式化:两个系统都是全新安装,不存在"保留现有系统"的路径;
-- 目标组合:Windows 11 专业版 + **Fedora 44 Silverblue**(GNOME 50、**Wayland**、**Anaconda 安装器**、支持期约 13 个月(每 6 个月一发新版本))。
+- 目标组合:Windows 11 IoT Enterprise LTSC 2024(底版 24H2 / build 26100,支持到 2034-10;镜像需自备正式版)+ **Fedora 44 Silverblue**(GNOME 50、**Wayland**、**Anaconda 安装器**、支持期约 13 个月(每 6 个月一发新版本))。
 
 偏离项要么给出适配分支(两块及以上磁盘、容量明显偏离 1TB、仅独显、共享盘降级为只读、共用 ESP 回退分支),要么明确**不适用于 v1**:需要磁盘加密、VMD/RAID 模式锁定无法更改、固件只从第一块盘引导的机型,以及需要快照式回滚的方案。吸收厂商差异的设备参数表(`DISK`、`VENDOR`、`BOOT_MENU_KEY`、`DISK_MODEL`、`DISK_SIZE`、`FEDORA_ESP_SIZE` 等)定义在 [docs/00-overview.md](docs/00-overview.md),每台设备填一份。原子语义(只读基础层、分层安装需重启、以部署为回滚单位)是契约的一部分,不是可选偏好——见 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与 [docs/design/00-design.md](docs/design/00-design.md) 第 3 节。
 
@@ -202,7 +202,7 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 
 ## 风险
 
-已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**34 条**),按阶段的速查与 **25 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Fedora 侧 NVIDIA 驱动签名与一次性 ublue MOK 注册、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Anaconda 误把 `/boot/efi` 指向 Windows 的 ESP(上游 issue #284)、原子基础层的 `rebase` 落到坏内核或坏驱动、把硬件故障误判成双系统问题。
+已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**38 条**),按阶段的速查与 **28 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Fedora 侧 NVIDIA 驱动签名与一次性 ublue MOK 注册、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Anaconda 误把 `/boot/efi` 指向 Windows 的 ESP(上游 issue #284)、原子基础层的 `rebase` 落到坏内核或坏驱动、把硬件故障误判成双系统问题。
 
 Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。安装介质校验按厂商现实分开写:Fedora Silverblue ISO 按官方 `*-CHECKSUM` 文件与其 GPG 签名比对;Windows ISO 官方未发布镜像哈希,只做“官方下载域 + 官方安装器校验”([docs/01-firmware.md](docs/01-firmware.md))。
 

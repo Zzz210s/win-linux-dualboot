@@ -1,6 +1,6 @@
-# 设计方案:Windows 11 专业版 + Fedora 44 Silverblue(原子版)双系统
+# 设计方案:Windows 11 IoT Enterprise LTSC 2024 + Fedora 44 Silverblue(原子版)双系统
 
-日期:2026-09-17(初版)/ 2026-09-25(修订九)
+日期:2026-09-17(初版)/ 2026-09-25(修订九)/ 2026-09-29(修订十)
 状态:已定稿(待实施计划)
 适用:单块 NVMe、UEFI、混合显卡、允许整盘格式化的设备类
 
@@ -29,7 +29,7 @@
 
 在一台**全新的同规格设备**上建立双系统,同时满足三件事:
 
-1. **能装成**:Windows 11 专业版 + **Fedora 44 Silverblue**(GNOME 50,Wayland),Linux 侧默认 Wayland 会话;
+1. **能装成**:Windows 11 IoT Enterprise LTSC 2024 + **Fedora 44 Silverblue**(GNOME 50,Wayland),Linux 侧默认 Wayland 会话;
 2. **能安全撤除**:删除 Linux 后仍能自动进入 Windows,不出现 `grub>` / `grub rescue>`;
 3. **能重复**:同一套手册可用于多台同规格设备,不绑定任何一台具体机器的序列号、机器名或历史状态。
 
@@ -42,7 +42,7 @@
 - 单块 NVMe SSD,**标称 1TB 级**、UEFI + GPT 引导;**容量口径**:若为 1024GB 型号则实际可用约 **953.7GiB**(本方案默认按此定表),若为 1000GB 型号则只有约 **931.3GiB** —— 两者相差约 22GiB,见 5.1 的偏离分支;
 - 混合显卡(集成显卡 + 独立显卡);
 - 允许整盘格式化(Windows 与 Linux 都是全新安装);
-- 目标系统组合:Windows 11 专业版 + **Fedora 44 Silverblue**(Linux 侧)。
+- 目标系统组合:Windows 11 IoT Enterprise LTSC 2024 + **Fedora 44 Silverblue**(Linux 侧)。Windows 侧底版 24H2 / build 26100,支持到 2034-10(见 3.20);LTSC 镜像需自备正式版,评估版不可用(见 4.1 与 L0 手册 `01-2`)。
 
 **偏离项的处置**
 
@@ -110,7 +110,7 @@
 
 | # | 决策 | 选择 | 理由 | 被否方案与原因 |
 |---|---|---|---|---|
-| 3.1 | 系统组合 | Windows 11 专业版 + **Fedora 44 Silverblue**(原子版,GNOME 50,Wayland) | 用户 2026-09-25 选定回切,动因 = snap 清不干净(设计缺口,见 06 号设计第 1 节);部署级回滚(`rpm-ostree rollback` + pin)与独立 ESP/`/boot` 是既有 02 号设计的内容清单 | `Kubuntu 26.04 LTS`(2026-09-22 采用、2026-09-25 废止,见 06 号设计);**Fedora 44 Kinoite**:Plasma + 部署级回滚,可作等价替换但不作默认(用户 2026-09-25 选定 GNOME);Ubuntu 主版 GNOME(Flutter 安装器的 ESP 行为与本方案的手工分区路径不同);Debian 13(内核与驱动偏旧);CachyOS(滚动更新与"稳定"冲突) |
+| 3.1 | 系统组合 | Windows 11 IoT Enterprise LTSC 2024(底版 24H2 / build 26100,支持到 2034-10)+ **Fedora 44 Silverblue**(原子版,GNOME 50,Wayland) | 用户 2026-09-25 选定回切,动因 = snap 清不干净(设计缺口,见 06 号设计第 1 节);部署级回滚(`rpm-ostree rollback` + pin)与独立 ESP/`/boot` 是既有 02 号设计的内容清单;**Windows 侧 2026-09-29 改选 LTSC**:去消费组件(Copilot / Recall / 默认无 Store)、不追每年功能更新、支持窗口长(主流支持到 2029-10-09,扩展支持到 2034-10-10) | **Windows 11 专业版**(2026-09-29 前采用:含消费组件、功能更新频繁、支持窗口按版本而非 LTSC 周期);`Kubuntu 26.04 LTS`(2026-09-22 采用、2026-09-25 废止,见 06 号设计);**Fedora 44 Kinoite**:Plasma + 部署级回滚,可作等价替换但不作默认(用户 2026-09-25 选定 GNOME);Ubuntu 主版 GNOME(Flutter 安装器的 ESP 行为与本方案的手工分区路径不同);Debian 13(内核与驱动偏旧);CachyOS(滚动更新与"稳定"冲突) |
 | 3.2 | 桌面环境 | **GNOME 50**(Silverblue 旗舰),Wayland 会话 | ublue 的 GNOME 变体验证最充分;Wayland 是默认且唯一会话类型,不提供 X11 回退(02 号设计 D1) | **KDE Plasma 6.6.4**:换成 Kinoite + ublue `aurora-nvidia`,本设计其余各条不变(可选替换,非默认) |
 | 3.3 | 引导栈 | **GRUB2 + shim**,写入 `\EFI\fedora\`,**使用 Silverblue 自己的 ESP** | 上游在 Secure Boot 下原生可用;官方签名链现成(`shim-x64` 由微软签名 + `grub2-efi-x64`),**无需自签**;`grub2-mkconfig` / `efibootmgr` 的救援路径有官方文档支撑(02 号设计第 6 节) | **systemd-boot + UKI**:原子版上非默认,且与救援卡里 `efibootmgr` + `grub2-mkconfig` 的口径不一致。**rEFInd**:需改 `{bootmgr}` 路径(违反 I3)或额外引入一层。**自定义 Secure Boot 密钥**:改动签名链会新增风险(见 1.3) |
 | 3.4 | ESP 布局 | **Windows 独占 2GiB + Fedora 独立 1GiB(两个 ESP)** | 上游与社区一致要求 Linux 用**自己的** ESP 与 `/boot`,并明确"不要让 Anaconda 使用 Windows 的 EFI 分区";独立后 I3 由**结构**保证;Windows 侧工具只认第一个 ESP 的习惯也不再被牵动 | **单个 2GiB 共用 ESP**:I3 只能靠纪律,且后续 Windows 更新可能重写共用 ESP 的 `\EFI\BOOT\` |
@@ -119,7 +119,7 @@
 | 3.7 | 根文件系统 | **btrfs**(Silverblue 默认) | 原子版需要 ostree 部署与 `var` 子卷;`/home` 是 `/var/home` 的符号链接、不属于部署,回滚不回退用户数据;文件系统层快照仍不需要(回滚由部署级 `rpm-ostree rollback` 承担,见 3.14) | **btrfs + snapper + grub-btrfs**(用户明确否决:额外维护一套快照工具链);**ZFS root 快照**(实验性选项,内存开销与调优门槛高,见 `04-kubuntu-variant-design.md` 2.1;04 号设计已标废止,该被否结论仍有效);**ext4**:不支持 ostree 部署体系 |
 | 3.8 | 交换空间 | **无 swap 分区**:zram + swapfile 4GiB | 可随时调整、不动分区表、兼容任意文件系统 | swap 分区(尺寸一旦定死);休眠(需 swap ≥ RAM,且 NVIDIA + Wayland 下风险高) |
 | 3.9 | 磁盘加密 | **不做** | TPM-FDE 需整盘且与双系统引导链测量冲突,官方仍标实验性质 | LUKS 口令(留给第 10 节变体) |
-| 3.10 | Windows 激活 | **成熟 KMS 激活**:采用上游项目的 **Online KMS**(180 天周期 + 每 7 天自动续期任务),**不引入任何自建 KMS 服务** | 按需求定调(采用成熟 KMS,而非购买密钥或 HWID);KMS 走的是微软官方激活协议,可重复、可验证、可续期;自建 KMS 已放弃,因为它需要一台常态在线的主机,收益(离线自主)不抵维护成本 | **KMS38**:微软在 build 26100.7019 起彻底废弃该机制,且已被上游项目移除,对 Windows 11 24H2+ 无效。**自建 KMS 服务**:已彻底放弃,需求中已删除。**HWID / TSforge**:虽为上游推荐,但按需求不使用(仅作文档中的回退说明) |
+| 3.10 | Windows 激活 | **成熟 KMS 激活**:采用上游项目的 **Online KMS**(180 天周期 + 每 7 天自动续期任务),**不引入任何自建 KMS 服务**;激活对象是 LTSC 版本时,**GVLK 随版本走,以微软官方 KMS client keys 页为唯一真源**,脚本与文档不硬编码任何密钥;镜像必须是**正式版**(评估版到期后无法按 KMS 路线激活) | 按需求定调(采用成熟 KMS,而非购买密钥或 HWID);KMS 走的是微软官方激活协议,可重复、可验证、可续期;自建 KMS 已放弃,因为它需要一台常态在线的主机,收益(离线自主)不抵维护成本 | **HWID 明确排除**:它是另一套机制(硬件绑定数字许可证),且会把版本翻成非 LTSC 的 IoT 版、改变版本策略,与"用 KMS 且不引入自建服务"的路数不同;上游 issue #613 说明 HWID 对 IoT Enterprise LTSC 2024 可用、对 Enterprise LTSC 2024 不可用,本方案两者都不用。**KMS38**:微软在 build 26100.7019 起彻底废弃该机制,且已被上游项目移除,对 Windows 11 24H2+ 无效。**自建 KMS 服务**:已彻底放弃,需求中已删除。**TSforge**:虽为上游推荐,但按需求不使用(仅作文档中的回退说明) |
 | 3.11 | 文档粒度 | **步骤级**(做什么 + 关键命令 + 验证方式) | 按需求定调;命令级会引入版本敏感的冗余细节 | 命令级(逐条可复制但难维护);说明级(信息不足) |
 | 3.12 | 多设备适配 | **参数化 + 厂商差异表**,`baseline/` 每台设备一份且不入库 | 面向"多台同规格设备"重复部署;同时避免公开仓库泄露具体机器信息 | 绑定单台机器(不可复用,且泄露序列号) |
 | 3.13 | 数据迁移 | **不做** | 高价值但高风险(iGloo 的整套迁移链路包含凭据解密/再加密) | iGloo 式迁移(见第 11 节) |
@@ -148,6 +148,9 @@
 | 同盘两个 ESP 的固件支持:官方未承诺,社区实践可行 | **待实测**(列入 A 组验收) | 中 |
 | Windows 11 ISO:微软不发布镜像 SHA256;Fedora ISO:官方发布 `CHECKSUM` 文件(含签名)可比对 | 已确认 | 高 |
 | Online KMS 激活周期为 180 天,需每 7 天联系 KMS 主机自动续期 | 已确认(上游文档) | 高 |
+| Windows 11 IoT Enterprise LTSC 2024:底版 24H2 / build 26100,主流支持到 **2029-10-09**、扩展支持到 **2034-10-10**;官方公开下载只有 **90 天评估版** | 已确认 | 高(微软 LTSC 生命周期页与官方下载页) |
+| LTSC 默认**不含 Microsoft Store**;官方声明"对 LTSC 的应用与工具支持可能有限"(in-box apps 与 Store 等) | 已确认 | 高(微软官方声明) |
+| MAS 明确警告不要用评估版("Evaluation editions cannot be activated beyond the evaluation period");其 issue #613 指出 HWID 对 IoT Enterprise LTSC 2024 可用、对 Enterprise LTSC 2024 不可用 | 已确认 | 中高(上游项目文档与 issue) |
 | 部分厂商笔记本固件**只从第一块盘引导**(用户报告:惠普官方明确不支持从第二块盘启动) | 社区报告;作为双盘分支的硬约束写入厂商差异表 | 中 |
 | 装完独显驱动后,部分机器在**引导菜单阶段黑屏**(键盘仍可用) | 社区报告(2026 年的实例);处置见决策 3.19 | 中 |
 
@@ -203,7 +206,7 @@
 | L4 | L + D | [docs/05-first-boot.md](../05-first-boot.md)(首启收敛与健壮性;其中"共享盘挂载""家目录重定向"两张卡是 D 轨道的共存增量;共 13 张卡 `05-1` … `05-13`) |
 | L5 | D | [docs/07-rescue.md](../07-rescue.md)(退役与救援;原 `06-decommission.md` 并入) |
 | 验收 | 全部 | [docs/08-verification.md](../08-verification.md) |
-| 风险与速查 | 全部 | [docs/10-faq.md](../10-faq.md)(症状卡 + 阶段风险速查;34 条风险总表保留在第 9 节) |
+| 风险与速查 | 全部 | [docs/10-faq.md](../10-faq.md)(症状卡 + 阶段风险速查;38 条风险总表保留在第 9 节) |
 
 | 阶段 | 名称 | 目的 | 产物 | 完成判据 |
 |---|---|---|---|---|
@@ -217,7 +220,7 @@
 ### 4.1 L0 装机前准备
 
 - 固件:SATA 操作模式设为 **AHCI / NVMe**(关闭 VMD 或 RAID On)、**Secure Boot 保持开启**、Fast Boot 关闭;
-- 介质:Windows 11 官方安装 U 盘;**Fedora 44 Silverblue 官方安装 U 盘**(或 Ventoy 多 ISO);介质校验按各官方站点发布的校验值(Fedora 有官方 `CHECKSUM` 文件与签名;Windows ISO 官方不发布镜像哈希,只做"官方下载域 + 官方安装器校验");
+- 介质:**正式版** Windows 11 IoT Enterprise LTSC 2024 安装 U 盘(微软公开下载只给 90 天评估版,正式镜像自备:VLSC / 合作渠道;**评估版不得用于本方案**);**Fedora 44 Silverblue 官方安装 U 盘**(或 Ventoy 多 ISO);介质校验按各官方站点发布的校验值(Fedora 有官方 `CHECKSUM` 文件与签名;Windows ISO 官方不发布镜像哈希,只做"官方下载域 + 官方安装器校验");
 - **关键点**:VMD 必须在安装 Windows **之前**关闭。若 Windows 已按 RAID On 装好再关闭,系统将无法启动,需先预置存储驱动再进安全模式完成切换(该路径作为附录分支,不属于本方案主路径)。
 
 ### 4.2 L1 Windows 全新安装
@@ -530,7 +533,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 
 ## 9. 风险登记
 
-34 条;等级为来源可信度与发生概率的综合(高 = 官方文档/上游 issue 级证据,中 = 社区报告或需实测)。原子版增补的风险(Anaconda 双系统安装、akmods/MOK、ublue 镜像名漂移)另见 `02-fedora-atomic-variant-design.md` 第 9 节。
+38 条;等级为来源可信度与发生概率的综合(高 = 官方文档/上游 issue 级证据,中 = 社区报告或需实测)。原子版增补的风险(Anaconda 双系统安装、akmods/MOK、ublue 镜像名漂移)另见 `02-fedora-atomic-variant-design.md` 第 9 节。
 
 | # | 风险 | 后果 | 缓解 | 等级 |
 |---|---|---|---|---|
@@ -568,6 +571,10 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 32 | **自建 akmods 卡住内核升级** | 内核/驱动更新被阻塞,长期停在旧内核 | 不用自建 akmods(`#632`);驱动随 ublue 预签名镜像更新,更新前先按 `05-9` 备份并记录部署号 | 中 |
 | 33 | **升级后驱动与内核不配套** | 新内核里 `nvidia` 不加载或桌面异常 | 升级前备份并留档;升级后立刻复检(会话 / Wayland / 驱动签名 / 桌面),不满足就按 `05-9` 回滚到固定部署 | 中 |
 | 34 | **分层包与镜像不配套(rebase 后模块版本变化)** | `nvidia` 不加载或桌面异常 | 用 ublue 的版本化标签而非 `latest` 做 rebase;变更前后各复检一次(镜像来源 / 模块签名 / 会话类型) | 中 |
+| 35 | **正式 LTSC 镜像来源**(微软公开下载只给 90 天评估版) | 用评估版装完后无法按 KMS 路线长期激活(上游明确警告不要用评估版),等于重来一次 | L0 把"已备妥正式版 LTSC 镜像(VLSC / 合作渠道)"列为前置并校验;评估版镜像按 FAIL 处理(见 4.1 与 `01-2`、`10-27`) | 中 |
+| 36 | **LTSC 默认不含 Microsoft Store** | 需要 Store 分发或商店应用的场景无从安装 | 按需用社区项目手工添加 Store,或改用 Flatpak / winget / 官方独立安装包;不把"必须有 Store"当默认前提(见 `10-28`) | 中 |
+| 37 | **OEM 调优工具可能装不上**(如依赖 Store / UWP / .NET 的厂商控制中心) | 风扇曲线、灯效、性能档等在 Windows 侧无法调节 | BIOS 里的开关不受影响;需要的功能以实测为准,缺失项登记为偏差并给出替代路径(见 `10-28`) | 中 |
+| 38 | **媒体编解码器缺失**(HEVC / AV1 / Dolby 等随 Store 分发的扩展) | 部分视频无法播放或硬件解码不可用 | 按需手工添加编解码器扩展,或用自带解码的第三方播放器;把"缺编解码器"登记为已知偏差(见 `10-28`) | 中 |
 
 ---
 
@@ -602,7 +609,9 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | `pgaskin/bootnext`、`mendhak/grub-reboot-picker` | 92 / 70 星 | **复用机制**:EFI `BootNext` 一次性启动语义,是 I2 的实现基础。前者自 2020 年未更新,故只取其机制,不依赖其产物 |
 | `bayasdev/envycontrol` | 1.9k 星 | 混合显卡模式切换参考,归入 L4 的备选工具 |
 | `fwupd/fwupd` + LVFS | 4.2k 星 | Linux 侧固件更新路径;注意部分机型 LVFS 版本可能落后于 Windows 侧固件 |
-| `massgravel/Microsoft-Activation-Scripts` | 190k 星,最近发布 v3.12(2026-07-04) | Windows **KMS 激活**的上游来源(Online KMS:180 天周期 + 每 7 天自动续期任务);其文档明确记录了 KMS38 的失效边界与移除决定,是本方案排除 KMS38 的依据;本仓库只做外链与流程说明 |
+| `massgravel/Microsoft-Activation-Scripts` | 190k 星,最近发布 v3.12(2026-07-04) | Windows **KMS 激活**的上游来源(Online KMS:180 天周期 + 每 7 天自动续期任务);其文档明确记录了 KMS38 的失效边界与移除决定,是本方案排除 KMS38 的依据;上游 issue #613 指出 HWID 对 IoT Enterprise LTSC 2024 可用、对 Enterprise LTSC 2024 不可用,本方案据此仍只用 KMS;本仓库只做外链与流程说明 |
+| 微软官方文档:Windows 11 IoT Enterprise LTSC 生命周期(2024 版) | 官方 | **本次 Windows 侧改选的来源**:底版 24H2 / build 26100,主流支持到 2029-10-09、扩展支持到 2034-10-10;并含"对 LTSC 的应用与工具支持可能有限"的官方声明(Store 缺失与 OEM 工具风险由此而来) |
+| 微软官方文档:KMS client keys(KMS 客户端激活密钥) | 官方 | **GVLK 真源**:KMS 客户端密钥随版本走(含 Windows 11 LTSC 2024),脚本与文档只指向本页,不硬编码任何密钥 |
 | `rezzcode/grub-rescue`、`blindma1den/windows-11-uefi-boot-repair` | 3 / 56 星 | L5 救援手册的内容来源(GRUB 恢复、`bcdboot` 重建,注意其命令写法偏 legacy) |
 | `yannubuntu/boot-repair` | GitHub 仓库已不存在 | 只能作为离线救援 ISO 列入工具箱,**不可作为方案依赖** |
 | `linuxmint/timeshift`、`Antynea/grub-btrfs` | 4.3k / 1.2k 星 | 快照回滚方案;**已作废**(3.7 / 3.14 明确不用:回滚由部署级 `rpm-ostree rollback` 承担) |
@@ -645,3 +654,4 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 2026-09-21 | 消除最后一处不和谐:I1 举例路径由 `\EFI\ubuntu\grubx64.efi` 改为原子版时代的 `\EFI\fedora\grubx64.efi`(仅举例路径,不变量语义未变),并同步 `docs/00-overview.md` 的同一处与说明句。**该行已废弃,保留为历史记录**(修订八已把举例路径改回 `\EFI\ubuntu\`) |
 | 2026-09-22 | **修订八:基础系统由 Fedora 44 Silverblue 改为 Kubuntu 26.04 LTS**(见 `04-kubuntu-variant-design.md`)。按"逐节核对"重写全文:第 1 节补回滚降级目标与非目标(新增 **ZFS root 快照**为被否项);第 3 节决策表改 Kubuntu 口径(基础系统 Kubuntu 26.04 LTS / Plasma 6.6 Wayland-only / Calamares / LTS 3 年;回滚改**包级回退 + 原地重装**;Secure Boot 走 Ubuntu 官方预签名包、**不需要自签与 MOK**;根文件系统 **ext4**;新增 **snap 规避 S1–S6** 决策 3.22);第 4 节 L4 卡清单改 **14 张**(`05-1` … `05-13`,末张是 snap 零残留卡 `05-14`)、4.7 的 R1–R9 改为新策略(变更前备份 / 包级回退 / 旧内核保留 / 救援 U 盘 / journald / OOM-zram / SSH / 保守更新 / SMART)、4.8 原地重装两法改 Ubuntu 口径(`grub-install` + `update-grub`、`grub-efi-amd64-signed`/`shim-signed`);第 5 节改 `ESP-Ubuntu 1GiB` 与 `UBUNTU_ESP_SIZE`、删除第三方镜像参数(**分区数值一律未变**);第 7 节回滚粒度表改按新策略重写(单包 / 配置 / 系统级 / 引导级);第 8 节 B 组新增 **snap 零残留**与**驱动来源为 Ubuntu 官方包**、去掉 `rpm-ostree status` 项,F 组把"部署回滚演练"换成 **包级回退演练 + 原地重装演练**;第 9 节删掉原子版专属风险(第三方镜像/MOK/分层安装/部署回滚),新增 Kubuntu 时代风险(第三方 PPA、失去原子回滚、安装器误选 ESP、snap 被静默装回),**总条数仍为 34**;第 11 节把第三方镜像相关条目替换为 Kubuntu/Ubuntu 侧证据(官方发布说明、Calamares 文档、Mozilla 官方安装文档与社区实测) |
 | 2026-09-25 | **修订九:回切 Fedora 44 Silverblue(原子版)+ 发行版薄接口层**(见 `06-atomic-restore-design.md`;`02-fedora-atomic-variant-design.md` 恢复为现行内容真源)。逐节同步:标题与第 1 节改系统组合(GNOME 50 / Wayland)与"恢复部署级回滚"目标;第 3 节决策表改原子版口径(3.1–3.7 / 3.14 / 3.16–3.19;3.20 事实表换 Fedora 原子版事实;3.21 生命周期改约 13 个月与 `rpm-ostree rebase`;3.22 由 snap 规避改为"原子版语义");第 4 节 L3/L4 改 Anaconda 与 13 张 L4 卡、映射表改 `\EFI\fedora\`、部署级回滚演练;第 5 节 ESP-Fedora 与 root **btrfs**(**分区数值一律未变**);第 7/8 节回滚粒度与验收改部署级回滚;第 9 节风险表换原子版条目;第 11 节证据来源换 Fedora/ublue 侧。第 2 节仅替换 I1 举例路径(`\EFI\ubuntu\` → `\EFI\fedora\`),不变量语义未变。分区数值一字未动 |
+| 2026-09-29 | **修订十:Windows 侧由 Windows 11 专业版改为 Windows 11 IoT Enterprise LTSC 2024**(底版 24H2 / build 26100,支持到 2034-10;用户 2026-09-29 决定)。决策 3.1 更新系统组合并在被否栏保留"专业版";决策 3.10 明确只用 KMS、**明确排除 HWID**,并写明 GVLK 随版本、官方 KMS client keys 页为真源、镜像须为正式版;第 9 节风险表新增 4 条(正式 LTSC 镜像来源 / Store 默认缺失 / OEM 工具 / 媒体编解码器)后共 **38 条**;3.20 事实表与第 11 节来源补微软 LTSC 生命周期页、KMS client keys 页、"支持 LTSC 有限"声明与 MAS issue #613;4.1 介质改为正式版 LTSC 镜像。**分区数值与卡号一字未动**。 |
