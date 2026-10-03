@@ -113,10 +113,10 @@
 | 风险 | 处置 |
 |---|---|
 | 13 个月升级节奏回来了 | 写成正式卡(`05-10`)+ 巡检项;02 号设计已有现成内容 |
-| ublue 镜像名 / `ujust` 任务名 / MOK 密码 | **已核实(2026-09-27)** → 镜像 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`、任务 `ujust enroll-secure-boot-key`、密码 `universalblue`、密钥 `/etc/pki/akmods/certs/akmods-ublue.der`;**仍需现场确认** stream 与 Fedora 版本的对应关系 |
+| ublue 镜像名 / `ujust` 任务名 / MOK 密码 | **已核实(2026-09-27)** → 镜像 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`、任务 `ujust enroll-secure-boot-key`、密码 `universalblue`、密钥 `/etc/pki/akmods/certs/akmods-ublue.der`;stream 与 Fedora 版本的对应关系**不写死映射**,改由 `dbk-driver.sh` 的 `driver_release_guard` 在 rebase 前断言(本机 `VERSION_ID` 主版本 vs 操作员按 ublue 官方文档核对后声明的 `DBK_UBLUE_FEDORA`;不一致/未声明 → 2 且不发 rebase) |
 | 分层安装"装了但没生效" | 接口暴露 `pkg_needs_reboot`;L4 把分层安装**合并到一次重启**;卡片显式提示 |
-| Anaconda 在含 Windows ESP 的盘上装 Silverblue 失败 | 独立 ESP + 独立 `/boot` 为硬要求;L3 前置核对,失败即回分区卡 |
-| 双 ESP 固件支持未承诺 | 验收 A 组列为"参考设备必做"实测项 |
+| Anaconda 在含 Windows ESP 的盘上装 Silverblue 失败 | 独立 ESP + 独立 `/boot` 为硬要求;**装前**跑 `check-partition-plan.sh --track D --check` 并在分区页显式确认 Linux 侧 ESP;**失败即转 `07-rescue.md` 手工修(不重装、不就地重排分区表)**;参考设备必测项 = 验收 A10 |
+| 双 ESP 固件支持未承诺 | 验收 A 组列为**设备侧必测项 A9**(两条条目都在 + 分别重启各进一个系统);只认一个时走共用 ESP 分支(共用 ESP + 独立 `/boot`,I3 改由备份/还原演练保证) |
 | 薄接口只保住脚本层,手册仍与发行版绑定 | 如实说明:下次切换 ≈ 4 份手册 + 4 个接口,不再是 6 批;S-1 守住脚本层不退化 |
 | 夹具重写期覆盖率短暂下降 | 验收线 = 步骤脚本 50/50 且断言数 ≥320 |
 
@@ -139,10 +139,11 @@
 | Fedora 44 Silverblue 于 2026-04-28 GA,支持约 13 个月 | 高 | Fedora 官方发布与生命周期文档(02 号设计已记录) |
 | ublue 的 NVIDIA 变体镜像内模块预签名;镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(gts / stable / stable-daily / latest);MOK 密码 `universalblue`、密钥 `/etc/pki/akmods/certs/akmods-ublue.der` | **高** | ublue 的 just 配方(`ublue-os/packages` 仓库 `packages/ublue-os-just/src/recipes/00-default.just`;装机后落 `/usr/share/ublue-os/just/00-default.just`)、Bazzite Secure Boot 指南、Bluefin 文档(2026-09-27 核实) |
 | `ujust enroll-secure-boot-key` 的任务名与行为 | **高** | 同上(配方内即 `mokutil --timeout -1` + `mokutil --import /etc/pki/akmods/certs/akmods-ublue.der`),2026-09-27 核实 |
-| Anaconda 在含既有 ESP 的盘上装 Silverblue 的失败模式 | **高(仍未修)** | 上游 issue `fedora-silverblue/issue-tracker#284` **截至 2026-09 仍开**;相关 Bugzilla 2439271(已作为重复项关闭);因此独立 ESP + 独立 `/boot` 是**必需**而非可选 |
-| 双 ESP 的固件支持 | 低(**仅剩的设备侧未知项**) | 无官方承诺;列"参考设备必做"实测项(镜像名/任务名/MOK 密码/#284 已于 2026-09-27 核实) |
+| Anaconda 在含既有 ESP 的盘上装 Silverblue 的失败模式 | **高(仍未修)** | 上游 issue `fedora-silverblue/issue-tracker#284` **截至 2026-09 仍开**;相关 Bugzilla 2439271(已作为重复项关闭);因此独立 ESP + 独立 `/boot` 是**必需**而非可选;缓解路径 = 装前核对 → 失败转 `07-rescue.md`(验收 A10) |
+| 双 ESP 的固件支持 | 低(**设备侧未知项,只能在设备上实测**) | 无官方承诺;验收 A9 给了可执行步骤与失败分支(共用 ESP);镜像名/任务名/MOK 密码/#284 已于 2026-09-27 核实 |
 | snap 残留的未覆盖面(包名、目录、单元、用户组) | 高 | 本仓库实现自查 + Ubuntu 包元数据 |
 
 ## 10. 变更历史
 
 - 2026-09-25:首版。记录用户四项决定(回切、Silverblue、方式 B、薄接口),给出接口层契约、脚本/手册/夹具三层改动清单、13 条修复存活审计要求、风险与非目标、5 批实施批次。
+- 2026-10-03:四项待核实收口同步 —— stream ↔ Fedora 版本改由 `driver_release_guard` 前置断言强制(不写死映射);`#284` 缓解路径写实(装前核对 → 失败转救援、不重排分区表)并把"在已有 Windows ESP 的盘上装成功"定为参考设备必测项 A10;同盘双 ESP 改为设备侧必测项 A9。KMS `GracePeriodRemaining` 不再换算天数。

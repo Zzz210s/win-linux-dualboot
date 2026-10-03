@@ -165,7 +165,7 @@
 
 - 厂商硬约束:两块 ESP 都必须留在第一块盘;Linux 数据分区可以放第二块盘。
 - 装机前用 `01-3` 核对目标盘型号与容量,不要先按第二块盘规划。
-- 已装完才发现:记偏离并评估"共用 ESP 分支"(设计 10),该分支需实测。
+- 已装完才发现:记偏离,先按验收 A9 的步骤确认(另一条条目在不在、能不能选中启动),再评估"共用 ESP 分支"(设计 10;该分支本身也要在参考设备实测)。
 -> `01-3`、`02-1`;设计 1.2、设计 9 第 19 条
 脚本:`scripts/windows/preflight.ps1 -Only target-disk`;`scripts/windows/check-partition-layout.ps1 -Track D`
 
@@ -284,8 +284,8 @@
 | 1 / 18 / 19 | VMD 未关、装错盘、ESP 放错盘 | 装 Windows 之前先关 VMD;用 `DISK_MODEL`/`DISK_SIZE` 逐盘核对;两块 ESP 都必须在第一块盘 | `01-1`、`01-3`、`02-1` |
 | 20 | 国内镜像未校验 | 镜像站只当加速器:Fedora 按官方 `CHECKSUM`(并验签),Windows 只认官方或授权渠道 + 安装器校验 | `01-2` |
 | 35 | 拿到的是评估版 LTSC 镜像 | L0 前置"已备妥正式版镜像";评估版到期无法按 KMS 激活,换正式版(VLSC / 合作渠道)重做介质 | `01-2` |
-| 30 | 固件只认第一个 ESP | 两块 ESP 互不干扰是 A 组实测项;机型不支持就记偏离并评估共用 ESP 分支 | `02-1`、`08-verification.md` |
-| 29 | Anaconda 误把 Windows 的 ESP 设成 `/boot/efi`(含上游 `#284` 的失败路径) | `04-2` 卡内显式核对 `/boot/efi` 指向 ESP-Fedora,并由 `check-partition-plan.sh` 断言 | `02-4`、`04-2` |
+| 30 | 固件只认第一个 ESP | A9 是设备侧必测项(`efibootmgr -v` 见两条 + 分别重启各进一个系统);只认一个就记偏离,走共用 ESP 分支(共用 ESP + 独立 `/boot`,I3 改由备份/还原演练保证) | `02-1`、`04-3`、`08-verification.md` |
+| 29 | Anaconda 误把 Windows 的 ESP 设成 `/boot/efi`(含上游 `#284` 的失败路径,截至 2026-09 仍开) | `04-2` 卡内显式核对 `/boot/efi` 指向 ESP-Fedora,并由 `check-partition-plan.sh` 断言;`#284` 真的发作就转 `07-rescue.md` 手工修(不重装、不重排分区表) | `02-4`、`04-2`、`07-rescue.md` |
 
 脚本:`scripts/windows/check-firmware.ps1 -Check`;`scripts/windows/verify-install-media.ps1 -Check`;`scripts/windows/check-partition-layout.ps1 -Track D`
 
@@ -330,7 +330,7 @@
 | 14 / 24 / 25 | 自动更新被放开 / 没有部署回滚点 / 分层装完忘重启 | `rpm-ostreed-automatic` 只检查/下载;变更前备份 `baseline/` 与 `/etc` 并 `--pin` 当前部署;分层动作合并到一次重启 | `05-7`、`05-9`、`07-7` |
 | 22 | 家目录重定向后应用不兼容 | 只重定向文档类目录;出问题还原 `user-dirs.dirs` 的 `.dbk.bak` 备份 | `05-2` |
 | 15 / 16 | 反复强断电源 / 把硬件故障误判为双系统问题 | 用 SysRq `S` -> `U` -> `B`;两个系统一起异常先查硬件,先不要格式化分区 | `07-8`、`10-7`、`10-8` |
-| 34 | `rebase` 后分层包与镜像不配套 / ublue 镜像名漂移 | 用版本化标签而非 `latest`;变更前后各复检一次镜像来源、模块签名与会话类型 | `05-3`、`05-10`、`07-7` |
+| 34 | `rebase` 后分层包与镜像不配套 / ublue 镜像名漂移 | 用版本化标签而非 `latest`;变更前后各复检一次镜像来源、模块签名与会话类型;**stream ↔ Fedora 版本由 `driver_release_guard` 在 rebase 前断言**(未声明/不一致 → 2 且不发 rebase,以 ublue 官方文档为准核对目标版本) | `05-3`、`05-10`、`07-7` |
 
 脚本:`scripts/linux/mount-shared.sh --check`;`scripts/linux/set-updates.sh --check`;`scripts/linux/check-health.sh --check`;`scripts/linux/set-remote-health.sh --check`
 

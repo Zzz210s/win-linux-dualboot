@@ -97,6 +97,8 @@ if ((Get-VerifyState 'A1') -eq 'pass' -and (Get-VerifyState 'A3') -eq 'pass') { 
 elseif ((Get-VerifyState 'A1') -eq 'fail' -or (Get-VerifyState 'A3') -eq 'fail') { Add-VerifyItem A7 A 'fail' '两个 ESP 不再互不干扰:Windows ESP 或 BootOrder 首位已被改动;处置见 07-6' '07-6' }
 else { Add-Manual A7 A '无法从 Windows 侧自动判定;手动核对:两块 ESP 分别可挂载且内容完整、BootOrder 首位仍是 Windows' '07-7' }
 Add-Manual A8 A '可撤除性演练:另存 \EFI\fedora\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测' '07-8'
+Add-Manual A9 A '同盘两块 ESP 都被固件识别(设备侧必测):efibootmgr -v 里 Windows Boot Manager 与 fedora 两条都在,且 BootOrder 首位仍是 Windows;再分别重启两次(固件菜单键选 fedora 进 Silverblue、不按键自动进 Windows),两次都无 grub rescue;只认一个 ESP 时记偏离项并按设计第 10 节评估共用 ESP 分支' '04-3'
+Add-Manual A10 A 'Anaconda 在已有 Windows ESP 的盘上装成功(参考设备必测;上游 #284 截至 2026-09 仍开):装前 check-partition-plan.sh --track D --check 报 PASS 且 Windows ESP 未被挂载,装中只挂载/格式化 Fedora 三块,写引导到 \EFI\fedora\,装完 verify-l3.sh --check 报 PASS;失败时按 07-1 判层后进 07-rescue.md 手工修(不重装、不动分区表),最坏退回轨道 W(03-windows.md)' '04-2'
 # ===== B 系统功能组(Fedora 侧判定;此处只记需人工) =====
 Add-Manual B1 B '在 Fedora 侧看 echo $XDG_SESSION_TYPE 应为 wayland,且登录界面无 X11 会话选项' '05-12'
 Add-Manual B2 B '在 Fedora 侧跑 graphics.sh --check:nvidia 模块签名者非空且已注册 ublue 密钥(或明确记录 nouveau 兜底的偏差)' '05-3'
@@ -177,24 +179,9 @@ else {
 }
 if ($script:DbkMode -eq 'apply') {
   if (-not (Test-Path -LiteralPath ([System.IO.Path]::GetFullPath($OutDir)))) { New-Item -ItemType Directory -Path ([System.IO.Path]::GetFullPath($OutDir)) -Force | Out-Null }
-  $out = @(
-    '# 验收汇总:A-F 六组逐项判定', '',
-    ('- 设备:' + $env:COMPUTERNAME),
-    '- 判定侧:Windows(管理员会话)',
-    ('- 生成时间:' + (Get-Date).ToString('yyyy-MM-dd HH:mm:sszzz')),
-    '- 判定脚本:`scripts/windows/verify-all.ps1`(执行器,不进卡映射表)',
-    '- 依据:`docs/08-verification.md`(唯一判据)', '',
-    '## 逐项结果', '', '| 项 | 组 | 结论 | 原因 | 关联卡 |', '|---|---|---|---|---|'
-  )
-  foreach ($i in $script:Items) { $out += ('| ' + $i.Id + ' | ' + $i.Group + ' | ' + (Get-DbkTag $i.State) + ' | ' + ($i.Reason -replace '\|', '\|') + ' | ' + $i.Card + ' |') }
-  $out += @('', '## 失败项', '')
-  $fails = @($script:Items | Where-Object { $_.State -eq 'fail' })
-  if ($fails.Count -eq 0) { $out += '（无）' } else { foreach ($i in $fails) { $out += ('- ' + $i.Id + ' ' + $i.Reason + '(关联卡 ' + $i.Card + ')') } }
-  $out += @('', '## 已知例外', '', '未通过项的唯一合法归宿;逐条填写条目/原因/影响面/是否阻塞/后续动作,无例外时保留(无)。', '',
-    '| 条目 | 原因 | 影响面 | 是否阻塞 | 后续动作 |', '|---|---|---|---|---|', '| （无） |  |  |  |  |', '', '## 结论', '', ('结论: ' + $concl))
-  $utf8 = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText(($summary + '.new'), (($out -join "`r`n") + "`r`n"), $utf8)
-  Move-Item -LiteralPath ($summary + '.new') -Destination $summary -Force
+  Write-DbkAcceptSummary -Path $summary -Device $env:COMPUTERNAME -Side 'Windows(管理员会话)' `
+    -Script '`scripts/windows/verify-all.ps1`(执行器,不进卡映射表)' -Basis '`docs/08-verification.md`(唯一判据)' `
+    -Conclusion $concl -ManualConfirmed:$ConfirmManual -Items $script:Items
   Write-DbkNote ('汇总已写:' + $summary)
 }
 exit (Get-DbkStatusCode $overall)

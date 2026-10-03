@@ -59,7 +59,7 @@
 | 不接受第三方预构建镜像(ublue) | 回退分支:stock Silverblue + 手工自签 akmods(按上游 `issue-tracker#499` 的 workaround,每次内核更新重签),必须标注"未在真机验证"(02 号设计第 3 节) |
 | 需要磁盘加密 | **不适用**于 v1;见第 10 节 LUKS 变体 |
 | 双盘机型且固件只从第一块盘引导(部分厂商) | **两块 ESP 都必须留在第一块盘**;Linux 数据分区可放第二块盘,但两块 ESP 不能放第二块盘 |
-| 机型固件只认第一个 ESP(同盘双 ESP 不支持) | 记录为偏离项并评估"共用 ESP 分支"(第 10 节):退回 Windows 与 Fedora 共用一个 ESP,仍然保留独立 `/boot`;此分支需重新评估 I3 的保障方式 |
+| 机型固件只认第一个 ESP(同盘双 ESP 不支持) | **先实测再判定**(验收 A9:两块 ESP 都建好后 `efibootmgr -v` 应见两条 + 分别重启各进一个系统);确实只认一个时按第 10 节走"共用 ESP 分支":退回 Windows 与 Fedora 共用一个 ESP,**仍保留独立 `/boot`**,I3 改由 `02-esp-backup` 逐文件备份/还原 + `07-6` 演练承担(不再由结构保证) |
 | 不接受发行版自带安装器(要自研图形化安装器) | 不做:用 Anaconda 的手动分区页 + 只指定挂载点即可,自研安装器是新增风险而非收益(见 1.3) |
 
 ### 1.3 非目标(v1 明确不做)
@@ -139,13 +139,13 @@
 | 原子版每次更新产生**新 deployment**,GRUB 菜单列出各部署(含版本与时间戳);`rpm-ostree rollback` 切回上一部署 | 已确认 | 高(Fedora 官方文档) |
 | `/var` 与 `/home`(`/home` 是 `/var/home` 的符号链接)**不属于部署**,不随回滚回退 → 回滚不丢用户数据 | 已确认 | 高(ostree 部署模型) |
 | 双系统需**独立 `/boot/efi` 与 `/boot`**,官方文档明确"不要让 Anaconda 使用 Windows 的 ESP" | 已确认 | 中高(Silverblue 官方双系统页 + Fedora Discussion) |
-| Anaconda 在已有 ESP 的盘上装 Silverblue 会失败(`fedora-silverblue/issue-tracker#284`,自 F34 起) | **待复核**(F44 是否已修) | 中(上游 issue) |
+| Anaconda 在已有 ESP 的盘上装 Silverblue 会失败(`fedora-silverblue/issue-tracker#284`,2022-05 建单、自 F34 起) | **截至 2026-09 仍开**(无修复记录;缓解路径 = 装前核对 → 失败转 `07-rescue.md`,参考设备必测项 A10) | 中高(上游 issue) |
 | `rpm-ostree install` 时 **akmods 不签名**(新部署不共享宿主 `/etc` 的密钥,`#499`);`akmod-nvidia` 会卡住内核升级(`#632`) | 已确认 | 高 / 中高(上游 issue) |
-| ublue NVIDIA 镜像内模块**已预签名**,一次 MOK 注册即可(`ujust enroll-secure-boot-key`,上游密码 `universalblue`) | 已确认;**镜像名/分支/任务名需实施时复核** | 中高(ublue 官方文档与脚本) |
+| ublue NVIDIA 镜像内模块**已预签名**,一次 MOK 注册即可(`ujust enroll-secure-boot-key`,上游密码 `universalblue`) | 已确认;**镜像名/分支/任务名已于 2026-09-27 核实**(stream 与 Fedora 版本的对应关系不写死映射,由 `driver_release_guard` 在 rebase 前断言) | 中高(ublue 官方文档与脚本) |
 | 系统级工具走 `rpm-ostree install` 分层,**每次分层需重启**;GUI 应用优先 Flatpak,开发环境走 `toolbox`/`distrobox` | 已确认 | 高(Fedora 官方文档) |
 | `/home` 是 `/var/home` 的符号链接;`~/.config`、`~/.ssh`、`~/.gnupg` 在 ostree 的 `/var` 下,不随部署回滚 | 已确认 | 高 |
 | Fedora 内核同样包含 `ntfs3`,可读写 NTFS;但无 POSIX 权限语义(挂载时以固定 uid/gid/umask 呈现) | 已确认;需在挂载选项与工作流上适配(见 5.3) | 高 |
-| 同盘两个 ESP 的固件支持:官方未承诺,社区实践可行 | **待实测**(列入 A 组验收) | 中 |
+| 同盘两个 ESP 的固件支持:官方未承诺,社区实践可行 | **设备侧未知,只能实测**(验收 A9:两条条目都在 + 分别重启各进一个系统;失败走共用 ESP 分支) | 中 |
 | Windows 11 ISO:微软不发布镜像 SHA256;Fedora ISO:官方发布 `CHECKSUM` 文件(含签名)可比对 | 已确认 | 高 |
 | Online KMS 激活周期为 180 天,需每 7 天联系 KMS 主机自动续期 | 已确认(上游文档) | 高 |
 | Windows 11 IoT Enterprise LTSC 2024:底版 24H2 / build 26100,主流支持到 **2029-10-09**、扩展支持到 **2034-10-10**;官方公开下载只有 **90 天评估版** | 已确认 | 高(微软 LTSC 生命周期页与官方下载页) |
@@ -248,7 +248,7 @@
 - 不创建 swap 分区;首启后再配置 zram 与 swapfile;
 - 引导写入 `\EFI\fedora\`(安装器默认;条目显示名须实测核实),**期间不改动 `BootOrder`**;
 - Secure Boot 全程保持开启;
-- **已知风险路径**:Anaconda 在已有 ESP 的盘上装 Silverblue 有失败记录(`fedora-silverblue/issue-tracker#284`,自 F34 起,F44 是否已修需复核)。处置:① `04-2` 卡的前置核对(`check-partition-plan.sh` 断言 Windows ESP 未被挂载、尺寸仍是 2048MB)+ 在分区页显式确认 Linux 侧 ESP 指向 ESP-Fedora;② 若仍失败,按 `07-rescue.md` 在 live 环境手工修(`ostree admin status` 核对 + `grub2-mkconfig` + `efibootmgr -c` 补条目);③ 最坏情况退回轨道 W,损失可控(L2 基线可用)。
+- **已知风险路径(缓解路径按现状写实,不写成"待复核")**:Anaconda 在已有 ESP 的盘上装 Silverblue 有失败记录(`fedora-silverblue/issue-tracker#284`,2022-05 建单、自 F34 起,**截至 2026-09 仍开**;F44 未见修复记录)。处置三步:① **装前**跑 `check-partition-plan.sh --track D --check`(断言 Windows ESP 未被挂载、尺寸仍是 2048MB)并在分区页显式确认 Linux 侧 ESP 指向 ESP-Fedora;② **失败即转救援,不就地重排分区表**:按 `07-1` 判层后进 `07-rescue.md` 在 live 环境手工修(`ostree admin status` 核对 + `grub2-mkconfig -o /boot/grub2/grub.cfg` + 必要时 `efibootmgr -c` 补条目并断言 `BootOrder` 首位仍是 Windows);③ 最坏情况退回轨道 W(Windows 单系统),L2 基线可用、损失可控。**参考设备的对应必测项 = 验收 A10**。
 
 ### 4.5 L4 首启收敛
 
@@ -430,8 +430,8 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | **L2** | 存储控制器仍为 RAID/VMD | 停在 L2,回 L0 改固件;若 Windows 已装好才改,走附录分支(驱动预置 + 安全模式) | 改回 RAID On |
 | L3 | 安装器看不到磁盘 | 回 L0 核查控制器模式 | 无副作用 |
 | L3 | 重启直接进 Windows | 用厂商启动菜单键手动选 fedora(一次性);核对固件条目列表 | 无需回滚 |
-| L3 | **Anaconda 在写引导前中止 / 误选 Windows ESP 作为 Linux 侧 ESP** | 按 4.4 的前置核对(显式确认 Linux 侧 ESP 指向 ESP-Fedora)+ 只指定挂载点重来;仍失败则按 `07-rescue.md` 在 live 环境手工修 | 退回轨道 W(Windows 单系统);Windows 引导被写坏时走 ESP 镜像还原 |
-| L3 | 两个 ESP 中只有一个被固件识别 | 记录为偏离项;按第 10 节评估"共用 ESP 分支" | 无副作用(记录) |
+| L3 | **Anaconda 在写引导前中止 / 误选 Windows ESP 作为 Linux 侧 ESP**(上游 `#284`,截至 2026-09 仍开) | 按 4.4 的前置核对(显式确认 Linux 侧 ESP 指向 ESP-Fedora)+ 只指定挂载点重来;**仍失败即转 `07-rescue.md` 在 live 环境手工修,不就地重排分区表**(参考设备必测项 = 验收 A10) | 退回轨道 W(Windows 单系统);Windows 引导被写坏时走 ESP 镜像还原 |
+| L3 | 两个 ESP 中只有一个被固件识别 | 记录为偏离项;**按验收 A9 的步骤确认**(另一条条目在不在、能不能选中启动),再按第 10 节的"共用 ESP 分支"回退(I3 改由备份/还原演练保证) | 无副作用(记录;回退分支要重做 A3/A7 复判) |
 | L3 | 停在 `grub>` / `grub rescue>` | ① `ls` 找分区 -> `set prefix` -> `insmod normal` -> `normal`;② 直接回 Windows:`search --file --set=root /EFI/Microsoft/Boot/bootmgfw.efi` -> `chainloader` -> `boot` | 基线回滚(ESP 镜像) |
 | L3 | Secure Boot 拒载 | 核查 `mokutil --sb-state`;驱动走 ublue 预签名镜像(一次性 MOK 注册),不在 L3 引入自签 | 无副作用 |
 | L4 | 装驱动后黑屏 / 闪烁 | 在 GRUB 菜单选上一部署启动(`rpm-ostree rollback`);或回滚到 stock Silverblue | **部署级回滚**(R2) |
@@ -498,6 +498,8 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 不变量落地 | fedora 条目位于 `BootOrder` 末尾;全程未使用 `efibootmgr -o`;`\EFI\fedora\` 与 Windows ESP 分属两块不同分区 |
 | **两个 ESP 互不干扰** | 在 Silverblue 侧任何引导相关操作后:Windows ESP 的 `\EFI\Microsoft\` 逐文件不变;`BootOrder` 首位仍是 Windows Boot Manager;两块 ESP 可分别挂载并各自内容完整 |
 | **可撤除性演练** | 备份 ESP 后临时删除 `\EFI\fedora\`(保留分区)-> 重启确认**自动进 Windows 且无 `grub rescue`** -> 用另存的副本还原 `\EFI\fedora\`(L2 基线**不含**该子树,见 4.3)并复测。**参考设备必做,其他设备推荐** |
+| **固件识别两块 ESP(设备侧必测)** | `efibootmgr -v` 里 Windows 与 fedora 两条同时存在、`BootOrder` 首位仍是 Windows;再分别重启两次(固件菜单键进 Fedora、不按键进 Windows),两次都不停在 `grub rescue>`;只认一个时按第 10 节走共用 ESP 分支(A9) |
+| **Anaconda 在已有 Windows ESP 的盘上装成功(参考设备必测)** | L3 前置核对 PASS + 只挂载/格式化 Fedora 三块 + 引导落到 `\EFI\fedora\` + `verify-l3.sh --check` PASS;失败按 `07-rescue.md` 手工修(不重装、不重排分区表)(A10) |
 
 **B. 系统功能组**:会话类型为 `wayland`(且无 X11 会话可选);GPU 驱动状态正常或有 nouveau 兜底且无签名拒绝日志;**驱动来源为 ublue 预签名镜像**(`rpm-ostree status` 显示的目标镜像与计划一致、`mokutil --list-enrolled` 含 ublue 密钥);Secure Boot 保持开启;**分层包清单与计划一致**(`rpm-ostree status` 的 layered packages);共享数据分区以 `ntfs3` **读写**挂载成功且 `nofail`;**跨系统双向可见性**(Windows 写入 -> Linux 读到;Linux 写入 -> Windows 读到);**家目录重定向生效**(桌面/文档/下载/图片/视频/音乐指向共享盘);`RTC in local TZ: no`;切换系统后蓝牙无需重新配对;`fwupd` 能识别设备。
 
@@ -565,8 +567,8 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 26 | **原地重装时误格分区** | 数据分区或另一边系统被清空 | 安装时逐分区核对;明确禁止"删除所有分区";动手前先做基线备份 | 高 |
 | 27 | **重装 Silverblue 时误格 ESP 或 `/boot`** | 破坏 Silverblue 引导;误格 Windows ESP 时连带破坏 Windows 引导 | 显式检查安装器里两块 ESP 的"格式化"勾选;`/boot` 与 ESP 绝不格式化;动手前先备份 `~` | 高 |
 | 28 | **已知文件夹重定向遗漏** | 数据落在 C:,重装即丢 | L1 完成后按验收 D 组逐项核对;重定向清单固化为文档步骤 | 中 |
-| 29 | **安装器误选 Windows ESP 作为 Linux 侧 ESP**(Anaconda 会自动选目标 ESP;另有上游 `#284` 的失败路径) | 当场写坏 Windows 引导 | `04-2` 卡的前置核对(`check-partition-plan.sh` 断言 Windows ESP 未被挂载、尺寸仍是 2048MB)+ 分区页显式确认 Linux 侧 ESP 指向 ESP-Fedora;L2 基线可还原 | 中 |
-| 30 | **同盘两块 ESP 的固件支持不确定** | 固件只认第一块 ESP,fedora 条目不可见 | 列为 A 组必做实测项;若某机型不支持,记录偏离并评估"共用 ESP 分支"(第 10 节) | 中 |
+| 29 | **安装器误选 Windows ESP 作为 Linux 侧 ESP**(Anaconda 会自动选目标 ESP;另有上游 `#284` 的失败路径) | 当场写坏 Windows 引导 | `04-2` 卡的前置核对(`check-partition-plan.sh` 断言 Windows ESP 未被挂载、尺寸仍是 2048MB)+ 分区页显式确认 Linux 侧 ESP 指向 ESP-Fedora;上游 `#284` 截至 2026-09 仍开,失败即按 `07-rescue.md` 手工修(不重装、不重排分区表);参考设备必测项 = 验收 A10;L2 基线可还原 | 中 |
+| 30 | **同盘两块 ESP 的固件支持不确定** | 固件只认第一块 ESP,fedora 条目不可见 | 列为 A 组的**设备侧必测项 A9**(两条条目都在 + 分别重启各进一个系统);若某机型只认一个 ESP,记录偏离并按第 10 节走"共用 ESP 分支"(共用一个 ESP、保留独立 `/boot`,I3 改由备份/还原演练保证) | 中 |
 | 31 | **自签或第三方驱动源易碎** | 驱动拒载、升级后需重签,Secure Boot 下更麻烦 | 默认走 ublue 预签名镜像;stock + 自签 akmods 仅作回退分支且必须标注"未在真机验证" | 中 |
 | 32 | **自建 akmods 卡住内核升级** | 内核/驱动更新被阻塞,长期停在旧内核 | 不用自建 akmods(`#632`);驱动随 ublue 预签名镜像更新,更新前先按 `05-9` 备份并记录部署号 | 中 |
 | 33 | **升级后驱动与内核不配套** | 新内核里 `nvidia` 不加载或桌面异常 | 升级前备份并留档;升级后立刻复检(会话 / Wayland / 驱动签名 / 桌面),不满足就按 `05-9` 回滚到固定部署 | 中 |
@@ -584,7 +586,7 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 |---|---|---|
 | `autounattend.xml` + `diskpart` 模板(部署加速器) | **占位,先不实现** | 面向多台同规格设备的批量部署;代价是应答文件对 Windows 版本敏感、调试成本高 |
 | 独立共享分区变体 | 待评估 | 从 D: 再切出一块专用共享分区,把"共享"与"Windows 私有数据"隔离,降低写入风险 |
-| 共用 ESP 分支(单 ESP) | 待评估 | 若机型固件只认第一个 ESP:退回 Windows 与 Fedora 共用一个 ESP(**仍保留独立 `/boot`**),并重新评估 I3 的保障方式;需实测 |
+| 共用 ESP 分支(单 ESP) | 待评估(触发条件已明确) | **触发条件 = 验收 A9 实测只认一个 ESP**;回退落地:Windows 的 2GiB ESP 由两边共用(Anaconda 不再建 ESP-Fedora),**`/boot` 仍独立**,I3 的保障从"结构"降为"`02-esp-backup` 逐文件备份/还原 + `07-6` 演练",并复判 A3/A7;需在参考设备上实测通过后才写进手册 |
 | 外置 USB SSD / 移动硬盘安装分支 | 待评估 | 无第二盘位又不愿动内置盘时的可行路径(评论区有同类需求),需补 USB 供电、性能与引导条目保持的注意点 |
 | 云端/网络同步补充 | 待评估 | 若需跨机器访问同一批办公文件,可叠加云同步或 NAS;同机双系统之间的 SMB 无意义(两系统不能同时开机) |
 | LUKS 加密变体 | 待评估 | 需改为手动分区,首启需口令;与 Secure Boot 及预签名驱动的交互**须先核实** |
@@ -655,3 +657,4 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 2026-09-22 | **修订八:基础系统由 Fedora 44 Silverblue 改为 Kubuntu 26.04 LTS**(见 `04-kubuntu-variant-design.md`)。按"逐节核对"重写全文:第 1 节补回滚降级目标与非目标(新增 **ZFS root 快照**为被否项);第 3 节决策表改 Kubuntu 口径(基础系统 Kubuntu 26.04 LTS / Plasma 6.6 Wayland-only / Calamares / LTS 3 年;回滚改**包级回退 + 原地重装**;Secure Boot 走 Ubuntu 官方预签名包、**不需要自签与 MOK**;根文件系统 **ext4**;新增 **snap 规避 S1–S6** 决策 3.22);第 4 节 L4 卡清单改 **14 张**(`05-1` … `05-13`,末张是 snap 零残留卡 `05-14`)、4.7 的 R1–R9 改为新策略(变更前备份 / 包级回退 / 旧内核保留 / 救援 U 盘 / journald / OOM-zram / SSH / 保守更新 / SMART)、4.8 原地重装两法改 Ubuntu 口径(`grub-install` + `update-grub`、`grub-efi-amd64-signed`/`shim-signed`);第 5 节改 `ESP-Ubuntu 1GiB` 与 `UBUNTU_ESP_SIZE`、删除第三方镜像参数(**分区数值一律未变**);第 7 节回滚粒度表改按新策略重写(单包 / 配置 / 系统级 / 引导级);第 8 节 B 组新增 **snap 零残留**与**驱动来源为 Ubuntu 官方包**、去掉 `rpm-ostree status` 项,F 组把"部署回滚演练"换成 **包级回退演练 + 原地重装演练**;第 9 节删掉原子版专属风险(第三方镜像/MOK/分层安装/部署回滚),新增 Kubuntu 时代风险(第三方 PPA、失去原子回滚、安装器误选 ESP、snap 被静默装回),**总条数仍为 34**;第 11 节把第三方镜像相关条目替换为 Kubuntu/Ubuntu 侧证据(官方发布说明、Calamares 文档、Mozilla 官方安装文档与社区实测) |
 | 2026-09-25 | **修订九:回切 Fedora 44 Silverblue(原子版)+ 发行版薄接口层**(见 `06-atomic-restore-design.md`;`02-fedora-atomic-variant-design.md` 恢复为现行内容真源)。逐节同步:标题与第 1 节改系统组合(GNOME 50 / Wayland)与"恢复部署级回滚"目标;第 3 节决策表改原子版口径(3.1–3.7 / 3.14 / 3.16–3.19;3.20 事实表换 Fedora 原子版事实;3.21 生命周期改约 13 个月与 `rpm-ostree rebase`;3.22 由 snap 规避改为"原子版语义");第 4 节 L3/L4 改 Anaconda 与 13 张 L4 卡、映射表改 `\EFI\fedora\`、部署级回滚演练;第 5 节 ESP-Fedora 与 root **btrfs**(**分区数值一律未变**);第 7/8 节回滚粒度与验收改部署级回滚;第 9 节风险表换原子版条目;第 11 节证据来源换 Fedora/ublue 侧。第 2 节仅替换 I1 举例路径(`\EFI\ubuntu\` → `\EFI\fedora\`),不变量语义未变。分区数值一字未动 |
 | 2026-09-29 | **修订十:Windows 侧由 Windows 11 专业版改为 Windows 11 IoT Enterprise LTSC 2024**(底版 24H2 / build 26100,支持到 2034-10;用户 2026-09-29 决定)。决策 3.1 更新系统组合并在被否栏保留"专业版";决策 3.10 明确只用 KMS、**明确排除 HWID**,并写明 GVLK 随版本、官方 KMS client keys 页为真源、镜像须为正式版;第 9 节风险表新增 4 条(正式 LTSC 镜像来源 / Store 默认缺失 / OEM 工具 / 媒体编解码器)后共 **38 条**;3.20 事实表与第 11 节来源补微软 LTSC 生命周期页、KMS client keys 页、"支持 LTSC 有限"声明与 MAS issue #613;4.1 介质改为正式版 LTSC 镜像。**分区数值与卡号一字未动**。 |
+| 2026-10-03 | **修订十一:四项待核实收口**(不改变四条不变量 I1–I4,不改变任何分区数值):① ublue stream ↔ Fedora 版本改为**前置断言**(`dbk-driver.sh` 的 `driver_release_guard`:本机 `VERSION_ID` 主版本 vs 操作员按 ublue 官方文档核对后声明的 `DBK_UBLUE_FEDORA`,不一致或未声明 → 2 且**不发出 rebase**,`DBK_ALLOW_CROSS_RELEASE=1` 才能显式跨版本),文档侧为 05-3 卡、设计 02/06 与 10-faq;② 上游 `#284` 缓解路径写实(装前 `check-partition-plan.sh` → **失败即转 `07-rescue.md`,不就地重排分区表**)并把"Anaconda 在已有 Windows ESP 的盘上装成功"定为参考设备必测项(A10);③ 同盘双 ESP 从"待实测"改为**设备侧必测项**(A9:两条条目都在 + 分别重启各进一个系统),失败走"共用 ESP 分支"(第 10 节补触发条件与 I3 的替代保障);④ Windows 侧 `GracePeriodRemaining` 不再换算天数(只原样记录并标"单位未核实",判定只用 `LicenseStatus`)。验收 A 组 8 → 10 条(两侧总控条目数 42 → 44),设计 02/06、手册 04/05/07/10、两份 README 与 `00-overview` 偏离项表同步 |

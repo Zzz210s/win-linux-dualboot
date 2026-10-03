@@ -83,6 +83,8 @@ chk_step A7 "07-7" "两个 ESP 互不干扰(两块 ESP 内容完整 + BootOrder 
 item A4 manual "Windows 管理员会话 bcdedit /enum {bootmgr} 的 path 与基线逐字一致" "07-7"
 item A6 manual "复核全部执行记录:没有任何一次 efibootmgr -o / displayorder 调整永久顺序" "07-7"
 item A8 manual "可撤除性演练:另存 \\EFI\\fedora\\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测" "07-8"
+item A9 manual "同盘两块 ESP 都被固件识别(设备侧必测):efibootmgr -v 里 Windows Boot Manager 与 fedora 两条都在,且 BootOrder 首位仍是 Windows;再分别重启两次(固件菜单键选 fedora 进 Silverblue、不按键自动进 Windows),两次都无 grub rescue;只认一个 ESP 时记偏离项并按设计第 10 节评估共用 ESP 分支" "04-3"
+item A10 manual "Anaconda 在已有 Windows ESP 的盘上装成功(参考设备必测;上游 #284 截至 2026-09 仍开):装前 check-partition-plan.sh --track D --check 报 PASS 且 Windows ESP 未被挂载,装中只挂载/格式化 Fedora 三块,写引导到 \\EFI\\fedora\\,装完 verify-l3.sh --check 报 PASS;失败时按 07-1 判层后进 07-rescue.md 手工修(不重装、不动分区表),最坏退回轨道 W(03-windows.md)" "04-2"
 G=B   # ===== B 系统功能组 =====
 ST="${DBK_SESSION_TYPE:-${XDG_SESSION_TYPE:-}}"
 if [ -z "$ST" ]; then item B1 manual "XDG_SESSION_TYPE 取不到;手动核对:echo \$XDG_SESSION_TYPE 应为 wayland" "05-12"
@@ -184,16 +186,8 @@ else
 fi
 if [ "$DBK_MODE" = apply ]; then
   mkdir -p "$OUTDIR"
-  { printf '# 验收汇总:A-F 六组逐项判定\n\n- 设备:%s\n- 判定侧:Linux(Fedora 原子版)\n- 生成时间:%s\n- 判定脚本:%s\n- 依据:%s\n\n' \
-      "$HOST" "$(date '+%F %T%z')" '`scripts/linux/verify-all.sh`(执行器,不进卡映射表)' '`docs/08-verification.md`(唯一判据)'
-    printf '## 逐项结果\n\n| 项 | 组 | 结论 | 原因 | 关联卡 |\n|---|---|---|---|---|\n'
-    for r in "${R[@]}"; do IFS='|' read -r i g s m c <<<"$r"; printf '| %s | %s | %s | %s | %s |\n' "$i" "$g" "$(tag_of "$s")" "$(printf '%s' "$m" | sed 's/|/\\|/g')" "$c"; done
-    printf '\n## 失败项\n\n'
-    for r in "${R[@]}"; do IFS='|' read -r i g s m c <<<"$r"; if [ "$s" = fail ]; then printf -- '- %s %s(关联卡 %s)\n' "$i" "$m" "$c"; fi; done
-    if [ "$n_fail" -eq 0 ]; then printf '（无）\n'; fi
-    printf '\n## 已知例外\n\n未通过项的唯一合法归宿;逐条填写条目/原因/影响面/是否阻塞/后续动作,无例外时保留(无)。\n\n'
-    printf '| 条目 | 原因 | 影响面 | 是否阻塞 | 后续动作 |\n|---|---|---|---|---|\n| （无） |  |  |  |  |\n\n## 结论\n\n结论: %s\n' "$CONCL"
-  } >"$SUMMARY.new" && mv "$SUMMARY.new" "$SUMMARY"
+  printf '%s\n' "${R[@]}" | dbk_write_accept_summary "$SUMMARY" "$HOST" 'Linux(Fedora 原子版)' \
+    '`scripts/linux/verify-all.sh`(执行器,不进卡映射表)' '`docs/08-verification.md`(唯一判据)' "$CONCL" "$CONFIRM"
   printf '汇总已写:%s\n' "$SUMMARY" >&2
   if [ -n "${DBK_LOG:-}" ]; then dbk_log_write "验收汇总已写:$SUMMARY;结论:$CONCL"; fi
 fi

@@ -11,11 +11,11 @@
 - Fedora 侧:`scripts/linux/verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual]`
 - Windows 侧:`scripts/windows/verify-all.ps1 [-Check|-Apply] [-BaselineDir <目录>] [-OutDir <目录>] [-ConfirmManual]`
 
-能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。**自动化覆盖的侧别**(两侧合计 42 项中的 23 项有自动判定):Fedora 侧 `scripts/linux/verify-all.sh` 自动判定 **A1 / A5 / A7 / B1 / B2 / B3 / B4 / B5 / B6 / B8 / B9 / B11 / E1 / E2 / F2 / F4 / F5 / F6 / F7 / F8 / F9**;Windows 侧 `scripts/windows/verify-all.ps1` 自动判定 **A1 / A3 / A4 / A5 / A7 / E1 / E2**;其余按「需人工」登记。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到 `baseline/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录,再把两份汇总人工合并为填写版(避免互相覆盖)。**注意同名覆盖**:两个总控的**默认汇总落点就是 `baseline/08-verification.md`**,与上面那份「人填写的设备勾选版」同名——不带参数落汇总会把填写版直接盖掉。因此落汇总时**必须显式用 `--out-dir`/`-OutDir` 指到填写版之外的目录**(例如 `baseline/auto/` 或临时目录),再人工合并;填写版自身只手工维护。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
+能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。**自动化覆盖的侧别**(两侧合计 44 项中的 23 项有自动判定):Fedora 侧 `scripts/linux/verify-all.sh` 自动判定 **A1 / A5 / A7 / B1 / B2 / B3 / B4 / B5 / B6 / B8 / B9 / B11 / E1 / E2 / F2 / F4 / F5 / F6 / F7 / F8 / F9**;Windows 侧 `scripts/windows/verify-all.ps1` 自动判定 **A1 / A3 / A4 / A5 / A7 / E1 / E2**;其余按「需人工」登记。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到 `baseline/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录,再把两份汇总人工合并为填写版(避免互相覆盖)。**注意同名覆盖**:两个总控的**默认汇总落点就是 `baseline/08-verification.md`**,与上面那份「人填写的设备勾选版」同名——不带参数落汇总会把填写版直接盖掉。因此落汇总时**必须显式用 `--out-dir`/`-OutDir` 指到填写版之外的目录**(例如 `baseline/auto/` 或临时目录),再人工合并;填写版自身只手工维护。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
 
 **执行顺序建议**:A -> B -> C -> F -> D -> E。D 组含"真做一次退役"与"真做一次原地重装",做完这台设备上可能已没有 Linux 或已被格式化,必须排最后(F 组要在 D 组真做之前完成);E 组是归档收尾。**验收期间不改分区表、不改固件设置**(设计 I4)。
 
-### A. 引导安全组(A1-A8)
+### A. 引导安全组(A1-A10)
 
 - [ ] A1 默认启动项仍是 Windows Boot Manager -> 看到:Windows 管理员会话 `bcdedit /enum firmware` 的 `displayorder` 首位是 `{bootmgr}`(或 live 内 `sudo efibootmgr -v` 的 `BootOrder` 首位描述为 Windows Boot Manager),与 `baseline/02-firmware-entries.txt` 逐字一致(脚本判定;设计 I1)
 - [ ] A2 连续重启 3 次都默认进 Windows -> 看到:3 次都不按键、不选菜单,每次都自动进 Windows,全程不出现 `grub>` / `grub rescue>`(需人工)
@@ -25,8 +25,10 @@
 - [ ] A6 全程未使用 `efibootmgr -o` -> 看到:全部执行记录里没有 `efibootmgr -o` / `bcdedit /set {fwbootmgr} displayorder` 的实执行,进 Linux 一律走一次性入口(需人工;设计 I2)
 - [ ] A7 两个 ESP 互不干扰 -> 看到:在 Fedora 侧任何引导相关操作之后,`\EFI\Microsoft\` 仍与基线逐文件一致(A3 通过)、`BootOrder` 首位仍是 Windows Boot Manager(A1 通过),且两块 ESP 可分别挂载、`\EFI\fedora\` 与 `\EFI\Microsoft\` 各自内容完整(脚本判定;涉及两块 ESP 的实测由 `scripts/linux/verify-l3.sh --check` 承担)
 - [ ] A8 可撤除性演练(参考设备必做,其他设备推荐) -> 看到:另存 `\EFI\fedora\` 后删除该子树(保留分区),连续重启 3 次都自动进 Windows 且无 `grub rescue`;用副本还原(或 live chroot 重建)后 A1/A3/A4/A5 复检仍通过(需人工)
+- [ ] A9 同盘两块 ESP 都被固件识别(设备侧必测;参考设备必做,其他设备推荐) -> 看到:① `sudo efibootmgr -v` 里 Windows Boot Manager(指向 `\EFI\Microsoft\Boot\bootmgfw.efi`)与 fedora 条目(指向 `\EFI\fedora\shimx64.efi`)**两条同时存在**,且 `BootOrder` 首位仍是 Windows Boot Manager;② **分别重启两次**:一次在固件启动菜单里选 fedora(或 `04-1` 的一次性入口)能进 Silverblue,一次不按键自动进 Windows,两次都不出现 `grub>` / `grub rescue>`;③ 进 Silverblue 后再看一次 `efibootmgr -v`,两条仍在。失败(只认第一个 ESP、fedora 条目不可见或选不中)-> 记偏离项(设计 1.2「机型固件只认第一个 ESP」)并按设计第 10 节走「共用 ESP 分支」:退回 Windows 与 Fedora 共用一个 ESP(**仍保留独立 `/boot`**),I3 改由 `02-esp-backup` 的逐文件备份/还原 + `07-6` 演练承担(不再由结构保证),补做还原演练后复判 A3/A7(需人工;设计 3.20 事实表、第 9 节第 30 条)
+- [ ] A10 Anaconda 在已有 Windows ESP 的盘上装成功(参考设备必测) -> 看到:L3 前置核对 `bash scripts/linux/check-partition-plan.sh --track D --check` 报 PASS(它断言 Windows ESP 未被挂载、尺寸仍是 2048MiB);Anaconda 的手动分区页里只给 Fedora 三块指定挂载点并勾格式化,Windows 各分区一律未挂载、未格式化;安装连续走完且把引导写到 `\EFI\fedora\`(没有停在 `Failed to set new efi boot target`),装完 `bash scripts/linux/verify-l3.sh --check` 报 PASS。失败(上游 `fedora-silverblue/issue-tracker#284` 的形态,**截至 2026-09 仍开**) -> **不要重装、不要就地重排分区表**:先按 `07-1` 判层,再进 `07-rescue.md` 的 live 环境手工修(`ostree admin status` 核对 + `grub2-mkconfig -o /boot/grub2/grub.cfg` + 必要时 `efibootmgr -c` 补条目并断言 `BootOrder` 首位仍是 Windows),最坏退回轨道 W(Windows 单系统;L2 基线可用,损失可控)(需人工;设计 4.4 的已知风险路径)
 
-脚本:BootOrder 与两块 ESP 的内容由两脚本各自判定(A1/A5/A7);A3/A4 由 Windows 侧的基线巡检判定,在 Fedora 侧记 `需人工`;A2/A6/A8 无脚本(人工)。
+脚本:BootOrder 与两块 ESP 的内容由两脚本各自判定(A1/A5/A7);A3/A4 由 Windows 侧的基线巡检判定,在 Fedora 侧记 `需人工`;A2/A6/A8/A9/A10 无脚本(人工)。
 
 这组全绿才可以进下一步
 
@@ -112,7 +114,7 @@
 
 任一组出现未勾选项时,**停手**做三件事,不要靠"装完了"往前推:
 
-1. **A 组不过**:先进固件设置界面把 `BootOrder` 首位设回 Windows Boot Manager(设计 I1),**不得**改用 `efibootmgr -o`(I2);引导本身有问题按 `07-rescue.md` 分类处置。
+1. **A 组不过**:先进固件设置界面把 `BootOrder` 首位设回 Windows Boot Manager(设计 I1),**不得**改用 `efibootmgr -o`(I2);引导本身有问题按 `07-rescue.md` 分类处置。**A9 不过**(固件只认一个 ESP)-> 记偏离项并按设计第 10 节走「共用 ESP 分支」,不要反复重装;**A10 不过**(Anaconda 在含 Windows ESP 的盘上中止)-> 不要重装、不要就地重排分区表,按 `07-1` 判层后进 `07-rescue.md` 手工修,最坏退回轨道 W。
 2. **B/C/F 组不过**:按对应卡的 `出错时:` 走;`fstab`/家目录/驱动这类改动都可逆,先回退到上一状态再做变更(回退动作见 [checklists/rollback.md](../checklists/rollback.md))。
 3. **D 组不过或中途反悔**:退役/重装的不可逆项动手前先做一次基线备份(`07-10`);只想停用 Linux 而不删,走 `07-13` 的变体。
 

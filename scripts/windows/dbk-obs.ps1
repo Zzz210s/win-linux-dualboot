@@ -13,6 +13,7 @@
 # 外部命令:统一走 Invoke-DbkExe(唯一把 $ErrorActionPreference 临时降为 Continue 的地方——PS 5.1 下原生命令
 #   往 stderr 写字 + `2>&1` 会抛 NativeCommandError,在 Stop 的步骤脚本里会当场终止;收尾的 mountvol /d 尤其致命)。
 # 夹具级验证,真机未跑。
+# 验收汇总渲染:Write-DbkAcceptSummary 供验收总控(verify-all.ps1)把 A-F 逐项判定落成 08-verification.md。
 
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -165,4 +166,28 @@ function Write-DbkErrTrap {
   } else {
     Write-Output ("[FAIL] errtrap: {0}" -f $detail)
   }
+}
+
+# Write-DbkAcceptSummary -Path <汇总路径> -Device <设备名> -Side <判定侧> -Script <判定脚本> -Basis <依据文档> `
+#   -Conclusion <结论行> -ManualConfirmed -Items <逐项对象[]>:` 先写 <Path>.new 再 Move-Item(原子落盘)。
+function Write-DbkAcceptSummary {
+  param([string]$Path, [string]$Device, [string]$Side, [string]$Script, [string]$Basis, [string]$Conclusion,
+    [switch]$ManualConfirmed, [object[]]$Items = @())
+  $tag = { param($st) switch ($st) { 'pass' { 'PASS' } 'fail' { 'FAIL' } 'skip' { '跳过' } default { if ($ManualConfirmed) { '需人工(已确认)' } else { '需人工' } } } }
+  $out = @(
+    '# 验收汇总:A-F 六组逐项判定', '',
+    ('- 设备:' + $Device), ('- 判定侧:' + $Side),
+    ('- 生成时间:' + (Get-Date).ToString('yyyy-MM-dd HH:mm:sszzz')),
+    ('- 判定脚本:' + $Script), ('- 依据:' + $Basis), '',
+    '## 逐项结果', '', '| 项 | 组 | 结论 | 原因 | 关联卡 |', '|---|---|---|---|---|'
+  )
+  foreach ($i in $Items) { $out += ('| ' + $i.Id + ' | ' + $i.Group + ' | ' + (& $tag $i.State) + ' | ' + ($i.Reason -replace '\|', '\|') + ' | ' + $i.Card + ' |') }
+  $out += @('', '## 失败项', '')
+  $fails = @($Items | Where-Object { $_.State -eq 'fail' })
+  if ($fails.Count -eq 0) { $out += '（无）' } else { foreach ($i in $fails) { $out += ('- ' + $i.Id + ' ' + $i.Reason + '(关联卡 ' + $i.Card + ')') } }
+  $out += @('', '## 已知例外', '', '未通过项的唯一合法归宿;逐条填写条目/原因/影响面/是否阻塞/后续动作,无例外时保留(无)。', '',
+    '| 条目 | 原因 | 影响面 | 是否阻塞 | 后续动作 |', '|---|---|---|---|---|', '| （无） |  |  |  |  |', '', '## 结论', '', ('结论: ' + $Conclusion))
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText(($Path + '.new'), (($out -join "`r`n") + "`r`n"), $utf8)
+  Move-Item -LiteralPath ($Path + '.new') -Destination $Path -Force
 }

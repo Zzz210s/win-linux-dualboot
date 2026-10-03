@@ -116,7 +116,7 @@ I1 `BootOrder` 首位**永远是 Windows Boot Manager**;I2 进 Linux 只用**一
 Linux 引导器 / 它找不到 `/boot` 时掉落的最小 shell。项目提供两条恢复路径:在 `grub>` 里 `insmod normal` 等命令修回来,或直接从 GRUB 链式加载 `\EFI\Microsoft\Boot\bootmgfw.efi` 回 Windows。
 
 **Secure Boot / shim / MOK**
-固件验签 / 第三方引导的签名跳板 / 你自签名模块后要手动注册的密钥库(Machine Owner Key)。本项目走 **ublue 预签名镜像**路线:内核模块在镜像里已签,但仍要**一次性 MOK 注册**(`mokutil`,由 `ujust enroll-secure-boot-key` 驱动,MOK 密码 `universalblue` 待核实)把 ublue 的密钥登记进固件;Secure Boot 保持开启、**不自签密钥**。
+固件验签 / 第三方引导的签名跳板 / 你自签名模块后要手动注册的密钥库(Machine Owner Key)。本项目走 **ublue 预签名镜像**路线:内核模块在镜像里已签,但仍要**一次性 MOK 注册**(`mokutil`,由 `ujust enroll-secure-boot-key` 驱动,MOK 密码 `universalblue`(2026-09-27 已核实))把 ublue 的密钥登记进固件;Secure Boot 保持开启、**不自签密钥**。
 
 **UEFI / GPT / VMD / AHCI**
 固件接口 / 分区表格式 / Intel 的 RAID 模式(会遮蔽 NVMe,Linux 安装器看不到盘)/ 直通模式(目标状态)。

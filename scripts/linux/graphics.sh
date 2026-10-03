@@ -20,14 +20,15 @@
 #   (回滚后由 nouveau 起桌面);接口 driver_fallback_nouveau 打印同一套步骤。
 # --apply 的终局与动作结果一致,且不吞掉当下可判的失败(计划 Task 5 修订版四种):rebase 失败 → 1;rebase 成功且只余
 #   ①②③(重启后才可能成立)未达成 → 0 PASS + 需重启提示;当下可判的 ④ 未达成 → 1;判据读不到(driver_check=2)→ 2 需人工。
+#   另一支:版本一致性前置断言未过(driver_release_guard=2 → 2 需人工,且**绝不调 rebase** —— 跨版本会换掉整个发行版基线)。
 #   三种未达成明细都逐条列进 checks(不静默),且都经汇总函数选退出码,不绕过。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误(脚本头声明了破坏性,--apply 缺 --yes 由库层拒且零写)。
 # 用法: graphics.sh [--check|--apply] [--json] [--log <路径>] [--yes] [--step 05-3] [-h]
-# 注入(夹具用):DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_RPM_OSTREE / DBK_UBLUE_IMAGE 与 XDG_SESSION_TYPE,
-#   全部透传给 dbk-driver.sh;本脚本不写发行版命令字面量(规则 S-1)。
+# 注入(夹具用):DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_RPM_OSTREE / DBK_UBLUE_IMAGE / DBK_OS_RELEASE /
+#   DBK_UBLUE_FEDORA / DBK_ALLOW_CROSS_RELEASE 与 XDG_SESSION_TYPE,全部透传给 dbk-driver.sh;本脚本不写发行版命令字面量(规则 S-1)。
 # 已核实(2026-09-27):ublue NVIDIA 变体镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(streams = gts / stable / stable-daily / latest);
 #   MOK 任务 ujust enroll-secure-boot-key、密码 universalblue、待导入密钥 /etc/pki/akmods/certs/akmods-ublue.der(ublue 的 just 配方与官方文档);
-#   仍需现场确认:所选 stream 对应的 Fedora 版本是否与安装的 44 对齐(Bluefin 的 stable 可能落后一代)。
+#   所选 stream 对应的 Fedora 版本是否与安装的 44 对齐,由 dbk-driver.sh 的 driver_release_guard 前置断言强制(rebase 前先判,不写死映射);
 #   modinfo -F signer / mokutil --list-enrolled 的输出格式。夹具级验证,真机未跑。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -146,9 +147,14 @@ if [ "$DBK_MODE" = apply ]; then
     dbk_exit PASS "显卡栈已就绪:无需再 rebase(--apply 幂等);要复核对齐请只跑 --check"
   fi
   dbk_need_yes "rebase 到 ublue 的 NVIDIA 变体(镜像内模块已预签名;重启后生效)" "$REBASE_CMD rebase $UBLUE_IMAGE"
-  if driver_rebase; then
+  rc=0
+  driver_rebase || rc=$?
+  if [ "$rc" -eq 0 ]; then
     dbk_add_action "driver_rebase(已 rebase 到 $UBLUE_IMAGE)"
     dbk_mark_changed
+  elif [ "$rc" -eq 2 ]; then
+    dbk_add_check "需人工: driver_release_guard 版本一致性前置断言未过(接口 rc=2),rebase 未执行(原因见上面接口输出)"
+    dbk_exit 需人工 "版本一致性前置断言未通过:rebase 未执行;按上面接口输出的本机 Fedora 主版本与 DBK_UBLUE_FEDORA 核对所选 stream(先按 ublue 官方文档确认),或确需跨版本时显式给 DBK_ALLOW_CROSS_RELEASE=1 后重跑"
   else
     dbk_add_check "失败项: driver_rebase 失败(原因见上面接口输出)"
     dbk_exit FAIL "rebase 未执行成功:按上面原因处理后重跑(幂等);要退回 stock 部署按 driver_fallback_nouveau 的步骤走"

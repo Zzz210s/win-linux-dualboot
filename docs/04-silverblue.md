@@ -33,15 +33,15 @@
      看到:分区列表新增三行且三块新分区都被标成"格式化";Windows 的 ESP / `C:` / `D:` 原值未被动过,没有任何一块被标成"格式化"
 脚本:scripts/linux/check-partition-plan.sh --track D --check
 坑:**绝不让 Anaconda 使用 Windows 的 ESP** —— 含既有 ESP 的盘上是它的已知失败模式(自 F34 起的上游 issue #284,**截至 2026-09 仍未关闭**;同类报告还有 Bugzilla 2439271「Failed to set new efi boot target」(该单已作为重复项关闭,仅作现象参考)),把 Windows 的 2GiB ESP 设成 `/boot/efi` 更等于当场毁掉 Windows 引导(不变量 I3);Fedora 必须用独立 `ESP-Fedora` 且 `/boot` 独立(每个部署的内核与 initrd 在此),root 必须是 btrfs(ostree 部署与 `var` 子卷需要,ext4 不支持);**格式化只勾新建的三块**(ESP-Fedora / `/boot` / root 都是新建分区,按设计 4.4 要勾,不勾装不出系统)—— 反过来,**Windows 的任何分区绝不能勾**:勾了 Windows 的 ESP 等于当场毁掉 Windows 引导(违反不变量 I3),勾 `C:` / `D:` 等于清空数据;把三块建在预留区之外会挤压 Windows 分区。
-出错时:分区表对不上 -> 不要就地重排,按 `07-1` 判层后走救援;Anaconda 在写引导前中止(issue #284 的形态)-> 按 `07-1` 在 live 环境手工修,最坏退回轨道 W(`03-windows`)。
+出错时:分区表对不上 -> 不要就地重排,按 `07-1` 判层后走救援;Anaconda 在写引导前中止(issue `#284` 的形态,**截至 2026-09 仍开**)-> **不要重装、不要就地重排分区表**:按 `07-1` 判层后进 `07-rescue.md` 在 live 环境手工修,最坏退回轨道 W(`03-windows`);参考设备必须把这条路径真跑通一次(验收 A10)。
 
 ### 04-3 装完重启进入 Silverblue 并核对部署
 
 做:装完重启,默认应仍进 Windows;进 Silverblue 后用校验脚本逐项核对,而不是只看"能不能进桌面"。
   1. 进 Silverblue(厂商菜单键一次性选 Fedora 条目),跑校验脚本
      看到:脚本报 PASS,逐条列出 ostree 部署在位、`/boot` 独立且为 ext4、`/boot/ostree` 在位、引导落 `\EFI\fedora\`、两块 ESP 互不干扰、`BootOrder` 首位仍是 Windows Boot Manager
-  2. 不做任何引导改动直接重启一次,看默认进哪个系统
-     看到:默认进 Windows(预期结果,不是失败);Fedora 条目在 `BootOrder` 尾部
+  2. 不做任何引导改动直接重启一次,看默认进哪个系统,并在固件启动菜单里手动选一次 Fedora 条目
+     看到:默认进 Windows(预期结果,不是失败);Fedora 条目在 `BootOrder` 尾部;手动选 Fedora 能再进一次(这一选一重启就是验收 A9 的设备侧必测动作)
 脚本:scripts/linux/verify-l3.sh --check
 坑:把 Fedora 条目设成默认首位会破坏 I1;在 L3 就配驱动(含 rebase 与 MOK)或共享盘会把两件事混在一起(那是 `05-first-boot`)。
 出错时:任一 FAIL -> 按 checks 里的失败项处置,引导层问题走 `07-1` 判层(不重装);`BootOrder` 首位被改 -> 只在固件设置界面改回,不得用 `efibootmgr -o`。

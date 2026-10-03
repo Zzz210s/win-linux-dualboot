@@ -102,16 +102,16 @@
 
 - **`templates/partitions.txt`(L1 的 diskpart 脚本)不变**:仍然只在 `D:` 之后预留一段 **115GiB 未分配空间**;变的是 L3 在这 115GiB 里切出上述三块。
 - **为何独立 ESP**:上游与社区一致要求 Fedora 用**自己的 `/boot/efi` 与 `/boot`**,并明确"**不要让 Anaconda 使用 Windows 的 EFI 分区**"(见第 6 节证据)。附带好处:I3(不覆盖 `\EFI\Microsoft\`)**由结构保证**,不再依赖纪律。
-- **需实测项**:同盘两个 ESP 的固件支持(多数出厂固件支持;若某机型只认第一个 ESP,按"偏离项处置"记录并评估退回共用 ESP 分支)。
+- **设备侧必测项**:同盘两个 ESP 的固件支持(多数出厂固件支持)。验收按 A9 的可执行步骤走:两块 ESP 都建好后 `efibootmgr -v` 应同时列出 Windows Boot Manager 与 fedora 两条,再分别重启两次(固件菜单键进 Fedora、不按键进 Windows);只认第一个 ESP 时按"偏离项处置"记录并走共用 ESP 分支(设计 00 第 10 节:共用一个 ESP + 独立 `/boot`,I3 改由备份/还原演练保证)。
 
 ## 6. 双系统安装的已知风险与处置(证据驱动)
 
 | 风险 | 证据 | 处置 |
 |---|---|---|
-| **Anaconda 在已有系统/ESP 的盘上装 Silverblue 会失败**("stops before the EFI boot configuration is correctly written",自 F34 起的已知问题) | `fedora-silverblue/issue-tracker#284` | ① L1 阶段**先手工建好三块 Fedora 分区**(ESP 1GiB + `/boot` 1GiB + root 113GiB),Anaconda 里只做"指定挂载点",不让它动分区表与 Windows ESP;② 若仍失败,按 `07` 救援流程在 live 环境手工修(`ostree admin status` 核对、`grub2-mkconfig -o /boot/grub2/grub.cfg`、必要时 `efibootmgr -c` 补条目并断言 `BootOrder` 首位仍是 Windows);③ 最坏情况退回轨道 W(Windows 单系统),**L2 基线已备份,损失可控** |
-| 双 ESP 的固件支持 | 官方文档未承诺;社区实践中可行 | 列为"参考设备必做"的实测项(A 组新增判据) |
+| **Anaconda 在已有系统/ESP 的盘上装 Silverblue 会失败**("stops before the EFI boot configuration is correctly written",自 F34 起的已知问题,**截至 2026-09 仍开**) | `fedora-silverblue/issue-tracker#284` | ① L3 阶段**装前**跑 `check-partition-plan.sh --track D --check`(断言 Windows ESP 未被挂载、尺寸仍是 2048MB)并在分区页显式确认 Linux 侧 ESP 指向 ESP-Fedora;② 若仍失败,**不要重装、不要就地重排分区表**:按 `07-1` 判层后进 `07-rescue.md` 在 live 环境手工修(`ostree admin status` 核对、`grub2-mkconfig -o /boot/grub2/grub.cfg`、必要时 `efibootmgr -c` 补条目并断言 `BootOrder` 首位仍是 Windows);③ 最坏情况退回轨道 W(Windows 单系统),**L2 基线已备份,损失可控** |
+| 双 ESP 的固件支持 | 官方文档未承诺;社区实践中可行 | 列为**设备侧必测项**(验收 A9:两条条目都在 + 分别重启各进一个系统;给可执行步骤);只认一个 ESP 时走共用 ESP 分支 |
 | Silverblue 双系统 + SB + NVIDIA 的实操摩擦("要重启很多次") | 社区指南(r/Fedora 2025) | 写进文档预期管理;把"分阶段可中断"作为本方案一贯原则 |
-| 该 issue 自 F34 起存在 → **F44 是否已修需复核** | 同上 | 实施时在参考设备实测并回写文档 |
+| 该 issue 自 F34 起存在 → **截至 2026-09 仍开**(无修复记录) | 同上 | 把"装前核对 → 失败转救援"作为参考设备的必测项(A10)真跑通一次并回写文档 |
 
 **架构上的一条纪律**:所有"可能失败"的动作都落在 **L3**,而 L3 之前已有 L2 基线备份;失败不会波及 Windows(不变量 I1–I4 与独立 ESP 共同保证)。
 
@@ -157,7 +157,7 @@
 
 | 组 | 增补项 |
 |---|---|
-| A(引导安全) | **两个 ESP 互不干扰**:Fedora 侧操作后 `\EFI\Microsoft\` 逐文件不变;`BootOrder` 首位仍是 Windows Boot Manager |
+| A(引导安全) | **两个 ESP 互不干扰**:Fedora 侧操作后 `\EFI\Microsoft\` 逐文件不变;`BootOrder` 首位仍是 Windows Boot Manager。并新增两条**设备侧必测项**:**A9 固件识别两块 ESP**、**A10 Anaconda 在已有 Windows ESP 的盘上装成功**(参考设备必测;判据与步骤见 `docs/08-verification.md`) |
 | F(健壮性) | **部署回滚演练**(真做一次):`rpm-ostree rollback` → 重启 → 桌面可用 → 复检模块加载 → 再回滚回来;并确认"**用户数据在回滚后仍存在**"(`/var` 不被回退) |
 | B(系统功能) | 新增:`rpm-ostree status` 显示 ublue 镜像来源;分层包列表与计划一致 |
 
@@ -171,7 +171,7 @@
 | 原子桌面回滚:`rpm-ostree rollback` + GRUB 列出各部署 | Fedora 官方文档"Updates, Upgrades & Rollbacks"(原子桌面) | 高 |
 | 发行版升级 = `rpm-ostree rebase` | Fedora Magazine"如何在 Silverblue 上 rebase 到 F44" | 高 |
 | 双系统需独立 `/boot/efi` 与 `/boot`,不要让 Anaconda 用 Windows ESP | Silverblue 官方文档双系统页 + Fedora Discussion 两帖 | 中高 |
-| Anaconda 在已有 ESP 的盘上装 Silverblue 失败(#284,自 F34) | 上游 issue | 中(需 F44 复核) |
+| Anaconda 在已有 ESP 的盘上装 Silverblue 失败(#284,2022-05 建单、自 F34) | 上游 issue(**截至 2026-09 仍开**,无修复记录) | 中高(缓解路径 = 装前核对 + 失败转 `07-rescue.md`,参考设备必测项 = A10) |
 | `rpm-ostree install` 下 akmods 不签名(#499)、akmods 卡内核升级(#632) | 上游 issue | 高 |
 | ublue NVIDIA 镜像预签名 + `ujust enroll-secure-boot-key`(MOK 密码 `universalblue`)| `ublue-os/akmods` README、ublue 官方脚本与论坛帖 | 中高(**镜像名/分支/任务名须在实施时复核**) |
 | `/var`(`/home`)不随部署回滚 | ostree 部署模型(官方文档) | 高 |
@@ -181,3 +181,4 @@
 | 日期 | 变更 |
 |---|---|
 | 2026-09-19 | 初版:取代传统版变体设计。基础系统改 Fedora 44 Silverblue(原子)、NVIDIA 改 ublue rebase + MOK、回滚改部署级(去 snapper/grub-btrfs/快照)、双系统改独立 ESP + 独立 `/boot`、引入三轨道结构、给出脚本与文档影响面、增补验收与 6 条风险、标注证据等级与须复核项 |
+| 2026-10-03 | 四项待核实收口:第 5 节的"需实测项"改为**设备侧必测项**(验收 A9,给可执行步骤与共用 ESP 分支);第 6 节的 `#284` 缓解路径写实(装前核对 → **失败转救援、不重排分区表**)并把"在已有 Windows ESP 的盘上装成功"定为参考设备必测项(A10);第 9 节验收增补与第 10 节事实等级同步(#284 标"截至 2026-09 仍开")。**不变量与分区数值未动** |

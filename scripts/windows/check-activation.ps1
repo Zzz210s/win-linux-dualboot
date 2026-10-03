@@ -7,7 +7,7 @@
   本脚本只读状态,**不含也不分发任何激活脚本本体**,不写购买路径,不引入自建 KMS;激活走上游项目的官方入口,步骤见 03-windows.md 的 03-4。
   判据(依据 design 3.10):
     1) Get-CimInstance SoftwareLicensingProduct(PartialProductKey 非空、名称含 Windows)的 LicenseStatus = 1(已授权);
-    2) GracePeriodRemaining 记录本次周期剩余时间(Online KMS 为 180 天周期,续期任务由上游流程创建,本脚本只记录状态);
+    2) GracePeriodRemaining 只原样记录该字段并标单位未核实,不做单位换算与天数推断;判定只用 LicenseStatus;
        取不到时记「需人工:读不到 KMS 剩余期」,不静默。
     3) 评估版断言:产品名/Caption 含 Eval 即判 FAIL(评估版不可在评估期外激活,本方案的 KMS 路线要求正式 LTSC 镜像)。
   首次激活失败**不阻塞** L1(design 第 7 节 L1 行):未授权时退出码 2(需人工),把报错与失败记进 01-activation.md(03-5)即可继续。
@@ -84,13 +84,11 @@ if (-not $o.LicenseStatus) {
   Write-DbkExit -Status FAIL -Message '读不到授权状态(Get-CimInstance SoftwareLicensingProduct 无结果):用管理员身份重跑;WMI 服务被禁时需先恢复 Software Protection 服务'
 }
 $statusText = Get-LicStatusText $o.LicenseStatus
-# 待核实(以官方文档为准):GracePeriodRemaining 在 KMS/数字许可下的确切语义与单位(官方文档记单位为分钟,
-#   本脚本按 1440 分钟/天换算天数;与「剩余宽限期」的对应关系以官方文档为准)。
-$days = ''
-if ($o.GracePeriodRemaining -match '^[0-9]+$') { $days = [string][math]::Floor([double]$o.GracePeriodRemaining / 1440) }
+# 待核实(以官方文档为准):GracePeriodRemaining 在 KMS/数字许可下的确切语义与单位未核实 —— 只原样记录该字段并标单位
+#   未核实,不做单位换算与天数推断;判定只用 LicenseStatus。
 Add-DbkCheck ('授权对象:' + $(if ($o.Name) { $o.Name } else { '(名称读不到)' }) + ';LicenseStatus = ' + $o.LicenseStatus + '(' + $statusText + ')')
-if ($days) { Add-DbkCheck ('本周期剩余:' + $days + ' 天(GracePeriodRemaining = ' + $o.GracePeriodRemaining + ' 分钟;Online KMS 周期 180 天)') }
-else { Add-DbkCheck '需人工:读不到 KMS 剩余期(GracePeriodRemaining 缺失或不是整数分钟),请在 SoftwareLicensingProduct 里人工核对' }
+if ($o.GracePeriodRemaining) { Add-DbkCheck ('本周期剩余(GracePeriodRemaining 原始值,单位未核实):' + $o.GracePeriodRemaining) }
+else { Add-DbkCheck '需人工:读不到 KMS 剩余期(GracePeriodRemaining 缺失),请在 SoftwareLicensingProduct 里人工核对' }
 if ($o.Description) { Add-DbkCheck ('描述:' + $o.Description) }
 
 # 评估版断言(优先于「已授权」判定):评估版不可在评估期外激活,本方案的 KMS 路线要求正式 LTSC 镜像。
@@ -102,7 +100,7 @@ if ($evalText -match '(?i)Eval') {
 
 if ($o.LicenseStatus.Trim() -eq '1') {
   Add-DbkAction '把本脚本输出(含执行日期)写进 01-activation.md(03-5);续期任务与 KMS 主机 1688 端口可达性按 03-4 人工核对'
-  Write-DbkExit -Status PASS -Message ('已授权(LicenseStatus = 1' + $(if ($days) { ',本周期剩余 ' + $days + ' 天' } else { '' }) + ');激活状态已核对')
+  Write-DbkExit -Status PASS -Message '已授权(LicenseStatus = 1);激活状态已核对'
 }
 Add-DbkAction '激活走上游项目官方入口(见 03-windows.md 的 03-4),本脚本不含激活脚本本体;完成后再跑一次本脚本'
 Write-DbkExit -Status 需人工 -Message ('未授权(LicenseStatus = ' + $o.LicenseStatus + ',' + $statusText + '):激活按 03-4 人工做;本项不阻塞 L1,把状态与报错记进 01-activation.md(03-5)后继续')

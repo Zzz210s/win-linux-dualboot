@@ -5,35 +5,38 @@
 #   docs/design/02-fedora-atomic-variant-design.md 第 3 节 D2 的「看到:」四项;docs/design/03-step-automation-design.md
 #   第 6 节库文件行(四个发行版薄接口之一)。接口名不带发行版痕迹,只换内部实现;Kubuntu 时代的 ubuntu-drivers
 #   预签名包路径(不换镜像分支、不注册 MOK)已随 2026-09-25 回切废弃。
-# 已核实(2026-09-27):镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest;
-#   MOK 任务 `ujust enroll-secure-boot-key`、密码 universalblue、待导入密钥 /etc/pki/akmods/certs/akmods-ublue.der。
-#   仍需现场确认:所选 stream 与安装的 Fedora 版本是否一致(Bluefin 的 stable 可能落后一代)。
+# 已核实(2026-09-27):镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest;目标镜像名与
+#   分支见文件头品牌名/通道名;MOK 任务 `ujust enroll-secure-boot-key`、密码 universalblue、待导入密钥 /etc/pki/akmods/certs/akmods-ublue.der;
+#   modinfo -F signer 与 mokutil --list-enrolled 的输出格式;rebase 到 ostree-image-signed:docker://… 的参数形态与返回码;
+#   本步的 driver_check 不判镜像来源与版本(镜像来源与版本由 07-7 周期巡检承担,见下面作用域段;版本一致性另由 driver_release_guard 在 rebase 前断言)—— 以上均未在真机验证。
+# 版本一致性(卡 05-3 的 --apply 路径):所选 stream 与安装的 Fedora 版本是否一致,由 driver_release_guard 前置断言强制(rebase 前先判,不写死映射)。
 # 调用约定:调用方先 source 本库(如需落日志,先 source dbk-obs.sh 的 dbk_obs —— dbk-cli.sh 只是替调用方 source 它),
 #   然后使用:
 #   driver_check            0 = 已就绪(签名者非空 + ublue 密钥已注册 + nvidia 已加载)/ 1 = 未完成 / 2 = 需人工
 #   mok_check               0 = ublue 密钥已注册 / 1 = 未注册 / 2 = 读不到(需人工)
 #   driver_signer           0 = 签名者非空(打印签名者)/ 2 = 读不到(需人工);1 不用:模块不在位也是「判不了」
 #   driver_module_state     0 = lsmod 有 nvidia(打印命中行)/ 1 = 没有(可能是 nouveau 兜底)/ 2 = 读不到(需人工)
-#   driver_rebase           0 = 已提交 rebase(重启后生效)/ 1 = 失败(原因已落日志)
+#   driver_release_guard    0 = 本机 Fedora 主版本与目标镜像声明的一致(或已显式给 DBK_ALLOW_CROSS_RELEASE=1 覆盖)/ 2 = 需人工;无 1
+#   driver_rebase           0 = 已提交 rebase(重启后生效)/ 1 = 失败(原因已落日志)/ 2 = 版本一致性前置断言未过(未调 rebase)
 #   driver_fallback_nouveau 只打印 nouveau 兜底步骤(不改任何系统状态),恒返回 0
 # 返回值纪律(读调用方代码前必看):读类判定(driver_check / mok_check / driver_signer / driver_module_state)
 #   在命令缺失、退出非 0、输出为空或字段缺失时一律返回 2(需人工),绝不 fail-open 成「没问题」;
 #   1 是「读到了,而且明确没完成」。调用方必须显式处理 2(case 里给 2 单独一支),
-#   丢进 *) 当普通失败处理会把「需人工」误记成 FAIL。
+#   丢进 *) 当普通失败处理会把「需人工」误记成 FAIL。driver_release_guard 同属「不 fail-open」:
+#   本机 Fedora 版本读不到、目标版本未声明或两者跨版本一律返回 2(仅显式给 DBK_ALLOW_CROSS_RELEASE=1 才放行)。
 # 判据口径(设计 02 第 3 节 D2):① `modinfo -F signer nvidia` 非空(模块已签名);② `mokutil --list-enrolled` 含
 #   ublue 密钥(签名者非空且已注册 ublue 密钥);③ `lsmod` 有 nvidia(模块已加载)。三条全绿 = 本地这三条读得到且成立。
 # 判据作用域(契约,不可外推):driver_check 的 0 只证明「签名者非空 + 已注册密钥里出现 ublue + nvidia 已加载」这三件事,
 #   既不证明镜像来源与版本,也不证明 Secure Boot 链整体有效 —— 这两点由 07-7 周期巡检承担
-#   (镜像来源与版本由卡 07-7 判定;签名与 Secure Boot 状态部分见 check-signature.sh)。本步不判也不降级,只如实标注「不由本步判定」。
+#   (镜像来源与版本由卡 07-7 判定;签名与 Secure Boot 状态部分见 check-signature.sh)。版本一致性不在巡检范围:rebase 路径另由
+#   driver_release_guard 前置断言(见下)。本步不判也不降级,只如实标注「不由本步判定」。
 #   「是否已 rebase」同理不单独判:本步判结果,不读 status 的镜像 ref。
 # 本文件只定义函数与常量:不设置 shell 选项、不执行任何动作(调用方自己 set -euo pipefail 或逐项汇总)。
-# 夹具级验证,真机未跑。环境注入(夹具用):DBK_RPM_OSTREE / DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_UBLUE_IMAGE。
-# 已核实(2026-09-27):本步不判镜像来源与版本(由 07-7 周期巡检承担,见上面作用域段);目标镜像名与分支见文件头
-#   品牌名/通道名);MOK 注册任务名 enroll-secure-boot-key 与密码 universalblue;modinfo -F signer 与 mokutil --list-enrolled
-#   的输出格式;rebase 到 ostree-image-signed:docker://… 的参数形态与返回码 —— 均未在真机验证。
+# 夹具级验证,真机未跑。环境注入(夹具用):DBK_RPM_OSTREE / DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_UBLUE_IMAGE /
+#   DBK_OS_RELEASE / DBK_UBLUE_FEDORA / DBK_ALLOW_CROSS_RELEASE。
 
 REBASE_CMD="${DBK_RPM_OSTREE:-rpm-ostree}"   # 夹具注入用
-# 环境相关:所选 stream 对应的 Fedora 版本须与安装版本一致(Bluefin 的 stable 可能落后一代);装机前按 ublue 发布页核对。
+# 环境相关:版本一致性由 driver_release_guard 前置断言强制(卡 05-3 的 --apply 路径,rebase 前先判);装机前仍应按 ublue 官方文档核对。
 UBLUE_IMAGE="${DBK_UBLUE_IMAGE:-ostree-image-signed:docker://ghcr.io/ublue-os/bluefin-nvidia:latest}"
 MOK_KEY_MATCH="ublue"   # 设计 06 第 3 节:mokutil --list-enrolled 含 ublue 密钥
 
@@ -141,10 +144,39 @@ driver_check() {
   return 0
 }
 
-# rebase 到 ublue 的 NVIDIA 变体(镜像内模块已预签名):0 = 已提交(重启后生效)/ 1 = 失败(原因已落日志)。
+# 版本一致性前置断言(rebase 前先判,卡 05-3 的 --apply 路径):本机 Fedora 主版本(读 ${DBK_OS_RELEASE:-/etc/os-release} 的 VERSION_ID,
+#   去引号取开头连续数字)与操作员按 ublue 官方文档核对后声明的目标镜像 Fedora 主版本(DBK_UBLUE_FEDORA,只认纯数字;前导零归一化后比较,如 044 = 44)。
+#   0 = 一致(或 DBK_ALLOW_CROSS_RELEASE=1 显式覆盖,覆盖时先打警告行)/ 2 = 需人工(本机版本读不到 / 未声明 / 跨版本)。无 1。
+driver_release_guard() {
+  local osf want lv ov bad=""
+  osf="${DBK_OS_RELEASE:-/etc/os-release}"; want="${DBK_UBLUE_FEDORA:-}"; ov="${DBK_ALLOW_CROSS_RELEASE:-}"
+  lv="$( { grep -m1 -E '^VERSION_ID=' "$osf" 2>/dev/null || true; } | sed -nE 's/^VERSION_ID="?([0-9]+).*/\1/p' )"
+  case "$want" in ''|*[!0-9]*) [ -n "$want" ] && bad=",当前声明值 $want 非法(只认纯数字)"; want="未声明" ;; *) want="$(printf '%s' "$want" | sed 's/^0*//')"; [ -n "$want" ] || want=0 ;; esac
+  if [ -z "$lv" ]; then
+    _drv_note "错误: 读不到本机 Fedora 主版本($osf 不存在、无 VERSION_ID 或值非数字)(需人工):版本一致性判不了,覆盖变量也不放行"
+    return 2
+  fi
+  if [ "$want" != "未声明" ] && [ "$want" = "$lv" ]; then
+    _drv_note "版本一致性前置断言通过:本机 Fedora $lv = 目标镜像声明的 Fedora $want"
+    return 0
+  fi
+  if [ "$ov" = 1 ]; then
+    _drv_note "警告: 跳过版本一致性断言(DBK_ALLOW_CROSS_RELEASE=1 显式覆盖):本机 Fedora $lv / 目标镜像声明的 Fedora $want;跨版本 rebase 会换掉整个发行版基线,确认无误再继续"
+    return 0
+  fi
+  if [ "$want" = 未声明 ]; then
+    _drv_note "错误: 未声明目标镜像的 Fedora 主版本(DBK_UBLUE_FEDORA=<主版本>)${bad}:先按 ublue 官方文档核对所选 stream 对应哪个 Fedora,再声明后重跑"
+    return 2
+  fi
+  _drv_note "错误: 版本一致性前置断言未通过:本机 Fedora $lv != 目标镜像声明的 Fedora $want;跨版本 rebase 会换掉整个发行版基线 —— 改用与本机同代的 stream,确需跨版本再显式给 DBK_ALLOW_CROSS_RELEASE=1"
+  return 2
+}
+
+# rebase 到 ublue 的 NVIDIA 变体(镜像内模块已预签名):0 = 已提交(重启后生效)/ 1 = 失败(原因已落日志)/ 2 = 版本一致性前置断言未过(未调 rebase)。
 driver_rebase() {
   local -a rb
   local out st
+  driver_release_guard || return 2   # 前置断言:非 0 绝不调 rpm-ostree(跨版本 rebase 会换掉整个发行版基线)
   read -r -a rb <<<"$REBASE_CMD"
   command -v "${rb[0]}" >/dev/null 2>&1 || { _drv_note "错误: 未找到 ${rb[0]},无法 rebase 到 ublue NVIDIA 变体"; return 1; }
   out="$(command "${rb[@]}" rebase "$UBLUE_IMAGE" 2>&1)" && st=0 || st=$?

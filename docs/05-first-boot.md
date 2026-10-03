@@ -46,8 +46,8 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 做:把系统 `rebase` 到 ublue 的 **NVIDIA 变体**(镜像内 nvidia 模块**已预签名**),再重启进 MOK 界面做**一次性密钥注册**(设计 02 第 3 节 D2、设计 06 第 2 节 D3)。
   1. 先看现状:`sudo bash scripts/linux/graphics.sh --check`
      看到:四项判据(① `modinfo -F signer nvidia` 非空 ② `mokutil --list-enrolled` 含 ublue 密钥 ③ `lsmod` 有 `nvidia` ④ `XDG_SESSION_TYPE` 为 `wayland`);零写;未 rebase / 未重启 / 未注册 MOK 的 ①②③ 在 `--check` 下记 **FAIL**(退出 1),④不符也记 FAIL;只有 ①②③ 读不到时(接口返 2)才记"需人工"
-  2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`,脚本调接口把系统 rebase 到 ublue 的 NVIDIA 镜像(已核实形态 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest;**实施时须确认所选 stream 对应的 Fedora 版本与安装的 44 一致**),重启后生效
-     看到:脚本报 PASS"已 rebase 到 ublue 的 NVIDIA 变体:需重启",并提示重启后在 MOK 界面完成注册;重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
+  2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`(镜像形态已核实 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest)。**脚本在 rebase 前先做版本一致性前置断言**(`driver_release_guard`):本机 Fedora 主版本(读 `/etc/os-release` 的 `VERSION_ID`)必须等于你**按 ublue 官方文档核对后声明的目标版本** —— **不写死 stream ↔ 版本的映射**(stream 集合与对应版本会随版本演进变),先查文档再声明:`sudo DBK_UBLUE_FEDORA=44 bash scripts/linux/graphics.sh --apply --yes`;不一致或未声明 → 退出码 2 需人工且**不发出 rebase**;确实要跨版本时才显式给 `DBK_ALLOW_CROSS_RELEASE=1`,重启后生效
+     看到:断言通过时报 PASS"已 rebase 到 ublue 的 NVIDIA 变体:需重启"(未通过则报"版本一致性前置断言未通过"且 `rpm-ostree rebase` 一次都没发),并提示重启后在 MOK 界面完成注册;重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
   3. 一次性 MOK 注册(必须人工,接口不代跑):重启进 MOK 界面按提示完成注册(已核实:任务 `ujust enroll-secure-boot-key`、密码 `universalblue`、待导入密钥 `/etc/pki/akmods/certs/akmods-ublue.der`;若 Secure Boot 已开启,ublue/Bazzite 文档建议先关再注册、注册后重开),也可在会话内跑 `ujust enroll-secure-boot-key` 后再重启一次;随后复跑 `--check` 四项
      看到:`mokutil --list-enrolled` 含 ublue 密钥;四项全过;注册只需做一次,不是每次更新都重来
   4. 会话与内核行校验:`echo "$XDG_SESSION_TYPE"` 为 `wayland`;`cat /proc/cmdline` 不含 `nomodeset`
@@ -55,8 +55,8 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   5. nouveau 兜底:桌面起不来时不要长按电源,按 `07-2` 从 GRUB 提示符回 Windows;能在 GRUB 菜单选上一部署就用旧部署启动,或按 `05-9` 回滚到 stock 部署(回滚后由 nouveau 起桌面)
      看到:系统仍可用;处置顺序是"选上一部署 / 回滚 -> rebase 回 stock 部署 -> 才考虑发行版问题"
 脚本:sudo bash scripts/linux/graphics.sh --check / --apply --yes
-坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码已于 2026-09-27 核实(见本卡第 2/3 步;上游端口或分支改名时以 ublue 发布页为准)。
-出错时:装完黑屏 -> 按 `10-1` 处置(显卡驱动专项见 `10-21`);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
+坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码已于 2026-09-27 核实(见本卡第 2/3 步;上游端口或分支改名时以 ublue 发布页为准)。**stream ↔ Fedora 版本的对应关系随版本演进,以 ublue 官方文档为准**:不要凭记忆或旧笔记填 `DBK_UBLUE_FEDORA`,也不要在没核对的情况下用 `DBK_ALLOW_CROSS_RELEASE=1` 跨版本(跨版本 rebase 会换掉整个发行版基线)。
+出错时:版本一致性前置断言未过(退出码 2)-> 按接口输出核对本机版本与所选 stream 的目标版本后重跑;确实要跨版本才给 `DBK_ALLOW_CROSS_RELEASE=1`。装完黑屏 -> 按 `10-1` 处置(显卡驱动专项见 `10-21`);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
 
 ### 05-4 时间(RTC 走 UTC)
 

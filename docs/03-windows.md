@@ -59,7 +59,7 @@
 
 做:只读核对授权状态;**激活动作人工**——按上游项目 `massgravel/Microsoft-Activation-Scripts` 的官方入口 https://github.com/massgravel/Microsoft-Activation-Scripts 走 Online KMS 路径。本仓库不含也不分发任何激活脚本本体,不写购买路径,不引入自建 KMS;合规责任由操作者自担(设计 3.10)。镜像必须是**正式版 LTSC**,评估版不适用(到期后无法按 KMS 路线激活);GVLK 随版本走,以微软官方 KMS client keys 页为唯一真源,脚本与文档不硬编码任何密钥。
   1. 跑只读脚本核对状态
-     看到:已授权时退出码 0(`LicenseStatus = 1`,`GracePeriodRemaining` 给出本周期剩余);未授权时退出码 2(需人工)并给出原因;评估版镜像退出码 1(判 FAIL,须换正式版重装)
+     看到:已授权时退出码 0(`LicenseStatus = 1`,并把 `GracePeriodRemaining` 原样记进 `01-activation.md`,单位未核实、不换算成天数);未授权时退出码 2(需人工)并给出原因;评估版镜像退出码 1(判 FAIL,须换正式版重装)
   2. 激活后核对续期与可达性:打开 `taskschd.msc` 看上游流程创建的续期任务,并确认能访问 KMS 主机的 1688 端口
      看到:续期任务存在且处于启用;端口可达(企业网、校园网与代理环境常在此被拦)
 脚本:scripts/windows/check-activation.ps1 -Check

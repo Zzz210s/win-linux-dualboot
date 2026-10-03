@@ -193,6 +193,8 @@
 
 `baseline/02-esp-backup/` 由 L2 预检产出,而 L2 生成于装 Silverblue **之前**,所以里面**没有** `EFI/fedora/`——不能用它还原 Silverblue 引导(基线只能复原 `\EFI\Microsoft\`,固件条目现状看 `baseline/02-firmware-entries.txt`)。
 
+**L3 装到一半中止(L3 的上游 `#284` 形态)也走本文件**:先按 `07-1` 判层,再看部署写没写进去——`ostree admin status` 能列出部署就按下面的 **(b)** 修引导(**不要重装**);列不出部署说明系统层不完整,按 `07-5` 只格 root 重装(root 是唯一勾格式化的那块,ESP 与 `/boot` 复用、绝不勾)。**禁止就地重排分区表**:那会把一次引导故障升级成两块 ESP 都要重建。这条路径在参考设备上必须真跑通一次(验收 A10)。
+
 **(a) 做过 L5 退役备份的**:用 `D:\dbk-l5-backup\02-esp-backup\EFI\fedora\`(那是 `07-10` 写出的备份,含两棵子树):
 
 ```powershell

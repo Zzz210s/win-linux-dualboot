@@ -143,7 +143,7 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 - **每个版本支持期约 13 个月**(每 6 个月一发新版本),所以大版本升级(`rpm-ostree rebase`)是反复出现、有专门卡片的计划事件,不是一次性的稀有事;
 - **用户数据不属于部署**:`/var`(以及符号链接到 `/var/home` 的 `/home`)不随回滚回退;但只格 root 的重装仍会丢 `~`,所以动手前先把 `~` 拷到共享盘(见 [docs/07-rescue.md](docs/07-rescue.md))。数据盘 `D:` 两种情况都不受影响。
 - **原子版里没有 snapd**:原子基础层不带 snap 守护进程,也没有 apt 能把它装回来,所以 Kubuntu 变体**只能自己压制、并在回切前被认定为设计缺口**的“snap 清不干净”问题,在这里被结构性消灭,而不只是被压住;回切记录见 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md)。
-- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。其中三项已于 2026-09-27 对照上游核实:镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(streams = `gts` / `stable` / `stable-daily` / `latest`)、MOK 任务 `ujust enroll-secure-boot-key` 与密码 `universalblue`(密钥 `/etc/pki/akmods/certs/akmods-ublue.der`)、以及**上游 issue #284 仍未关闭**——这正是 Fedora 必须用独立 ESP 与独立 `/boot` 的原因。仍需现场确认两项:所选 stream 对应的 Fedora 版本要与安装的一致(Bluefin 的 `stable` 可能落后一代)、以及本机固件是否支持同盘两块 ESP。
+- **Secure Boot 保持开启,不自签驱动**:NVIDIA 支持来自 ublue 的 NVIDIA 变体镜像,内核模块在镜像内**已预签名**;一次性 MOK 注册(`mokutil`,由 `ujust` 任务驱动)把 ublue 的密钥登记进去,模块才能加载。其中三项已于 2026-09-27 对照上游核实:镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(streams = `gts` / `stable` / `stable-daily` / `latest`)、MOK 任务 `ujust enroll-secure-boot-key` 与密码 `universalblue`(密钥 `/etc/pki/akmods/certs/akmods-ublue.der`)、以及**上游 issue #284 仍未关闭**——这正是 Fedora 必须用独立 ESP 与独立 `/boot` 的原因。剩下两件事属于设备侧而不是文档侧:stream 的 Fedora 版本要与安装的一致、本机固件要能启动同盘的第二块 ESP。两件都不靠肉眼确认——版本一致性由 `driver_release_guard` 在任何 rebase 之前断言(`DBK_UBLUE_FEDORA`;跳版本要显式覆盖;映射随版本演进,以 ublue 官方文档为准),同盘双 ESP 则是验收清单里的设备侧必测项 **A9**。
 - **明确被否(不使用)**:**`snapper` / `timeshift` / `grub-btrfs` / btrfs 快照栈**;**ZFS root 快照**;**以逐包降级作为主要恢复手段**——回滚单位是整个部署,不可变基础层上也没有受支持的 `dnf downgrade` 路径;
 - **四级回退粒度**:部署级 <-> `rpm-ostree rollback` 加 `pin`;配置 <-> 各脚本留下的 `.dbk.bak` 备份;基线级 <-> ESP 备份 + 固件启动项快照;阶段级 <-> L5 退役流程。
 
@@ -191,7 +191,7 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 
 是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分六组:
 
-- **A. 引导安全组(A1-A8)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线逐文件一致、`{bootmgr}` 的 `path` 未变、全程没写过永久启动顺序、fedora 条目位于末尾、两块 ESP 互不干扰,并含一次**可逆的撤除演练**。
+- **A. 引导安全组(A1-A10)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线逐文件一致、`{bootmgr}` 的 `path` 未变、全程没写过永久启动顺序、fedora 条目位于末尾、两块 ESP 互不干扰,含一次**可逆的撤除演练**,并含两条**设备侧必测项**:固件识别两块 ESP(A9,参考设备必做、其他设备推荐)与 Anaconda 在已有 Windows ESP 的盘上装成功(A10,参考设备必做)。
 - **B. 系统功能组(B1-B11)**:Wayland 会话且无 X11 可选、显卡驱动正常且有 nouveau 兜底、模块签名者非空、Secure Boot 仍开启且未引入自签密钥、驱动来源为 ublue 预签名 NVIDIA 镜像、一次性 MOK 注册已完成(`mokutil --list-enrolled`)、`ntfs3` 读写挂载带 `nofail`、共享盘双向可见、家目录重定向生效、RTC 用 UTC、切换系统后蓝牙无需重配、`fwupd` 能识别设备。
 - **C. 双系统切换组(C1-C3)**:一次性 `BootNext` 进 Linux 且不改默认项、一键回 Windows、切换三次后顺序仍稳定。
 - **D. 可撤除性组(D1-D6)**:L5 五步退役完整推演、系统盘隔离逐项核对、两条原地重装路径各走一遍、非重装的引导修复路径已被证明可用。
