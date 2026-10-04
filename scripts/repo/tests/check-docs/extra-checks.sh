@@ -171,6 +171,23 @@ t "C5 反引号写法同样受检" C5 1 docs/01-firmware.md < <(mk01 3 '### 01-1
 t "C5 豁免:变更历史表格行(日期行)" OK 0 docs/01-firmware.md < <(mk01 3 '### 01-1 甲' '| 2026-09-25 | 修订八:当时末张卡 `01-9` |')
 t "C5 不豁免:活引用同行含历史措辞" C5 1 docs/01-firmware.md < <(mk01 3 '### 01-1 甲' '旧方案已废弃,先看 -> 01-9。')
 t "C8 emoji 与坏链接各一条" C8 2 docs/notes.md < <(printf '# 夹具:C8\n\n这行有 %b 与坏链接 [坏](nope.md)。\n' '\xf0\x9f\x98\x80')
+
+# ==== D2:emoji 字节范围扩展(U+2B50 / U+231B 等) =============================
+t "D2 ⭐(U+2B50)与 ⌛(U+231B)各报一条" C8 2 docs/notes.md < <(printf '# 夹具:D2\n\n星 %b\n\n沙 %b\n' '\xe2\xad\x90' '\xe2\x8c\x9b')
+t "D2 非 emoji 多字节(箭头/CJK)不误报(应过)" OK 0 docs/notes.md < <(printf '# 夹具:D2 反例\n\n箭头 %b 与中文。\n' '\xe2\x86\x92')
+
+# ==== D3:相对链接范围 = 任何相对目标(不再只看固定扩展名) ===================
+t "D3 坏链 png 目标不存在" C8 1 docs/notes.md < <(printf '# 夹具:D3\n\n见 [图](absent.png)。\n')
+t "D3 坏链 目录目标不存在" C8 1 docs/notes.md < <(printf '# 夹具:D3\n\n见 [目录](nope/)。\n')
+t "D3 坏链 无扩展名目标不存在" C8 1 docs/notes.md < <(printf '# 夹具:D3\n\n见 [裸](bare-target)。\n')
+t "D3 坏链 yml 目标不存在" C8 1 docs/notes.md < <(printf '# 夹具:D3\n\n见 [配置](cfg.yml)。\n')
+mkdir -p "$W/docs"; printf 'x\n' > "$W/docs/exists.png"
+t "D3 存在目标/占位符/站点绝对路径等豁免(应过)" OK 0 docs/notes.md <<'EOF'
+# 夹具:D3 正例
+
+见 [图](exists.png)、[占位]({{base}}/x)、[站点绝对](/docs/01-firmware.md)、[页首](#)、[外链](https://example.com/a.png)、[邮件](mailto:a@b.c)。
+EOF
+
 printf '
 PASS=%s FAIL=%s
 ' "$pass" "$bad"

@@ -5,11 +5,16 @@
 # 调用方需先定义 ROOT(仓库根)。
 set -uo pipefail
 
-# emoji 字节模式:F0 9F = U+1F000 及以上;E2 98/99/9A/9B = U+2600~U+26FF;E2 9C/9D/9E = U+2700~U+27BF;EF B8 8F = 变体选择符。
-# 本机 grep -P 不支持多字节码点范围,故用 LC_ALL=C 下的字节级匹配。
+# emoji 字节模式(LC_ALL=C 下按 UTF-8 前两字节匹配;本机 grep -P 不支持多字节码点范围):
+#   F0 9F           = U+1F000 及以上(补充平面 emoji)
+#   E2 98/99/9A/9B/9C/9D/9E/9F = U+2600~U+27FF(杂项符号、装饰符;U+2757 等在内)
+#   E2 8C/8D/8E/8F  = U+2300~U+23FF(技术符号:⌛ U+231B、⏳ U+23F3、⏰ U+23F0 等)
+#   E2 AC/AD        = U+2B00~U+2B7F(杂项符号与箭头:⭐ U+2B50、⬛ U+2B1B 等)
+#   EF B8 8F        = U+FE0F 变体选择符
+#   旧模式漏掉后三段,导致 ⭐(E2 AD 90)、⌛(E2 8C 9B)报不出。
 # 与 check-docs.sh 共用的命名常量:本文件只定义,由 check-docs.sh source 后使用(故此处看似未使用)。
 # shellcheck disable=SC2034
-EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xef\xb8\x8f')"
+EMOJI="$(printf '\xf0\x9f|\xe2\x98|\xe2\x99|\xe2\x9a|\xe2\x9b|\xe2\x9c|\xe2\x9d|\xe2\x9e|\xe2\x9f|\xe2\x8c|\xe2\x8d|\xe2\x8e|\xe2\x8f|\xe2\xac|\xe2\xad|\xef\xb8\x8f')"
 
 # C9 白名单:库文件(dbk-pkg.sh 是 hardening/storage/set-updates 等 source 的包助手;它取代了已废弃的 dbk-ostree.sh / dbk-apt.sh;
 # 另三个发行版薄接口 dbk-update.sh / dbk-rollback.sh / dbk-driver.sh 与它并称四个接口,是唯一允许出现包管理器/驱动命令的地方,见 docs/design/06,
@@ -80,9 +85,12 @@ card_header_cards() {
 card_heads() {
   case "$(scope_of "$1")" in FLOW) grep -nE '^### [0-9][0-9]-[0-9]+([[:space:]]|$)' "$1";; *) grep -nE '^### ' "$1";; esac
 }
-# 缺省文档集合:docs/*.md(仅深度 1)+ checklists/*.md + 仓库根 README.md / README.zh-CN.md
+# 缺省文档集合:docs/ 递归全部 .md + checklists/*.md + 仓库根 README.md / README.zh-CN.md。
+# docs/ 必须递归:旧实现只查深度 1,docs/design/** 等子目录文档整体不过门禁(C5/C7/C8 全逃)。
+# 显式排除 docs/superpowers/**:那是 AI 生成的过程产物(计划/报告),见 .gitignore「AI 运行与编辑产物」
+#   与 HANDOFF 的「不入库」清单,不属于要过手册规则的内容;误扫会让 AI 产物卡住人写的门禁。
 default_docs() {
-  { find "$ROOT/docs" -maxdepth 1 -name '*.md'
+  { find "$ROOT/docs" -name '*.md' -not -path "$ROOT/docs/superpowers/*"
     find "$ROOT/checklists" -maxdepth 1 -name '*.md' 2>/dev/null
     ls "$ROOT/README.md" "$ROOT/README.zh-CN.md" 2>/dev/null; } | sort
 }

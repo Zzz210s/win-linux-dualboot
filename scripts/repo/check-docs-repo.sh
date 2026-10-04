@@ -9,13 +9,17 @@ ROOT="$(cd "$SELF/../.." && pwd)"
 
 # ==== C9b:步骤脚本必须声明对应卡,且该卡真实存在 ==============================
 # 扫描目录含 scripts/repo(仓库自检脚本之外的新脚本同样受检),白名单跳过。
+# 递归扫描 scripts/{repo,linux,windows}/**/*.{sh,ps1}:旧实现只扫一层,步骤脚本放进 scripts/linux/<子目录>/ 就能
+#   逃过三条硬约束(C9b 卡头 / C9c 卡引用 / C9d 索引),现改为 find 递归。
 # 豁免:路径含 /tests/ 的文件是测试夹具(如 scripts/repo/tests/check-docs/ 下的样例仓库),
 #   夹具里的假 *.sh/*.ps1 不应被要求 `# 对应卡:`;C9c/C9d 消费同一个 $steps,故一并豁免。
+#   判断用**仓库相对路径**($p)而不是 find 的绝对路径:$p 是相对 ROOT 的,夹具树自身可能整个落在
+#   某个 .../tests/... 里(如 check-docs 自己的 .tmp/run/),按绝对路径排除会把夹具仓库一并静默剪掉。
 # 卡头允许列表写法(多卡复用同一脚本,如「# 对应卡:03-9,07-10」):列表里至少一个卡号真实存在即可;
 # 正则 $CARDRE 允许行首 BOM(.ps1 必须带 BOM,而 BOM 行不算「#」行,故 `# 对应卡:` 要写在 `#Requires` 之后)。
 steps=""
 for d in repo linux windows; do
-  for f in "$ROOT/scripts/$d"/*.sh "$ROOT/scripts/$d"/*.ps1; do
+  while IFS= read -r f; do
     [ -f "$f" ] || continue
     p="$(rel "$f")"; is_wl "$p" && continue
     case "$p" in */tests/*) continue;; esac
@@ -28,7 +32,7 @@ for d in repo linux windows; do
       for r in $refs; do card_exists "$r" "$f" && found=1 && break; done
       [ "$found" -eq 1 ] || printf '%s:%s C9b 脚本头声明的卡都不存在: %s\n' "$p" "$hl" "$(printf '%s' "$refs" | tr '\n' ' ')"
     fi
-  done
+  done < <(find "$ROOT/scripts/$d" -type f \( -name '*.sh' -o -name '*.ps1' \) 2>/dev/null | sort)
 done
 
 # ==== C9c 反向覆盖:步骤脚本必须被至少一张卡引用 ==============================

@@ -34,12 +34,16 @@ for f in "${files[@]}"; do
   esac
   # C8 emoji
   while IFS=: read -r ln _; do emit "$f" "$ln" C8 "emoji"; done < <(LC_ALL=C grep -nE "$EMOJI" "$f")
-  # C8 相对链接存在性(先剥锚点再按扩展名过滤;http/mailto 跳过)
+  # C8 相对链接存在性(先剥链接标题、再剥锚点;http/mailto 跳过)。
+  # 范围 = 任何相对目标(不再按扩展名过滤):目录、无扩展名、png/yml 等坏链同样要报。
+  # 豁免:模板占位符(链接里含 {{...}})与站点绝对路径(以 / 开头,非本仓相对路径)。
   while IFS='|' read -r ln link; do
     [ -n "$link" ] || continue
     [ -e "$(dirname "$f")/$link" ] || emit "$f" "$ln" C8 "相对链接目标不存在: $link"
-  done < <(grep -noE '\]\([^)#][^)]*\)' "$f" | sed -E 's/^([0-9]+):\]\(/\1|/; s/\)$//; s/#.*$//' \
-           | grep -vE '\|(https?|mailto)' | grep -E '\.(md|sh|ps1|txt|snippet|conf)$')
+  done < <(grep -noE '\]\([^)#][^)]*\)' "$f" | sed -E 's/^([0-9]+):\]\(/\1|/; s/\)$//' \
+           | sed -E "s/[[:space:]]+(\"[^\"]*\"|'[^']*'|\([^()]*\)?)[[:space:]]*\$//" \
+           | sed -E 's/#.*$//' \
+           | grep -vE '\|(https?|mailto)' | grep -vE '\|/|\{\{')
   # C5 卡编号引用:只认 -> NN-K 与反引号 `NN-K` 两种写法,目标文档必须含该卡
   while IFS=: read -r ln ref; do
     card_exists "$ref" "$f" || emit "$f" "$ln" C5 "卡编号引用无法解析: $ref"

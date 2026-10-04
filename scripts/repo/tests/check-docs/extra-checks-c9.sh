@@ -83,6 +83,22 @@ t "F1 C9a 反斜杠路径受检" C9a 1 docs/01-firmware.md <<'EOF'
 EOF
 has "F1 C9a 报错路径已归一成正斜杠" "scripts/windows/absent-xyz.ps1"
 
+# ==== W5:C8 相对链接的标题段(剥掉 "标题" / '标题' / (标题) 后判存在性) ====
+D8="$W/c8-title"; mkdir -p "$D8/docs"; : >"$D8/docs/target.md"
+cat > "$D8/docs/notes.md" <<'EOF'
+# 夹具:C8 带标题的链接
+
+见 [目标](target.md "标题") 与 [目标2](target.md '标题') 与 [目标3](target.md (标题))。
+EOF
+runcheck "W5a C8 带标题(双/单引号/括号)的合法链接不误报(应过)" OK 0 "$D8/docs/notes.md"
+cat > "$D8/docs/bad.md" <<'EOF'
+# 夹具:C8 带标题的坏链
+
+见 [坏](absent.md "标题")。
+EOF
+runcheck "W5b C8 带标题的坏链仍报目标不存在" C8 1 "$D8/docs/bad.md"
+has "W5b 报错保留剥标题后的原始目标文本" "相对链接目标不存在: absent.md"
+
 # ==== F9:仓库级扫描目录含 scripts/repo =======================================
 D="$W/repo-f9"; mkdir -p "$D/docs" "$D/scripts/repo"
 cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$D/scripts/repo/"
@@ -115,25 +131,30 @@ WLLIB="$(ROOT="$ROOT" bash -c '. "$1"; printf "%s\n" $WL' _ "$ROOT/scripts/repo/
 DOCWL="$(sed -n '/^| C9d /p' "$ROOT/docs/design/03-step-automation-design.md" | grep -oE '`scripts/[^`]+\.(sh|ps1)`' | tr -d '`' | sort)"
 d="$(diff <(printf '%s\n' "$WLLIB") <(printf '%s\n' "$DOCWL") 2>&1)"
 verdict "$([ -z "$d" ] && echo 0 || echo 1)" "F7 白名单与设计文档 C9d 名单逐行一致" "$d"
-if printf '%s' "$(bash "$SCRIPT" 2>&1)" | grep -q 'dbk-apt'; then
-  verdict 1 "F7 dbk-apt.sh 已在白名单(不再报 C9b/C9c)" "$(bash "$SCRIPT" 2>&1 | grep 'dbk-apt')"
+# 整仓扫描输出只跑一次(F12a 也复用它做仓库级参照,避免重复跑 check-docs-repo.sh)。
+full_out="$(bash "$SCRIPT" 2>&1)"
+if printf '%s' "$full_out" | grep -q 'dbk-apt'; then
+  verdict 1 "F7 dbk-apt.sh 已在白名单(不再报 C9b/C9c)" "$(printf '%s\n' "$full_out" | grep 'dbk-apt')"
 else verdict 0 "F7 dbk-apt.sh 已在白名单(不再报 C9b/C9c)"; fi
 
 # ==== F12:--repo 在单文件模式下追加仓库级 C9b/C9c/C9d ========================
 out="$(bash "$SCRIPT" "$ROOT/docs/00-overview.md" 2>&1)"; rc=$?
 judge "F12 不带 --repo:单文件模式无仓库级规则" OK 0 "$out" "$rc"
-# F12a:真实仓库 --repo 追加的仓库级条数必须与 check-docs-repo.sh 单独运行的输出逐类一致。
-# 断言"一致"而不是"非零":C9b/C9c 会随文档任务推进而变化甚至清零(如 05 手册改版把 first-boot.sh 收口后 C9c=0),
-# "单文件模式下确实会追加"这一点由 F12b(C9d)与 F12c(C9c)的临时仓库保证,不依赖真实仓库的中间态。
-repo_out="$(bash "$ROOT/scripts/repo/check-docs-repo.sh" 2>&1)"
+# F12a:真实仓库 --repo 追加的仓库级条数必须与整仓扫描逐类一致。
+# 复用 F7 的 full_out(已含 check-docs-repo.sh 的仓库级输出),不再单独跑一遍 check-docs-repo.sh(单跑 ~100s);
+# 断言而不是“非零”:C9b/C9c 会随文档任务推进而变化甚至清零,该真实仓库可能本来就无 C9b/C9c。
+# 另断言 --repo 输出里除 C9b/C9c/C9d 外无其它 ERROR(被测文件 docs/00-overview.md 本身干净),
+# 从而证明追加的确实是仓库级规则,而不是被测文件自己的问题。
 out="$(bash "$SCRIPT" --repo "$ROOT/docs/00-overview.md" 2>&1)"; rc=$?
 f12a_ok=1
 for r in C9b C9c C9d; do
-  a="$(printf '%s\n' "$repo_out" | grep -c " $r " || true)"; b="$(printf '%s\n' "$out" | grep -c " $r " || true)"
+  a="$(printf '%s\n' "$full_out" | grep -c " $r " || true)"; b="$(printf '%s\n' "$out" | grep -c " $r " || true)"
   [ "$a" -eq "$b" ] || f12a_ok=0
 done
-if [ "$f12a_ok" -eq 1 ]; then verdict 0 "F12a 真实仓库 --repo 追加的 C9b/C9c/C9d 条数与 check-docs-repo.sh 一致"
-else verdict 1 "F12a 真实仓库 --repo 追加条数与 check-docs-repo.sh 不一致" "$out"; fi
+other="$(printf '%s\n' "$out" | grep '^ERROR ' | grep -vcE ' C9[bcd] ' || true)"
+[ "$other" -eq 0 ] || f12a_ok=0
+if [ "$f12a_ok" -eq 1 ]; then verdict 0 "F12a 真实仓库 --repo 追加的 C9b/C9c/C9d 条数与整仓扫描一致(复用 F7 输出)"
+else verdict 1 "F12a 真实仓库 --repo 追加条数与整仓扫描不一致" "$out"; fi
 # F12c:临时仓库(存在未被任何卡引用的步骤脚本)→ --repo 在单文件模式下追加 C9c
 D12c="$W/repo-f12c"; mkdir -p "$D12c/scripts/repo"
 cp -r "$FIX/tmp-repo/c9c/." "$D12c/"
@@ -159,6 +180,15 @@ for f in docs/00-overview.md README.md README.zh-CN.md checklists/deploy.md chec
 done
 runcheck "设计文档 01(应过:卡编号引用按编号回退到手册解析)" OK 0 "$ROOT/docs/design/01-playbook-reshape-design.md"
 runcheck "设计文档 04(应过:04-* 是设计文档序号,卡 04-2 在 docs/04-*.md 里)" OK 0 "$ROOT/docs/design/04-kubuntu-variant-design.md"
+
+# ==== D5:夹具运行器语法自检(bash -n) ====================================
+SYNOK="$W/syn-ok"; rm -rf "$SYNOK"; mkdir -p "$SYNOK"; printf '#!/usr/bin/env bash\necho ok\n' > "$SYNOK/a.sh"
+out="$(bash "$FIX/run-fixtures.sh" --syntax-only "$SYNOK" 2>&1)"; rc=$?
+judge "D5 夹具语法自检:干净目录退 0 且无输出" OK 0 "$out" "$rc"
+SYNBD="$W/syn-bad"; rm -rf "$SYNBD"; mkdir -p "$SYNBD"; printf '#!/usr/bin/env bash\nif [ 1; then\n' > "$SYNBD/broken.sh"
+out="$(bash "$FIX/run-fixtures.sh" --syntax-only "$SYNBD" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q '语法错误'; then verdict 0 "D5 夹具语法自检:坏脚本退非 0 并报错"
+else verdict 1 "D5 坏脚本未被拦下(rc=$rc)" "$out"; fi
 
 printf '\nPASS=%s FAIL=%s\n' "$pass" "$bad"
 [ "$bad" -eq 0 ] || exit 1
