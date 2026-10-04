@@ -118,6 +118,7 @@
 - 做好就不会,前提是 I1 成立(`BootOrder` 首位始终是 Windows Boot Manager)——固件会在失效条目之后回落。
 - 顺序不可更换:先 `07-9` 归位 -> 再 `07-10` 备份到仓库外 -> 再 `07-11` 删三块 Fedora 分区 -> `07-12` 清 NVRAM(扩容可选)。
 - 只想停用不想删:做到 `07-9` 停下,或走 `07-13` 只停用条目,可逆。
+- `delete-linux-partition.ps1 -Check` 也可能以退 **2(需人工)** 结束:保护名单里 C:/D: 的分区号解析不出时,脚本拒绝按不完整的保护名单判定分区(用 `-WinEspNumber` 声明盘符映射或换管理员会话确认后重跑)。
 -> `00-overview.md`、`07-9`、`07-10`、`07-11`、`07-12`、`07-13`
 脚本:`scripts/windows/restore-boot-order.ps1 -Check`;`scripts/windows/delete-linux-partition.ps1 -Check`;`scripts/windows/cleanup-nvram.ps1 -Check`
 

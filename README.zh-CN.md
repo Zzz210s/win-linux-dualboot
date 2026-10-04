@@ -204,7 +204,7 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 
 已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**38 条**),按阶段的速查与 **28 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Fedora 侧 NVIDIA 驱动签名与一次性 ublue MOK 注册、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Anaconda 误把 `/boot/efi` 指向 Windows 的 ESP(上游 issue #284)、原子基础层的 `rebase` 落到坏内核或坏驱动、把硬件故障误判成双系统问题。
 
-Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。安装介质校验按厂商现实分开写:Fedora Silverblue ISO 按官方 `*-CHECKSUM` 文件与其 GPG 签名比对;Windows ISO 官方未发布镜像哈希,只做“官方下载域 + 官方安装器校验”([docs/01-firmware.md](docs/01-firmware.md))。
+Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。安装介质校验按厂商现实分开写:Fedora Silverblue ISO 按官方 `*-CHECKSUM` 文件与其 GPG 签名比对;Windows ISO 官方未发布 Windows 11 镜像的 SHA-256 哈希,只做“官方下载域 + 官方安装器校验”([docs/01-firmware.md](docs/01-firmware.md))。
 
 ## 当前状态
 

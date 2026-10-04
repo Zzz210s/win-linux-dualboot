@@ -138,7 +138,7 @@
 
 | 脚本 | 处置 |
 |---|---|
-| `dbk-pkg.sh`(原 `dbk-apt.sh`) | 改写为 **`dbk-ostree.sh`**:`pkg_installed` → `rpm-ostree status --json` 查询;**分层安装** `rpm-ostree install`(含"需重启"提示);保留 `DBK_SKIP_*` 与退出码语义 |
+| `dbk-pkg.sh`(原 `dbk-apt.sh`) | **保留文件名**(不改为 `dbk-ostree.sh`;接口名不带发行版或实现痕迹——该改名口径在 2026-09-25 回切时被否,现行见 `03-step-automation-design.md` 第 6 节):`pkg_installed` → `rpm-ostree status --json` 查询;**分层安装** `rpm-ostree install`(含"需重启"提示);保留 `DBK_SKIP_*` 与退出码语义 |
 | **新增** `dbk-rollback.sh` | 列出部署(`rpm-ostree status`)、pin/unpin、`rpm-ostree rollback`(经确认后 `--reboot`)、回滚后复检(会话/Wayland/模块) |
 | `hardening.sh` | 逐项改原子版语义:分层装 `smartmontools`;`sshd` 用 `systemctl enable --now`(`/etc` 持久化可用);journald 持久化不变(`/etc`);更新策略改 `rpm-ostreed-automatic` |
 | `set-updates.sh` | `dnf-automatic` → **`rpm-ostreed-automatic`**(`/etc/rpm-ostreed.conf`) |

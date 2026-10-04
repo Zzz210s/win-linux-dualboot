@@ -67,7 +67,7 @@
 | `dbk-pkg.sh` | apt/dpkg 语义 | **保留文件名**(接口面不变),内部改 ostree |
 | `dbk-update.sh` / `dbk-rollback.sh` / `dbk-driver.sh` | 不存在 | **新增 3 个库文件** |
 | `rollback-pkg.sh` | 包级降级 + `apt-mark hold` | **删除**(由部署级回滚取代) |
-| **新增 `rollback-deploy.sh`** | 不存在 | 卡 `05-9` 的**步骤脚本**(薄):`--check` 调 `dbk-rollback.sh check`;`--apply --yes` 调回滚并向重启提示 —— 接口是库文件,卡仍需自己的步骤脚本(这是 50/50 计数的来源:51 − 2 + 1) |
+| **新增 `rollback-deploy.sh`** | 不存在 | 卡 `05-9` 的**步骤脚本**(薄):`--check` 调 `dbk-rollback.sh check`;`--apply --yes` 调回滚并向重启提示 —— 接口是库文件,卡仍需自己的步骤脚本(该批次当时按 **50** 个步骤脚本估,后经 Task 17 按仓库实测定为 **45**;口径见 `03-step-automation-design.md` 第 6 节) |
 | `step-snap-free.sh` | snap 四条判据 + 清残留 + apt pin + Mozilla 源 | **删除**(原子版无 snap) |
 | `graphics.sh` | `ubuntu-drivers` 预签名包 | 薄脚本:`--check` 调 `dbk-driver.sh check`;`--apply` 调 rebase + MOK |
 | `set-updates.sh` | `unattended-upgrades` | 调 `dbk-update.sh`;模板 `unattended-upgrades.snippet` → `rpm-ostreed.snippet` |
@@ -105,7 +105,7 @@
 
 - **夹具重写**(Linux 侧):假命令从 apt/dpkg/snap/ubuntu-drivers/do-release-upgrade 换成 `rpm-ostree`/`rpm`/`systemctl`/`mokutil`/`ujust`/`modinfo`;新增 **4 个接口的单元夹具**(装包/更新/回滚/驱动各自的通过、失败、零写);删 snap 卡相关用例;Windows 夹具基本不动。
 - **修复存活审计**:把 13 条后置修复逐条在新内容上勾验(`cd38172` 的行为修复与闸门扩目录、`9d8ae63` 的 `--yes` 门槛、`25d8b23` 的只读契约)。
-- **门禁**:`check-docs`(卡数变更后)、`check-scripts`(含 S-1)、`check-docs` 夹具套件全绿;步骤脚本夹具覆盖 **50/50**、断言数**不少于当前 320**。
+- **门禁**:`check-docs`(卡数变更后)、`check-scripts`(含 S-1)、`check-docs` 夹具套件全绿;步骤脚本夹具覆盖 **45/45**、断言数(三套夹具合计)不少于当前 **494**(2026-10-04 实测:k1 199 / Windows 211 / 文档校验器 84,以三个 runner 末行为准)。
 - **交付**:打 **v0.2.0**;README 双语同步;状态声明保持"设计完备 + 夹具级验证,**真机未跑**"。
 
 ## 7. 风险、取舍与非目标
@@ -118,7 +118,7 @@
 | Anaconda 在含 Windows ESP 的盘上装 Silverblue 失败 | 独立 ESP + 独立 `/boot` 为硬要求;**装前**跑 `check-partition-plan.sh --track D --check` 并在分区页显式确认 Linux 侧 ESP;**失败即转 `07-rescue.md` 手工修(不重装、不就地重排分区表)**;参考设备必测项 = 验收 A10 |
 | 双 ESP 固件支持未承诺 | 验收 A 组列为**设备侧必测项 A9**(两条条目都在 + 分别重启各进一个系统);只认一个时走共用 ESP 分支(共用 ESP + 独立 `/boot`,I3 改由备份/还原演练保证) |
 | 薄接口只保住脚本层,手册仍与发行版绑定 | 如实说明:下次切换 ≈ 4 份手册 + 4 个接口,不再是 6 批;S-1 守住脚本层不退化 |
-| 夹具重写期覆盖率短暂下降 | 验收线 = 步骤脚本 50/50 且断言数 ≥320 |
+| 夹具重写期覆盖率短暂下降 | 验收线 = 步骤脚本 **45/45** 且三套夹具断言数合计 ≥**494**(2026-10-04 实测) |
 
 **非目标**:不做 Kubuntu 与原子版的双变体并行维护;不动 Windows 侧流程与分区数值(仅 ESP 改名);不引入 bootc/容器化未来形态;不改四条不变量;不做真机执行(本轮仍只改仓库内容)。
 

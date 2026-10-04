@@ -67,7 +67,7 @@
 
 **本阶段产物**:`baseline/04-first-boot.md`、`baseline/04-robustness.md` —— 是否已生成:`[ ]` 是 / `[ ]` 否
 
-- `[ ]` L4-1 挂载共享数据盘 `D:`:`ntfs3` 读写 + 固定 `uid`/`gid`/`umask` + `windows_names` + `nofail` + `noatime` | 脚本:`scripts/linux/mount-shared.sh --check`(动手加 `--apply --yes`) | 判据:挂载成功且跨系统双向可见(Windows 写入 -> Linux 读到,反向再测一次) | 卡:[05-first-boot.md](../docs/05-first-boot.md) 的 `05-1`
+- `[ ]` L4-1 挂载共享数据盘 `D:`:`ntfs3` 读写 + 固定 `uid`/`gid`/`umask` + `windows_names` + `nofail` + `noatime` | 脚本:`scripts/linux/mount-shared.sh --uuid <SHARED_UUID> --check`(动手加 `--apply --yes`;`--apply` 路径缺 `--uuid` / `--yes` 退 64 零写,`--check` 缺 `--uuid` 则该判据记需人工) | 判据:挂载成功且跨系统双向可见(Windows 写入 -> Linux 读到,反向再测一次) | 卡:[05-first-boot.md](../docs/05-first-boot.md) 的 `05-1`
 - `[ ]` L4-2 家目录数据重定向:只重定向文档类目录;`~/.config`、`~/.ssh`、代码仓库留在本地 root | 脚本:`scripts/linux/xdg-redirect.sh --check` | 判据:`xdg-user-dir` 六项都指向共享盘对应目录 | 卡:`05-2`
 - `[ ]` L4-3 显卡:用 `rpm-ostree rebase` 切到 ublue 的 NVIDIA 变体(镜像内模块**已预签名**)+ 一次性 MOK 注册(不关 Secure Boot、不自签密钥),保留 nouveau 兜底 | 脚本:`scripts/linux/graphics.sh --check` | 判据:会话为 `wayland`、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空、`mokutil --list-enrolled` 含 ublue 密钥 | 卡:`05-3`
 - `[ ]` L4-4 时间:`RTC in local TZ: no`(Linux 用 UTC,Windows 侧按需配 `RealTimeIsUniversal=1`) | 脚本:`scripts/linux/set-time.sh --check` | 判据:`timedatectl` 输出与目标一致 | 卡:`05-4`

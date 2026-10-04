@@ -93,7 +93,7 @@
 
 做:每次更新之后复核四项基线,顺带看 Linux 侧的系统体检与模块签名;只看不改。
   1. 管理员会话跑 Windows 侧巡检(`-Check` 缺省且只读;本脚本没有任何写动作,`-Apply` 与 `-Check` 同义)
-     看到:四项逐条给"通过 / 需人工介入"——① `BootOrder` 首位仍是 Windows Boot Manager;② `\EFI\Microsoft\` 与 `manifest.sha256` 逐文件一致;③ `{bootmgr}` 的 `path` 与基线一致;④ BitLocker 状态与 `02-preflight-report.md` 的记录一致
+     看到:四项逐条给三值结果"通过 / 不通过 / 需人工介入"——① `BootOrder` 首位仍是 Windows Boot Manager;② `\EFI\Microsoft\` 与 `manifest.sha256` 逐文件一致;③ `{bootmgr}` 的 `path` 与基线一致;④ BitLocker 状态与 `02-preflight-report.md` 的记录一致
   2. 在 Silverblue 里跑系统体检与模块签名
      看到:`scripts/linux/check-health.sh --check` 报 PASS(部署列表可读、会话为 wayland、显卡来源与计划一致、更新策略为只检查/下载、根分区余量 ≥10%)或逐条给出失败项;`scripts/linux/check-signature.sh --check` 报 PASS(签名者非空且 Secure Boot enabled)或"需人工"
   3. 逐项复核镜像来源:`sudo rpm-ostree status` 显示的来源(镜像与分支)与计划一致,分层包列表(`layered packages`)与部署记录一致
@@ -141,12 +141,12 @@
      产物名沿用基线口径,但**不要**写进 `baseline/`)
      看到:`D:\dbk-l5-backup\02-esp-backup\manifest.sha256`、`02-firmware-entries.txt`、`02-partitions.txt` 三份在位;备份树含 `EFI\Microsoft\` 与 `EFI\fedora\` 两棵子树
   2. 与 L2 基线比对,确认"动手前"现场未被改动
-     看到:① `BootOrder` 首位、② `\EFI\Microsoft\` 逐文件、③ `{bootmgr}` 的 path 三项"通过";④ BitLocker 若与 L2 记录不同(L3 收尾已重新启用保护)属**预期差异**,记进备注
+     看到:① `BootOrder` 首位、② `\EFI\Microsoft\` 逐文件、③ `{bootmgr}` 的 path 三项判为"通过"(三值口径:通过 / 不通过 / 需人工介入);④ BitLocker 若与 L2 记录不同(L3 收尾已重新启用保护)属**预期差异**,记进备注
   3. 把只读取证输出(`efibootmgr -v`、`lsblk -o NAME,SIZE,FSTYPE,PARTUUID,MOUNTPOINT`)也拷到共享盘或外置盘,别留在 `~/`
      看到:仓库外可读;本步没有任何写 ESP / 写 NVRAM / 改分区的动作
 脚本:scripts/windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup -Apply -Yes;scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline
 坑:用默认 `-OutDir baseline` 会覆盖 L2 基线(它正是本阶段的比对基准与回滚源);这批产物是**仓库外产物、不是基线**,不要拷进 `baseline/`(见 [baseline/README.md](../baseline/README.md))。另:`backup-esp.ps1` **缺省只读**——本卡要写仓库外的现状备份,必须显式给 `-Apply -Yes`(缺 `-Yes` 由库层退 64 且零写);不给 `-Apply` 时它只复验已有备份(已有备份就逐文件比哈希,还没有就提示尚无备份),写不出任何文件。
-出错时:清单文件数与备份树对不上 -> 先解决磁盘/权限问题再继续;`verify-baseline.ps1` 退出码 1 但只有 ④ 有差异 -> 属预期,记备注后继续。
+出错时:清单文件数与备份树对不上 -> 先解决磁盘/权限问题再继续;`verify-baseline.ps1` 退出码 1 但只有 ④ 有差异 -> 属**不通过**(BitLocker 变更属预期,记备注后继续);**只余需人工介入项时退 2** -> 多为读不到现场状态(非管理员 / 非 UEFI)或基线产物缺失,换管理员会话或按上面第 2 步补齐基线后重跑(不当失败计)。
 
 ### 07-11 退役第三步:删 Fedora 分区(只按分区号 / GPT GUID 精确删)
 
@@ -159,6 +159,7 @@
      看到:这 5 项的大小与基准一致;多出一处连续未分配空间(位于 `D:` 与 WinRE 之间)
 脚本:scripts/windows/delete-linux-partition.ps1 -Check -Partition <n,...> / -Apply -Yes -Partition <n,...> -WinEspNumber <n>
 坑:删分区不可逆,Fedora root 上的代码与密钥、`/boot` 上的旧部署内核全部消失;**Windows ESP 与 Windows 各分区绝不允许成为目标**;绝不用 `diskpart clean` / "删除所有分区";**绝不先格式化 Linux 分区再修引导**——那正是 `grub rescue>` 的成因(固件条目仍指着已删除的引导文件且排在前面)。
+另:`delete-linux-partition.ps1 -Check` 也可能以退出码 **2(需人工)** 结束(而不是 PASS/FAIL):当保护名单里 C:/D: 的分区号解析不出时,脚本拒绝按不完整的保护名单判定分区——先确认盘符能映射到分区号(或用 `-WinEspNumber` 声明)再重跑,不要把它当成"没有可删分区"。
 出错时:认不出哪块是 Fedora 分区 -> **停下不要猜**,用两份分区快照对账;误删了 `D:` 或 ESP -> 立刻停止一切写盘,ESP 走 `07-6`、`D:` 优先评估数据恢复,不要在盘上写新数据。
 
 ### 07-12 退役第四步:清 NVRAM 残留条目,并可选把空间扩给 `D:`
