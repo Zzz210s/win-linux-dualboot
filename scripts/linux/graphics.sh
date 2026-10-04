@@ -23,7 +23,7 @@
 #   另一支:版本一致性前置断言未过(driver_release_guard=2 → 2 需人工,且**绝不调 rebase** —— 跨版本会换掉整个发行版基线)。
 #   三种未达成明细都逐条列进 checks(不静默),且都经汇总函数选退出码,不绕过。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误(脚本头声明了破坏性,--apply 缺 --yes 由库层拒且零写)。
-# 用法: graphics.sh [--check|--apply] [--json] [--log <路径>] [--yes] [--step 05-3] [-h]
+# 用法: graphics.sh [--check|--apply] [--dry-run] [--json] [--log <路径>] [--yes] [--step 05-3] [-h]
 # 注入(夹具用):DBK_MOKUTIL / DBK_MODINFO / DBK_LSMOD / DBK_RPM_OSTREE / DBK_UBLUE_IMAGE / DBK_OS_RELEASE /
 #   DBK_UBLUE_FEDORA / DBK_ALLOW_CROSS_RELEASE 与 XDG_SESSION_TYPE,全部透传给 dbk-driver.sh;本脚本不写发行版命令字面量(规则 S-1)。
 # 已核实(2026-09-27):ublue NVIDIA 变体镜像形如 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`(streams = gts / stable / stable-daily / latest);

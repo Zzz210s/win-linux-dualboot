@@ -3,7 +3,7 @@
 # 破坏性:1(会写 fstab/user-dirs.dirs、装包、起服务:--apply 必须显式 --yes)
 # L4:健壮性配置落地(R1-R9;Fedora 44 Silverblue / 原子版语义)。九项逐项执行,单项失败不中断,末尾汇总。
 #
-# 用法:bash scripts/linux/hardening.sh [--check|--dry-run] [--apply --yes] [--log <path>]
+# 用法:bash scripts/linux/hardening.sh [--check|--dry-run] [--apply --yes] [--json] [--log <path>]
 #   缺省(或 --check/--dry-run)是 dry-run:只打印九项的动作与判据,不改动系统;--apply(需要 root)才真正改系统,
 #   且必须同时给 --yes(全仓契约:声明「# 破坏性:1」的脚本,--apply 缺 --yes 一律 64 且零写)。
 #   九项:R1 变更前备份 baseline/、R2 部署级回滚(rollback-deploy.sh)、R3 旧内核保留、R4 救援 U 盘(人工)、
@@ -28,13 +28,14 @@ TPL="$ROOT/templates"
 JOURNALD_CONF="${DBK_JOURNALD_CONF:-/etc/systemd/journald.conf.d/99-dbk-persistent.conf}"
 BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"; BAKDIR="${DBK_BACKUP_DIR:-/var/backups/dbk}"
 BOOT_DIR="${DBK_BOOT_DIR:-/boot}"
-APPLY=0; YES=0; NAMES=(); STATES=(); KEYS=()
+APPLY=0; YES=0; JSON=0; NAMES=(); STATES=(); KEYS=(); SEEN_CHECK=0; SEEN_APPLY=0
 
-usage() { sed -n '2,13p' "$0"; }
+usage() { sed -n '2,13p' "$0" >&2; }
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --apply) APPLY=1; shift ;;
-    --check|--dry-run) APPLY=0; shift ;;
+    --apply) APPLY=1; SEEN_APPLY=1; shift ;;
+    --check|--dry-run) APPLY=0; SEEN_CHECK=1; shift ;;
+    --json) JSON=1; shift ;;
     --yes|-y) YES=1; shift ;;
     --log)
       need_val "$#" "--log" "<日志文件路径>"
@@ -46,9 +47,15 @@ while [ "$#" -gt 0 ]; do
       LOG="${1#*=}"
       shift ;;
     -h|--help) usage; exit 0 ;;
-    *) usage; die "未知参数: $1" ;;
+    *) usage; printf '用法错误: 未知参数 %s\n' "$1" >&2; exit 64 ;;
   esac
 done
+
+# --check/--dry-run 与 --apply 互斥(与库层 dbk_parse_args 同口径):互斥时 64 且零写。
+{ [ "$SEEN_CHECK" -eq 1 ] && [ "$SEEN_APPLY" -eq 1 ]; } && { usage; echo "用法错误: --check/--dry-run 与 --apply 互斥,只能给一个" >&2; exit 64; }
+# --json 时人读信息走 stderr(dbk-log.sh 的 log() 消费 DBK_LOG_TO_STDERR),stdout 只留一行 JSON。
+# shellcheck disable=SC2034  # DBK_LOG_TO_STDERR 由 dbk-log.sh 的 log() 消费(跨文件)
+if [ "$JSON" -eq 1 ]; then DBK_LOG_TO_STDERR=1; fi
 
 # 破坏性门槛(与 dbk-cli.sh 同口径):带 --apply 必须显式 --yes,否则 64 且零写。
 if [ "$APPLY" -eq 1 ] && [ "$YES" -ne 1 ]; then
@@ -68,32 +75,25 @@ run_step() {   # <脚本文件名> [--apply 附加参数…];输出写调用方�
   return 0
 }
 
+# --json:stdout 只留一行契约 JSON(人读信息由 DBK_LOG_TO_STDERR=1 送到 stderr)
+emit_json() { printf '{"step":"05-13","status":"%s","message":"%s","checks":[],"actions":[],"changed":false}\n' "$1" "$(dbk_json_escape "$2")"; }
+
 if [ "$APPLY" -ne 1 ]; then
   log "=== dry-run:以下九项不会被执行 ==="
   log "R1 变更前备份 baseline/:$BASEDIR -> $BAKDIR/<时间戳>-baseline/;判据备份目录可读"
   log "R2 部署级回滚:只读核对 scripts/linux/rollback-deploy.sh 与接口 dbk-rollback.sh;回滚命令见该脚本 --check/--apply"
   log "R3 旧内核保留:只读核对 $BOOT_DIR 下的 vmlinuz-* 数量(>=2 才算保留了旧内核)"
   log "R4 永久救援介质:人工(确认 U 盘在位并标记已验证可用),本脚本只登记需人工"
-  log "R5 journald 持久化:$TPL/journald-persistent.snippet -> $JOURNALD_CONF;restart systemd-journald;判据 /var/log/journal 存在"
+  log "R5 journald 持久化:调 scripts/linux/set-journald.sh(片段 $TPL/journald-persistent.snippet -> $JOURNALD_CONF);restart systemd-journald;判据 /var/log/journal 存在"
   log "R6 OOM/zram:调 scripts/linux/storage.sh(swapfile + zram0);systemd-oomd 由该脚本一并核对"
   log "R7 SSH 救援:enable --now sshd(不装包);判据 ss -tlnp | grep :22"
   log "R8 保守更新:调 scripts/linux/set-updates.sh(只检查/下载,不自动应用与不自动重启;需 --yes)"
   log "R9 磁盘健康:分层安装 smartmontools(原子版:重启后生效);enable --now smartd;判据 smartctl -H 摘要"
   log "dry-run 结束:未修改任何文件。确认无误后加 --apply 重跑:sudo bash scripts/linux/hardening.sh --apply"
+  [ "$JSON" -eq 1 ] && emit_json pass "dry-run 完成:九项未执行、未修改任何文件(缺省/--check/--dry-run 都是 dry-run);确认无误后加 --apply --yes 重跑"
   exit 0
 fi
 [ "$(id -u)" -eq 0 ] || die "--apply 需要 root:sudo bash $0 --apply"
-
-# 安装片段:与模板一致则跳过;存在但不同则先备份为 <目标>.dbk.bak(不覆盖既有备份)再覆盖
-install_snippet() {
-  local tpl="$1" dst="$2"
-  [ -r "$tpl" ] || { log "错误: 缺少模板 $tpl"; return 1; }
-  if [ -f "$dst" ] && cmp -s "$tpl" "$dst"; then log "目标 $dst 已是模板内容,跳过"; return 0; fi
-  if [ -f "$dst" ] && [ ! -e "$dst.dbk.bak" ]; then cp -a "$dst" "$dst.dbk.bak" || return 1; log "已备份 $dst -> $dst.dbk.bak"; fi
-  mkdir -p "$(dirname "$dst")" 2>/dev/null || true
-  cp -a "$tpl" "$dst" || return 1
-  log "已安装 $tpl -> $dst"
-}
 
 item_r1() {   # 变更前备份 baseline/(取代原子版的"变更前固定部署")
   local name="R1 变更前备份 baseline/" ts bak
@@ -116,12 +116,15 @@ item_r3() {   # 旧内核保留(只读核对 /boot 下的内核数)
   else record "$name" fail "$BOOT_DIR 下找不到 vmlinuz-*(核对 $BOOT_DIR 是否为独立 ext4 分区)"; fi
 }
 item_r4() { record "R4 永久救援介质(安装 U 盘兼 live)" skip "需人工:确认介质在位并标记\"已验证可用\",本脚本无法自动判定"; }
-item_r5() {
+item_r5() {   # journald 持久化:唯一写者 set-journald.sh(消费同一模板 templates/journald-persistent.snippet)
   local name="R5 journald 持久化(崩溃可观测)"
-  install_snippet "$TPL/journald-persistent.snippet" "$JOURNALD_CONF" || { record "$name" fail "$JOURNALD_CONF 安装失败"; return; }
-  if ! systemctl restart systemd-journald >/dev/null 2>&1; then record "$name" fail "片段已就位但 systemctl restart systemd-journald 失败"; return; fi
-  if [ -d /var/log/journal ]; then record "$name" ok "片段已就位且 journald 已重启;/var/log/journal 存在(日志不随重装 root 丢失)"
-  else record "$name" fail "片段已就位且 journald 已重启,但 /var/log/journal 不存在(journalctl -b -1 仍不可用)"; fi
+  if [ ! -r "$HERE/set-journald.sh" ]; then record "$name" skip "缺 $HERE/set-journald.sh;请人工把 $TPL/journald-persistent.snippet 装到 $JOURNALD_CONF 并重启 systemd-journald"; return; fi
+  run_step set-journald.sh --yes
+  case "$STEP_RC" in
+    0) record "$name" ok "$(last_line "$STEP_OUT")" ;;
+    2) record "$name" skip "set-journald.sh 判为需人工:$(last_line "$STEP_OUT")" ;;
+    *) record "$name" fail "set-journald.sh 退出码 $STEP_RC:$(last_line "$STEP_OUT")" ;;
+  esac
 }
 item_r6() {   # OOM 与内存压力防护(zram + swapfile):委托 storage.sh
   local name="R6 OOM 与内存压力防护(zram + swapfile)"
@@ -189,7 +192,9 @@ print_summary
 fails=$?
 if [ "$fails" -gt 0 ]; then
   log "结束:有 $fails 个失败项;每项独立判定,按各项判据修好后可整脚本重跑(幂等)"
+  [ "$JSON" -eq 1 ] && emit_json fail "健壮性 R1-R9 有 $fails 个失败项(失败不中断,其余项已执行完毕);逐项见日志 $LOG"
   exit 1
 fi
 log "结束:九项无失败项(记为 skip 的项见上面的 DBK-RESULT 行)"
+[ "$JSON" -eq 1 ] && emit_json pass "健壮性 R1-R9 完成:九项无失败项(记为 skip 的项见日志 $LOG)"
 exit 0

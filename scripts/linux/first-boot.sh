@@ -4,7 +4,7 @@
 # L4 首启编排器:依次调用 storage.sh、hardening.sh、mount-shared.sh、graphics.sh,
 # 每模块单独落日志,末尾生成 /var/log/dbk/first-boot-summary.txt(模块 / 状态 / 关键输出)。
 #
-# 用法:bash scripts/linux/first-boot.sh [--check|--apply --yes] [--uuid <SHARED_PART_UUID>] [--user <name>] [--log-dir <dir>]
+# 用法:bash scripts/linux/first-boot.sh [--check|--dry-run] [--apply --yes] [--json] [--uuid <SHARED_PART_UUID>] [--user <name>] [--log-dir <dir>]
 #   缺省(或 --check)是 dry-run:各模块以 --check 调用,只判定不改动系统;--apply(需要 root)才真正改系统,
 #   且必须同时给 --yes(全仓契约:声明「# 破坏性:1」的脚本,--apply 缺 --yes 一律 64 且零写),并给模块统一透传 --yes。
 #   模块顺序:storage(交换空间与 zram)-> hardening(健壮性 R1-R9)-> mount-shared(共享盘挂载 + 家目录重定向;
@@ -25,18 +25,20 @@ LOG="${DBK_LOG:-/var/log/dbk/first-boot.log}"
 source "$HERE/dbk-log.sh"
 
 LOG_DIR="${DBK_LOG_DIR:-/var/log/dbk}"
-APPLY=0; YES=0
+APPLY=0; YES=0; JSON=0
+SEEN_CHECK=0; SEEN_APPLY=0
 UUID="${DBK_SHARED_UUID:-}"
 TARGET_USER="${DBK_USER:-${SUDO_USER:-${USER:-}}}"
 MOD_NAMES=(); MOD_STATES=(); MOD_KEYS=()
 F_N=0; S_N=0
 
-usage() { sed -n '2,15p' "$0"; }
+usage() { sed -n '2,15p' "$0" >&2; }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --apply) APPLY=1; shift ;;
-    --check|--dry-run) APPLY=0; shift ;;
+    --apply) APPLY=1; SEEN_APPLY=1; shift ;;
+    --check|--dry-run) APPLY=0; SEEN_CHECK=1; shift ;;
+    --json) JSON=1; shift ;;
     --yes|-y) YES=1; shift ;;
     --uuid) need_val "$#" "--uuid" "<SHARED_PART_UUID>"; UUID="$2"; shift 2 ;;
     --uuid=*) UUID="${1#*=}"; shift ;;
@@ -45,9 +47,20 @@ while [ "$#" -gt 0 ]; do
     --log-dir) need_val "$#" "--log-dir" "<日志目录>"; LOG_DIR="$2"; shift 2 ;;
     --log-dir=*) LOG_DIR="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) usage; die "未知参数: $1" ;;
+    *) usage; printf '用法错误: 未知参数 %s\n' "$1" >&2; exit 64 ;;
   esac
 done
+
+# --check/--dry-run 与 --apply 互斥(与库层 dbk_parse_args 同口径、同描述);互斥时 64 且零写。
+if [ "$SEEN_CHECK" -eq 1 ] && [ "$SEEN_APPLY" -eq 1 ]; then
+  usage
+  echo "用法错误: --check/--dry-run 与 --apply 互斥,只能给一个" >&2
+  exit 64
+fi
+
+# --json 时人读信息走 stderr(dbk-log.sh 的 log() 消费 DBK_LOG_TO_STDERR),stdout 只留一行 JSON。
+# shellcheck disable=SC2034  # DBK_LOG_TO_STDERR 由 dbk-log.sh 的 log() 消费(跨文件)
+if [ "$JSON" -eq 1 ]; then DBK_LOG_TO_STDERR=1; fi
 
 # 破坏性门槛(与 dbk-cli.sh 同口径):带 --apply 必须显式 --yes,否则 64 且零写。
 if [ "$APPLY" -eq 1 ] && [ "$YES" -ne 1 ]; then
@@ -71,6 +84,8 @@ if [ "$APPLY" -eq 1 ] && [ "$(id -u)" -ne 0 ]; then die "--apply 需要 root:sud
 
 # 记一个模块结果(同时落 DBK-MODULE 行,摘要据此生成)
 record_mod() { MOD_NAMES+=("$1"); MOD_STATES+=("$2"); MOD_KEYS+=("$3"); log "DBK-MODULE ${2} ${1} | ${3}"; }
+# --json:stdout 只留一行契约 JSON(人读信息由 DBK_LOG_TO_STDERR=1 送到 stderr)
+emit_json() { printf '{"step":"05-13","status":"%s","message":"%s","checks":[],"actions":[],"changed":false}\n' "$1" "$(dbk_json_escape "$2")"; }
 
 # 剥掉 dbk-log.sh 的日期前缀,摘要里只留人读文本
 strip_ts() { sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9:]{8}[+-][0-9]{4} //'; }
@@ -162,4 +177,5 @@ fi
 if [ "$APPLY" -ne 1 ]; then
   log "提示: 本次是 check(dry-run),未改动系统;确认无误后加 --apply(sudo)重跑:sudo bash scripts/linux/first-boot.sh --apply --uuid <SHARED_PART_UUID>"
 fi
+if [ "$JSON" -eq 1 ]; then emit_json pass "首启编排完成:失败 $F_N 项、跳过 $S_N 项;模块总数 ${#MOD_NAMES[@]};摘要 $SUMMARY(本脚本退出码固定 0,单模块失败不改变它)"; fi
 exit 0

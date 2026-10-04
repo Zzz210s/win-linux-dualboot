@@ -2,12 +2,12 @@
 # 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。按 docs/08-verification.md 的 A-F 六组逐项判定:
 #   能自动的复用 scripts\windows\verify-baseline.ps1 的逐项结论、bcdedit 固件表与 baseline 产物核对;不能自动的
 #   记「需人工」并给手动核对步骤。**绝不执行任何 -Apply**:本脚本自己的 -Apply 只表示"把汇总落盘",子脚本一律只被
-#   以只读方式调用(夹具断言从不传 -Apply)。汇总只在 -Apply 时落盘 <BaselineDir>\08-verification.md(每台设备副本,
+#   以只读方式调用(夹具断言从不传 -Apply)。汇总只在 -Apply 时落盘 <BaselineDir>\auto\08-verification.md(每台设备副本,
 #   含「已知例外」表与结论行);-Check 零写。同一台设备两侧都跑时用 -BaselineDir 分指两个目录,再人工合并为填写版。
 #   退出码:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 -ConfirmManual 表示人工项已逐条核对,
 #   不再计入退出码)/ 64 用法错误。用法(仓库根、管理员会话):
 #     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-all.ps1 -Check
-#   -BaselineDir(缺省 baseline)/-OutDir(缺省与 -BaselineDir 同;汇总写在它下面)/-BaselineScript/-FirmwareText/-GitRoot
+#   -BaselineDir(缺省 baseline)/-OutDir(缺省 <BaselineDir>\auto;汇总写在它下面;缺省落点避开手填的 <BaselineDir>\08-verification.md)
 #   为夹具注入点。本文件必须保存为 UTF-8 with BOM。夹具级验证,真机未跑。
 #   -Step 语义(执行器专用,真源 docs/design/03 第 5 节):取**验收条目关联的卡号**(NN-K),不是第 2 节的
 #   「脚本头卡号集合成员判断」——本执行器不绑卡,没有「# 对应卡:」头。合法值 = 本脚本条目表里出现过的卡号
@@ -32,7 +32,7 @@ if ($script:DbkMode -eq 'apply') { Set-DbkLogDefault -Name 'verify-all' }
 if (-not $BaselineScript) { $BaselineScript = Join-Path $repoRoot 'scripts\windows\verify-baseline.ps1' }
 if (-not $GitRoot) { $GitRoot = $repoRoot }
 $base = [System.IO.Path]::GetFullPath($BaselineDir)
-if (-not $OutDir) { $OutDir = $base }
+if (-not $OutDir) { $OutDir = Join-Path $base 'auto' }
 $summary = Join-Path ([System.IO.Path]::GetFullPath($OutDir)) '08-verification.md'
 $script:Items = New-Object System.Collections.ArrayList
 $script:nPass = 0; $script:nFail = 0; $script:nManual = 0; $script:nSkip = 0
@@ -49,18 +49,17 @@ function Get-VerifyState { param([string]$Id) foreach ($i in $script:Items) { if
 
 # 复用 07-7 的只读巡检:以子进程方式跑,只传 -BaselineDir(绝不传 -Apply),逐行取 ①/②/③ 的结论。
 function Invoke-BaselineCheck {
-  $script:BaseOut = ''; $script:BaseRc = 127
+  $script:BaseOut = ''
   if (-not (Test-Path -LiteralPath $BaselineScript)) { return }
   $exe = Get-Command powershell.exe -ErrorAction SilentlyContinue
   if (-not $exe) { return }
   # 不合并 stderr:子脚本按 O2 把失败写 stderr,而 `2>&1` 会把原生 stderr 变成 NativeCommandError,在 Stop 下终止执行器(①/②/③ 行在 stdout,不合并也能解析)
   $script:BaseOut = (& $exe.Source '-NoProfile' '-ExecutionPolicy' 'Bypass' '-File' $BaselineScript '-BaselineDir' $BaselineDir | Out-String)
-  $script:BaseRc = $LASTEXITCODE
 }
 function Get-BaselineVerdict {
   param([string]$Mark)
   foreach ($l in ($script:BaseOut -split "`r?`n")) {
-    if ($l -match ([regex]::Escape($Mark) + '\s*->\s*(通过|需人工介入)')) { return $Matches[1] }
+    if ($l -match ([regex]::Escape($Mark) + '\s*->\s*(通过|不通过|需人工介入)')) { return $Matches[1] }
   }
   return ''
 }
@@ -71,7 +70,8 @@ function Add-BaselineItem {
   $v = Get-BaselineVerdict $Mark
   if (-not $v) { Add-Manual $Id 'A' ($Lab + ':基线巡检输出里取不到该行(需管理员会话?)' + $hint) $Card }
   elseif ($v -eq '通过') { Add-VerifyItem $Id 'A' 'pass' ($Lab + ':基线巡检判为通过') $Card }
-  else { Add-VerifyItem $Id 'A' 'fail' ($Lab + ':基线巡检判为需人工介入,与 L2 基线不一致;处置见 07-6') $Card }
+  elseif ($v -eq '需人工介入') { Add-Manual $Id 'A' ($Lab + ':基线巡检判为需人工介入(读不到现场状态或基线产物缺失),需人工核对' + $hint) $Card }
+  else { Add-VerifyItem $Id 'A' 'fail' ($Lab + ':基线巡检判为不通过,与 L2 基线不一致;处置见 07-6') $Card }
 }
 # 固件枚举文本 → @{Order;Desc;Path}(BootOrder 的 GUID 序列含跨行续行);解析实现见 dbk-win-probe.ps1。
 function Get-FwOrder {

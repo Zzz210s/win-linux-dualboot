@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 Parse-DbkArgs -Check:$Check -Apply:$Apply -Json:$Json -Yes:$Yes -Step $Step -Log $Log -Extra $Extra
 Assert-DbkStep
 if ($PSBoundParameters.ContainsKey('FedoraChecksum')) {   # 已废弃别名命中
-  Write-Host '提示:-FedoraChecksum 是已废弃别名(原原子版遗留),请改用 -IsoChecksum。'
+  Write-DbkNote '提示:-FedoraChecksum 是已废弃别名(原原子版遗留),请改用 -IsoChecksum。'
   if (-not $IsoChecksum) { $IsoChecksum = $FedoraChecksum }   # 已废弃别名
 }
 # -Check 零写:不设缺省日志;只有 -Apply 才落 %LOCALAPPDATA%\dbk\logs\verify-install-media.log。

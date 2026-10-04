@@ -150,8 +150,8 @@ $R = Get-DbkLayout -DiskNumber $Disk
 Write-DbkNote '--- 复读分区表(写后)---'
 foreach ($p in @($R.Parts | Sort-Object { $_.OffsetMB })) { Write-DbkNote ('  ' + (Format-Part $p)) }
 $f2 = 0
-foreach ($spec in @('efi|2048|ESP-Windows', 'msr|16|MSR', 'basic|204800|C:', 'basic|650240|D:')) {
-  $a = $spec -split '\|'
+foreach ($spec in @(@('efi', $TR.WinEspMB, 'ESP-Windows'), @('msr', $TR.MsrMB, 'MSR'), @('basic', $TR.WinMB, 'C:'), @('basic', $TR.DataMB, 'D:'))) {
+  $a = $spec
   $hit = @($R.Parts | Where-Object { $_.Kind -eq $a[0] -and ([math]::Abs($_.SizeMB - [double]$a[1]) -le $TOL) })
   if ($hit.Count -eq 0) { $f2++; Add-DbkCheck ('失败项:复读未见 ' + $a[2] + '(期望 ' + $a[1] + 'MB,' + $a[0] + '),实际 ' + (Show-Parts $R.Parts)) }
 }

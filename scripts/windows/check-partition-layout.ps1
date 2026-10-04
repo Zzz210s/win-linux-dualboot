@@ -41,7 +41,7 @@ if (-not $env:DBK_PART_LAYOUT -and -not (Get-Command Get-Disk -ErrorAction Silen
 }
 
 # 定稿布局(设计 5.1):数值与 docs/02-partitioning.md 的 02-1 值表逐字一致,改这里必须同改该表。
-$TR = @{ WinEspMB = 2048; MsrMB = 16; WinMB = 204800; DataMB = 650240; WinReMB = 1024
+$TR = @{ WinEspMB = 2048; MsrMB = 16; WinMB = 204800; DataMB = 650240
          FedoraEspMB = 1024; BootMB = 1024; RootMinMB = 115712; ReserveMB = 117760 }
 $TOL = 2
 

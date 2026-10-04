@@ -45,7 +45,11 @@ hook_out() {
 is_uint() { case "${1:-}" in '' | *[!0-9]*) return 1 ;; *) return 0 ;; esac; }
 count_of() { printf '%s\n' "${1:-}" | grep -cE "${2:-}" || true; }
 # /dev/nvme0n1p5 -> 5;/dev/sda3 -> 3(只对 TYPE="part" 的设备名取号,避免把整盘当分区)
-part_of() { printf '%s' "${1:-}" | sed -n 's|.*p\([0-9]\+\)$|\1|p' | head -n1; }
+# /dev/nvme0n1p5 -> 5;/dev/sda3 -> 3;/dev/vda3 -> 3;整盘形态(/dev/nvme0n1、/dev/mmcblk0)不取号。
+part_of() {
+  case "${1:-}" in *nvme[0-9]*n[0-9]|*mmcblk[0-9]) return 0 ;; esac
+  printf '%s' "${1:-}" | sed -n 's|.*[^0-9]\([0-9]\+\)$|\1|p' | head -n1
+}
 emit() { if [ "${DBK_JSON:-0}" -eq 1 ]; then dbk_add_action "$1"; else printf '%s\n' "$1"; fi; }
 
 # 0) 只在 Linux 上可用
@@ -78,14 +82,14 @@ if [ "$DISK_N" -gt 0 ] && [ "$DISK" -ge "$DISK_N" ]; then
 fi
 root_src() { hook_out "$FM_HOOK" -n -o SOURCE "$1"; }
 lsb_part() { printf '%s' "${1:-}" | grep -qE "NAME=\"[^\"]*p?${2}\"|NAME=\"[^\"]*p${2}\""; }
-ROOT_P="$ROOT_REQ"; BOOT_P="$BOOT_REQ"
+ROOT_P="$ROOT_REQ"; BOOT_P="$BOOT_REQ"; ROOT_SRC=""
 if [ -n "$ROOT_REQ" ]; then
   if [ "$LSB_OK" -eq 1 ] && ! lsb_part "$LSB" "$ROOT_REQ"; then
     dbk_add_check "失败项: --root-part $ROOT_REQ 在 lsblk 的分区列表里找不到"
     dbk_exit FAIL "--root-part $ROOT_REQ 不存在:lsblk 里没有这个分区;先跑 lsblk -o NAME,SIZE,TYPE,FSTYPE 确认"
   fi
 fi
-if [ -z "$ROOT_P" ] && [ "$LSB_OK" -eq 1 ]; then ROOT_P="$(part_of "$(root_src /)")"; fi
+if [ -z "$ROOT_P" ] && [ "$LSB_OK" -eq 1 ]; then ROOT_SRC="$(root_src /)"; ROOT_P="$(part_of "$ROOT_SRC")"; fi
 if [ -z "$BOOT_P" ] && [ "$LSB_OK" -eq 1 ]; then
   bp="$(part_of "$(root_src /boot)")"
   if [ -n "$bp" ] && [ "$bp" != "$ROOT_P" ]; then BOOT_P="$bp"; fi
@@ -99,6 +103,12 @@ if [ "$LSB_OK" -eq 0 ]; then
     '') dbk_add_check "需人工: lsblk 无输出,探测不到现场分区;已用占位符生成(--root-part <ROOT> 请人工替换)" ;;
     *) dbk_add_check "需人工: lsblk 里没有 TYPE=\"part\" 的行,探测不到现场分区;已用占位符生成(请人工替换 <ROOT>)" ;;
   esac
+elif [ "$ROOT_P" = "<ROOT>" ]; then
+  if [ -n "$ROOT_SRC" ]; then
+    dbk_add_check "需人工: 设备名形态未识别 —— findmnt / 的分区源 '$ROOT_SRC' 不含可识别的分区号(nvme0n1pN / sdXN / vdXN);已用 <ROOT> 占位"
+  else
+    dbk_add_check "需人工: findmnt 取不到 / 的分区源(命令不可用或读不到);已用 <ROOT> 占位"
+  fi
 fi
 
 # 3) 生成两套命令(纯打印;JSON 模式下进 actions[],stdout 只有一行 JSON)

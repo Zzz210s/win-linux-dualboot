@@ -8,7 +8,7 @@
 #   同口径、同门槛):执行 efibootmgr -n <编号>,复读 BootNext 与 BootOrder 断言一致后提示手工 systemctl reboot(本脚本**不自动重启**)。
 # 纪律(设计第 2 节 / 不变量 I2):进 Windows 只用一次性 BootNext,**绝不执行 `efibootmgr -o`**——改永久顺序即违反 I2。
 # 注入:DBK_WIN_MATCH(描述关键字,缺省 Windows Boot Manager)/ DBK_EFIBOOTMGR(命令,可带参数)。夹具级验证,真机未跑。
-# 用法:reboot-to-windows.sh [--match <关键字>] [--check|--apply --yes] [--json] [--log <路径>] [--step NN-K] [-h]
+# 用法:reboot-to-windows.sh [--match <关键字>] [--check|--apply --yes] [--dry-run] [--json] [--log <路径>] [--step NN-K] [-h]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
@@ -21,7 +21,6 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --match) dbk_cli_val "--match" "${2:-}"; MATCH="$2"; shift 2 ;;
     --match=*) MATCH="${1#*=}"; shift ;;
-    --dry-run) shift ;;
     *) ARGS+=("$1"); shift ;;
   esac
 done

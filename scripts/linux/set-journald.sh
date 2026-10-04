@@ -15,6 +15,7 @@
 # 夹具注入(真机不需要设置):DBK_JOURNALD_CONF(配置目标)/ DBK_JOURNALCTL / DBK_SYSTEMCTL。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$HERE/dbk-cli.sh"
 dbk_enable_errtrap
@@ -31,8 +32,10 @@ read -r -a JC <<<"$JC_STR"
 read -r -a SC <<<"$SC_STR"
 jc() { command "${JC[@]}" "$@"; }
 sc() { command "${SC[@]}" "$@"; }
-CONTENT='[Journal]
-Storage=persistent'
+# 内容唯一真源:templates/journald-persistent.snippet(hardening.sh 的 R5 也委派本脚本 → 不再有第二个写者)。
+#   注入钩子 DBK_JOURNALD_TPL 供夹具离线回放。
+JOURNALD_TPL="${DBK_JOURNALD_TPL:-$ROOT/templates/journald-persistent.snippet}"
+conf_body() { if [ -r "$JOURNALD_TPL" ]; then cat -- "$JOURNALD_TPL"; else printf '[Journal]\nStorage=persistent\n'; fi; }
 ISSUES=(); MANUAL=(); APPLY_FAILS=()
 PROBE_RC=0
 
@@ -103,7 +106,7 @@ check_all() {
 apply_conf() {
   local dir
   dir="$(dirname "$CONF")"
-  if [ -f "$CONF" ] && printf '%s\n' "$CONTENT" | cmp -s - "$CONF"; then
+  if [ -f "$CONF" ] && conf_body | cmp -s - "$CONF"; then
     dbk_add_check "配置已是目标内容,未改动:$CONF"
     return 0
   fi
@@ -119,8 +122,8 @@ apply_conf() {
     APPLY_FAILS+=("目录创建失败:$dir")
     return 0
   fi
-  if printf '%s\n' "$CONTENT" >"$CONF"; then
-    dbk_add_action "写入 $CONF([Journal] + Storage=persistent)"
+  if conf_body >"$CONF"; then
+    dbk_add_action "写入 $CONF(模板 $JOURNALD_TPL)"
     dbk_add_check "配置已写入:$CONF"
     dbk_mark_changed
   else

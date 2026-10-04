@@ -123,11 +123,11 @@ $before = Get-DbkTable
 if (-not $before.Ok) { Add-DbkCheck ('失败项:' + $before.Error); Write-DbkExit -Status 需人工 -Message ('分区表读不到:' + $before.Error + ';无法核对目标,已零写') }
 $rows = @($before.Rows)
 $protect = @(); foreach ($n in @(([string]$env:DBK_PROTECT_NUMBERS) -split '[,\s]+' | Where-Object { $_ })) { $protect += [int]$n }
-if (-not $env:DBK_PART_LAYOUT) {
-  # C:/D: 的分区号是保护名单的一部分;解析不出来时不再静默吞错,改在 -Apply 时升为「需人工」。
+if (-not $env:DBK_PROTECT_NUMBERS) {
+  # C:/D: 的分区号是保护名单的一部分;解析不出来时不再静默吞错,-Check 也升为「需人工」(读路径不给误导性 PASS)。
   $protectErr = @()
-  foreach ($c in @('C', 'D')) { try { $protect += [int](Get-Partition -DriveLetter $c -ErrorAction Stop).PartitionNumber } catch { $protectErr += ($c + ': ' + $_.Exception.Message) } }
-  if ($protectErr.Count -gt 0 -and $Apply) { Add-DbkCheck ('需人工:系统盘分区号未能解析(' + ($protectErr -join '; ') + '):C:/D: 未进自动保护名单'); Write-DbkExit -Status 需人工 -Message ('无法解析系统盘分区号(' + ($protectErr -join '; ') + ');拒绝在保护名单不完整时删除分区(--apply 零写)') }
+  foreach ($c in @('C', 'D')) { try { if ($env:DBK_NO_GETPARTITION) { throw '夹具钩子 DBK_NO_GETPARTITION 强制不可解析' }; $protect += [int](Get-Partition -DriveLetter $c -ErrorAction Stop).PartitionNumber } catch { $protectErr += ($c + ': ' + $_.Exception.Message) } }
+  if ($protectErr.Count -gt 0) { Add-DbkCheck ('需人工:系统盘分区号未能解析(' + ($protectErr -join '; ') + '):C:/D: 未进自动保护名单'); Write-DbkExit -Status 需人工 -Message ('无法解析系统盘分区号(' + ($protectErr -join '; ') + ');保护名单不完整(缺 C:/D:),拒绝按不完整的保护名单判定分区(本次零写)') }
   foreach ($r in $rows) { if ($r.Kind -eq 'msr' -or $r.Kind -eq 'recovery') { $protect += [int]$r.Number } }
 }
 $notFound = @(); $prot = @()

@@ -4,11 +4,12 @@
 # 只做分发与汇总,不含业务逻辑:校验步骤号与索引脚本存在 → 透传 --check/--apply/--yes/--json/--log → 汇总。
 # 破坏性步骤(索引第 3 列 = 1)在 --apply 且未给 --yes 时**不调用子脚本**,按用法错误退 64;汇总规则:
 #   任一子步骤 1 → 1;无 1 但有 2 → 2;其余(0/9)→ 0;未知步骤或索引脚本缺失 → 64。
+#   子步骤退 64(用法错)也**原样透传** 64(它不是“判据失败”,优先于 1/2)。
 # 一张卡可以对应多个脚本(设计 03 第 5 节):同一步骤号在索引里允许出现多行,总控**按行顺序逐行执行**
 #   并把它们的退出码一起聚合(行顺序 = 索引行顺序);破坏性门槛也逐行判定(任一行是破坏性就需 --yes)。
 # 可观测性(设计 2.1 O1/O2):每个子步骤的 步骤号/退出码/状态/失败原因都要打印;有失败时把完整汇总写
 #   --log(缺省沿用 dbk_log_default 的 /var/log/dbk/dbk.log),失败行同时进 stderr,JSON 汇总含 message。
-# 汇总 JSON:{"steps":[{"step":…,"status":pass|fail|manual|skip,"rc":N,"message":…}],"summary":{pass,fail,manual,skip}}
+# 汇总 JSON:{"steps":[{"step":…,"status":pass|fail|manual|skip|usage,"rc":N,"message":…}],"summary":{pass,fail,manual,skip,usage}}(usage=子步骤退 64 原样透传)
 # 本文件是 C9d 白名单里的库/总控脚本(不写「# 对应卡:」,也不登记进 steps.tsv)。测试钩子:DBK_INDEX 覆盖索引。
 set -uo pipefail
 DBK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +18,7 @@ DBK_INDEX="${DBK_INDEX:-$DBK_DIR/steps.tsv}"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$DBK_DIR/dbk-cli.sh"
 DBK_MASTER_MODE=check; DBK_MASTER_JSON=0; DBK_MASTER_YES=0; DBK_MASTER_LOG=""
-S_IDS=(); S_KEYS=(); S_RCS=(); S_MSGS=()
+S_IDS=(); S_KEYS=(); S_RCS=(); S_MSGS=(); S_USAGE=0
 P_STEPS=(); P_PATHS=()
 
 # 索引里的全部步骤号(用法信息用)。
@@ -35,7 +36,7 @@ dbk_usage_master() {
   --check 缺省(只读);--apply 执行(破坏性步骤必须同时给 --yes);--json 输出单行汇总 JSON。
   索引: $DBK_INDEX
   可用步骤号: $(dbk_index_ids)
-退出码: 0 全部通过 / 1 有失败 / 2 有需人工 / 64 用法错误(未知步骤、索引脚本缺失、破坏性步骤缺 --yes)
+退出码: 0 全部通过(含跳过子步骤) / 1 有失败 / 2 有需人工 / 64 用法错误(未知步骤、索引脚本缺失、破坏性步骤缺 --yes、子步骤退 64 原样透传)
 EOF
 }
 dbk_parse_master_args() {
@@ -98,12 +99,7 @@ dbk_prepare() {
   done
 }
 dbk_step_key() { case "${1:-}" in 0) printf pass ;; 1) printf fail ;; 2) printf manual ;; 9) printf skip ;; *) printf fail ;; esac; }
-# JSON 反转义(与 dbk-log.sh 的 dbk_json_escape 互逆):从子脚本的 --json 里取 message。
-dbk_json_unescape() {
-  local s="${1:-}"
-  s="${s//\\n/$'\n'}"; s="${s//\\t/$'\t'}"; s="${s//\\r/$'\r'}"; s="${s//\\\"/\"}"; s="${s//\\\\/\\}"
-  printf '%s' "$s"
-}
+# JSON 反转义 dbk_json_unescape 由 dbk-log.sh 提供(与 dbk_json_escape 互逆,单遍),此处不再重复实现。
 # dbk_child_message <子脚本 stdout> <是否 JSON 模式>:取结论/失败原因文本(不依赖 jq/python)。
 #   契约输出的 JSON 里取 message(可能是空串,交给上层合成);不是契约输出时退回 stdout 的最后一行。
 dbk_child_message() {
@@ -137,6 +133,7 @@ dbk_run_one() {
   msg="$(dbk_child_message "$out" "$DBK_MASTER_JSON")"
   case "$rc" in
     0|1|2|9) ;;
+    64) key=usage; S_USAGE=1 ;;
     *) key=fail
        if [ -n "$msg" ]; then msg="$msg; 子步骤退出码 $rc 不在 0/1/2/9 契约内"; else msg="子步骤退出码 $rc 不在 0/1/2/9 契约内"; fi ;;
   esac
@@ -157,7 +154,7 @@ dbk_count() {
 # 有失败/需人工时把完整汇总(每个子步骤一行 + 总计)写进日志;全绿不落盘。
 dbk_log_summary() {
   local i
-  dbk_log_write "汇总: pass=$(dbk_count pass) fail=$(dbk_count fail) manual=$(dbk_count manual) skip=$(dbk_count skip)"
+  dbk_log_write "汇总: pass=$(dbk_count pass) fail=$(dbk_count fail) manual=$(dbk_count manual) skip=$(dbk_count skip) usage=$(dbk_count usage)"
   for i in "${!P_STEPS[@]}"; do
     dbk_log_write "$(dbk_step_line "${P_STEPS[$i]}" "${S_KEYS[$i]}" "${S_RCS[$i]}" "${S_MSGS[$i]}")"
   done
@@ -170,8 +167,8 @@ dbk_emit_summary_json() {
       "$(dbk_json_escape "${P_STEPS[$i]}")" "${S_KEYS[$i]}" "${S_RCS[$i]}" "$(dbk_json_escape "${S_MSGS[$i]}")"
     sep=,
   done
-  printf '],"summary":{"pass":%s,"fail":%s,"manual":%s,"skip":%s}}\n' \
-    "$(dbk_count pass)" "$(dbk_count fail)" "$(dbk_count manual)" "$(dbk_count skip)"
+  printf '],"summary":{"pass":%s,"fail":%s,"manual":%s,"skip":%s,"usage":%s}}\n' \
+    "$(dbk_count pass)" "$(dbk_count fail)" "$(dbk_count manual)" "$(dbk_count skip)" "$(dbk_count usage)"
 }
 
 dbk_parse_master_args "$@"
@@ -181,12 +178,13 @@ dbk_log_default dbk   # 缺省日志路径(显式给 --log 时不动);只有失�
 i=0
 while [ "$i" -lt "${#P_STEPS[@]}" ]; do dbk_run_one "$i"; i=$((i + 1)); done
 N_FAIL="$(dbk_count fail)"; N_MANUAL="$(dbk_count manual)"
-if [ "$N_FAIL" -gt 0 ] || [ "$N_MANUAL" -gt 0 ]; then dbk_log_summary; fi
+if [ "$N_FAIL" -gt 0 ] || [ "$N_MANUAL" -gt 0 ] || [ "$S_USAGE" -gt 0 ]; then dbk_log_summary; fi
 if [ "$DBK_MASTER_JSON" -eq 1 ]; then
   dbk_emit_summary_json
 elif [ "$N_FAIL" -gt 0 ] || [ "$N_MANUAL" -gt 0 ]; then
   printf '[汇总] pass=%s fail=%s manual=%s skip=%s\n' "$(dbk_count pass)" "$N_FAIL" "$N_MANUAL" "$(dbk_count skip)"
 fi
+if [ "$S_USAGE" -gt 0 ]; then exit "$DBK_USAGE"; fi
 if [ "$N_FAIL" -gt 0 ]; then exit "$DBK_FAIL"; fi
 if [ "$N_MANUAL" -gt 0 ]; then exit "$DBK_MANUAL"; fi
 exit "$DBK_PASS"

@@ -117,7 +117,7 @@ function Get-DbkJsonReport {
 function Get-DbkStatusTag {
   param([string]$Key = '')
   switch ($Key) {
-    'pass' { 'PASS' } 'fail' { 'FAIL' } 'manual' { '需人工' } 'skip' { '跳过' }
+    'pass' { 'PASS' } 'fail' { 'FAIL' } 'manual' { '需人工' } 'skip' { '跳过' } 'usage' { '用法错误' }
     default { $Key }
   }
 }

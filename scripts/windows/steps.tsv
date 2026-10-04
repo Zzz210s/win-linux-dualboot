@@ -1,10 +1,10 @@
-步骤号	脚本路径	破坏性(0/1)	说明
+步骤号	脚本路径	破坏性(0/1)	说明	固定参数
 01-1	scripts/windows/check-firmware.ps1	0	固件核对:Secure Boot 与 VMD/RAID 推断 + 固件界面人工核对清单
 01-2	scripts/windows/verify-install-media.ps1	0	安装介质校验:Fedora Silverblue ISO 与官方 CHECKSUM 比对 + Windows ISO 来源声明 + 可移动盘列举
 01-3	scripts/windows/preflight.ps1	0	核对目标盘:preflight.ps1 -Check(只读、零写;-Only target-disk 可只看磁盘段)
 01-4	scripts/windows/collect-l0.ps1	0	落 L0 产物:写 baseline/00-firmware.md(BootOrder 首位原值)
-02-1	scripts/windows/check-partition-layout.ps1	0	分盘总则:三种轨道的目标布局只读核对
-02-2	scripts/windows/check-partition-layout.ps1	0	轨道 W 的分盘核对:只 Windows(ESP-Win/MSR/C:/WinRE)
+02-1	scripts/windows/check-partition-layout.ps1	0	分盘总则:三种轨道的目标布局只读核对	-Track D
+02-2	scripts/windows/check-partition-layout.ps1	0	轨道 W 的分盘核对:只 Windows(ESP-Win/MSR/C:/WinRE)	-Track W
 02-4	scripts/windows/create-partitions.ps1	1	轨道 D 的分盘:diskpart 预建四区 + 预留 115GiB(破坏性,需 -Yes)
 03-1	scripts/windows/verify-windows-baseline.ps1	0	装 Windows 后核对版本/内部版本与分区布局(含 WinRE 偏差判据)
 03-2	scripts/windows/disable-faststartup.ps1	1	关快速启动与休眠:powercfg /h off + HiberbootEnabled=0(需 -Yes)
@@ -15,12 +15,12 @@
 03-7	scripts/windows/check-gate.ps1	0	读闸门结论:列红项并给退出码(只有它判能否进入 L3)
 03-8	scripts/windows/backup-esp.ps1	1	基线备份:ESP 全量文件树 + manifest.sha256(-Apply -Yes 写盘;-Check 只读校验已有备份)
 03-9	scripts/windows/collect-l2.ps1	0	核对 L2 四件产物齐全(报告/ESP 备份/固件启动项/分区快照)
-04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(-Device USB -Check / -Apply -Yes;写 bootsequence,不改 BootOrder)
+04-1	scripts/windows/set-bootnext.ps1	1	一次性从 U 盘启动(-Device USB -Check / -Apply -Yes;写 bootsequence,不改 BootOrder)	-Device USB
 07-3	scripts/windows/repair-windows-boot.ps1	1	Windows 侧修引导:mountvol + bcdboot 重建 \EFI\Microsoft\(破坏性,需 -Yes)
 07-6	scripts/windows/restore-esp.ps1	1	基线回滚:从 02-esp-backup 逐文件比对 manifest 复原 \EFI\Microsoft\(破坏性,需 -Yes)
 07-7	scripts/windows/verify-baseline.ps1	0	只读巡检四项基线(-Check 缺省;-Apply 同义,无写动作)
 07-9	scripts/windows/restore-boot-order.ps1	1	归位引导顺序:只用一次性 bootsequence(不改 BootOrder;永久归位靠固件设置界面)
-07-10	scripts/windows/backup-esp.ps1	1	L5 退役备份现状:手动执行 -OutDir D:\dbk-l5-backup -Apply -Yes(仓库外;不要覆盖 baseline/)
+07-10	scripts/windows/backup-esp.ps1	1	L5 退役备份现状:手动执行 -OutDir D:\dbk-l5-backup -Apply -Yes(仓库外;不要覆盖 baseline/)	-OutDir D:\dbk-l5-backup
 07-11	scripts/windows/delete-linux-partition.ps1	1	删 Fedora 分区:按分区号/GPT GUID 精确删除(拒绝 Windows ESP/C:/D:/MSR/WinRE)
 07-12	scripts/windows/cleanup-nvram.ps1	1	清 NVRAM:删除 fedora 固件启动条目(只删条目,不改 BootOrder)
 07-12	scripts/windows/extend-data-partition.ps1	1	可选扩容:把腾出的未分配空间扩给 D:(不是 C:)

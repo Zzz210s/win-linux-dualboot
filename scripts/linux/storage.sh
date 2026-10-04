@@ -13,7 +13,7 @@
 # 注入:DBK_SWAPFILE / DBK_SWAP_SIZE / DBK_FSTAB / DBK_ZRAM_CONF / DBK_ZRAM_TPL / DBK_SWAPON / DBK_ZRAMCTL /
 #   DBK_SYSTEMCTL / DBK_CMDLINE。
 # 回退:swapoff <swapfile> && rm -f <swapfile>;删 fstab 的 swapfile 行与 zram 配置;都不动分区表(D5 的 8 项不变)。
-# 夹具级验证,真机未跑。用法:storage.sh [--size 4G] [--swapfile /swapfile] [--check|--apply] [--json]
+# 夹具级验证,真机未跑。用法:storage.sh [--size 4G] [--swapfile /swapfile] [--check|--apply] [--dry-run] [--json]
 #   [--log <路径>] [--yes] [--step NN-K] [-h]
 # 待核实(以官方文档为准):systemd-zram-setup@zram0.service 的单元名、模板 templates/zram-generator.conf 的键名、
 #   mkswap/fallocate 在无根分区余量时的报错文本 —— 均未在真机验证。
@@ -38,7 +38,6 @@ while [ "$#" -gt 0 ]; do
     --size=*) SWAP_SIZE="${1#*=}"; shift ;;
     --swapfile) dbk_cli_val "--swapfile" "${2:-}"; SWAPFILE="$2"; shift 2 ;;
     --swapfile=*) SWAPFILE="${1#*=}"; shift ;;
-    --dry-run) shift ;;
     *) ARGS+=("$1"); shift ;;
   esac
 done

@@ -9,7 +9,7 @@
 # 注:快照分区与快照体系已作废(设计 04 第 7 节明确本方案不引入快照体系),本脚本只挂共享盘。
 # 设计依据:设计 3.16 / 4.5 / 5.3(共享盘与四条前提)、02 设计 5 节(D: ≈635GiB NTFS)。夹具级验证,真机未跑。
 # 用法:mount-shared.sh [--uuid <SHARED_UUID>(或 DBK_SHARED_UUID)] [--user <name>] [--template <fstab 片段>]
-#   [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
+#   [--check|--apply] [--dry-run] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -31,7 +31,6 @@ while [ "$#" -gt 0 ]; do
     --user=*) TARGET_USER="${1#*=}"; shift ;;
     --template) dbk_cli_val "--template" "${2:-}"; FSTAB_TPL="$2"; shift 2 ;;
     --template=*) FSTAB_TPL="${1#*=}"; shift ;;
-    --dry-run) shift ;;
     --*) ARGS+=("$1"); shift ;;
     -*) ARGS+=("$1"); shift ;;
     *) if [ -z "$UUID" ]; then UUID="$1"; shift; else ARGS+=("$1"); shift; fi ;;
@@ -72,6 +71,21 @@ want_line() {     # 打印目标 fstab 行;模板不合格或没有 UUID 时返�
 
 ISSUES=(); MANUAL=(); EXTRA_MANUAL=()   # EXTRA_MANUAL:--apply 路径产生的"需人工"项(judge 会重置 MANUAL,不清空它)
 
+# fstab 行结构判据:UUID + 挂载点 + fstype 相等,且选项里含必含集合(顺序无关,不看整行字符串)。
+fstab_match() {
+  local line="$1" opts
+  [ "$(printf '%s\n' "$line" | awk '{print $1}')" = "UUID=$UUID" ] || return 1
+  [ "$(printf '%s\n' "$line" | awk '{print $2}')" = "$SHARED_MNT" ] || return 1
+  [ "$(printf '%s\n' "$line" | awk '{print $3}')" = ntfs3 ] || return 1
+  opts="$(printf '%s\n' "$line" | awk '{print $4}')"
+  case ",$opts," in *,windows_names,*) ;; *) return 1 ;; esac
+  case ",$opts," in *,nofail,*) ;; *) return 1 ;; esac
+  case ",$opts," in *,uid=*) ;; *) return 1 ;; esac
+  case ",$opts," in *,gid=*) ;; *) return 1 ;; esac
+  case ",$opts," in *,umask=*) ;; *) return 1 ;; esac
+  return 0
+}
+
 judge() {         # 只读判定:判据 -> checks/ISSUES/MANUAL
   ISSUES=(); MANUAL=()
   want="$(want_line || true)"
@@ -88,8 +102,8 @@ judge() {         # 只读判定:判据 -> checks/ISSUES/MANUAL
       dbk_add_check "共享分区可解析:$DEV($FSTYPE)"
     fi
     cur="$(fstab_cur)"
-    if [ "$cur" = "$want" ]; then dbk_add_check "fstab 已含 $SHARED_MNT 的目标行"
-    elif [ -n "$cur" ]; then ISSUES+=("fstab 已有 $SHARED_MNT 的其他条目,需人工处理: $cur")
+    if [ -n "$cur" ] && fstab_match "$cur"; then dbk_add_check "fstab 已含 $SHARED_MNT 的合规条目(UUID/挂载点/fstype/必含选项,顺序无关)"
+    elif [ -n "$cur" ]; then MANUAL+=("fstab 已有 $SHARED_MNT 的条目但与模板不一致(需人工核对 UUID/挂载点/fstype/必含选项;本脚本不覆盖既有条目): $cur")
     else ISSUES+=("fstab 缺少 $SHARED_MNT 的 ntfs3 行(--apply 会补上)"); fi
   fi
   if [ "$(mnt_target)" = "$SHARED_MNT" ]; then
@@ -136,8 +150,8 @@ apply_run() {     # 唯一的写路径(库层已保证 --apply 必带 --yes)
   want="$(want_line || true)"
   if [ -z "$want" ]; then dbk_add_check "模板 ${FSTAB_TPL} 的 ntfs3 行缺失或选项不全"; dbk_exit FAIL "模板校验失败(--template 指定的片段不合格),没有可写入的 fstab 行"; fi
   cur="$(fstab_cur)"
-  if [ "$cur" = "$want" ]; then dbk_add_action "fstab 已含目标行,跳过写入"
-  elif [ -n "$cur" ]; then dbk_add_check "fstab 已有 $SHARED_MNT 的其他条目: $cur"; dbk_exit FAIL "fstab 已有 $SHARED_MNT 的其他条目(见 checks):手工处理后重跑,本脚本不覆盖既有条目"
+  if [ -n "$cur" ] && fstab_match "$cur"; then dbk_add_action "fstab 已含合规目标行,跳过写入"
+  elif [ -n "$cur" ]; then dbk_add_check "fstab 已有 $SHARED_MNT 的条目但与模板不一致: $cur"; dbk_exit 需人工 "fstab 已有 $SHARED_MNT 的条目但与模板不一致(需人工核对 UUID/挂载点/fstype/必含选项):本脚本不覆盖既有条目,请手工处理后重跑"
   else
     if [ ! -e "$FSTAB_BAK" ]; then cp -a "$FSTAB" "$FSTAB_BAK"; dbk_add_action "备份 $FSTAB -> $FSTAB_BAK(仅首次,重跑不覆盖)"; fi
     printf '\n# L4 共享数据盘(D:),由 scripts/linux/mount-shared.sh 写入\n%s\n' "$want" >>"$FSTAB"

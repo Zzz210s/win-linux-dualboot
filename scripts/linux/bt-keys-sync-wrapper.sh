@@ -14,7 +14,7 @@
 #   → bash <脚本> --windows-keys --path <hive> [-- 透传]。
 # 环境开关:DBK_SKIP_PKG=1(兼容 DBK_SKIP_APT)跳过分层安装。注入:DBK_WIN_MNT / DBK_BT_SCRIPT / DBK_BT_DIR / DBK_BT_REPO。
 # 夹具级验证,真机未跑。用法:bt-keys-sync-wrapper.sh [--win-mnt <挂载点>] [--script <上游脚本>] [--repo-url <地址>]
-#   [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-- <上游额外参数>] [-h]
+#   [--check|--apply] [--dry-run] [--json] [--log <路径>] [--yes] [--step NN-K] [-- <上游额外参数>] [-h]
 # 待核实(以官方文档为准):chntpw 的包名与所在仓库、上游脚本的文件名与 --windows-keys 参数均未在真机验证。
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,7 +37,6 @@ while [ "$#" -gt 0 ]; do
     --script=*) SCRIPT_PATH="${1#*=}"; shift ;;
     --repo-url) dbk_cli_val "--repo-url" "${2:-}"; REPO_URL="$2"; shift 2 ;;
     --repo-url=*) REPO_URL="${1#*=}"; shift ;;
-    --dry-run) shift ;;
     --) shift; PASSTHRU=("$@"); break ;;
     *) ARGS+=("$1"); shift ;;
   esac

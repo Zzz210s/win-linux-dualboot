@@ -47,6 +47,7 @@ dbk_usage() {
   cat >&2 <<'EOF'
 用法: <脚本> [--check] [--apply] [--json] [--log <路径>] [--yes] [--step <NN-K>]
   --check  只读判定本步是否达成(缺省;不写任何系统状态)
+  --dry-run 等价于 --check(只读;与 --apply 同时给 → 64 互斥)
   --apply  执行本步(幂等;破坏性动作需要 --yes)
   --json   机器可读输出(含 message/checks[]/actions[]/changed)
   --log <路径> 日志路径;不给就不落盘(步骤脚本可用 dbk_log_default 设缺省路径)
@@ -74,7 +75,7 @@ dbk_parse_args() {
   DBK_CHECKS=(); DBK_ACTIONS=(); DBK_CHECKS_JSON=(); DBK_CHANGED=0
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      --check) seen_check=1; shift ;;
+      --check|--dry-run) seen_check=1; shift ;;
       --apply) seen_apply=1; shift ;;
       --json) DBK_JSON=1; shift ;;
       --yes|-y) DBK_YES=1; shift ;;
@@ -90,7 +91,7 @@ dbk_parse_args() {
     esac
   done
   if [ "$seen_check" -eq 1 ] && [ "$seen_apply" -eq 1 ]; then
-    dbk_usage; dbk_note "用法错误: --check 与 --apply 互斥,只能给一个"; exit "$DBK_USAGE"
+    dbk_usage; dbk_note "用法错误: --check/--dry-run 与 --apply 互斥,只能给一个"; exit "$DBK_USAGE"
   fi
   if [ "$seen_apply" -eq 1 ]; then DBK_MODE=apply; else DBK_MODE=check; fi
   caller="${BASH_SOURCE[1]:-}"

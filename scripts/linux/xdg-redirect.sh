@@ -10,7 +10,7 @@
 #   xdg-user-dirs-update --force -> 建目标目录 -> 复读判据。通常由 mount-shared.sh --apply 在挂载成功后调用。
 # 注入(离线校验):DBK_SHARED_MNT / DBK_XDG_SNIPPET / DBK_HOME。夹具级验证,真机未跑。
 # 用法:xdg-redirect.sh [--user <name>] [--template <片段路径>] [--skip-mount-check]
-#   [--check|--apply] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
+#   [--check|--apply] [--dry-run] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -30,7 +30,6 @@ while [ "$#" -gt 0 ]; do
     --template) dbk_cli_val "--template" "${2:-}"; XDG_TPL="$2"; shift 2 ;;
     --template=*) XDG_TPL="${1#*=}"; shift ;;
     --skip-mount-check) SKIP_MOUNT_CHECK=1; shift ;;
-    --dry-run) shift ;;
     *) ARGS+=("$1"); shift ;;
   esac
 done

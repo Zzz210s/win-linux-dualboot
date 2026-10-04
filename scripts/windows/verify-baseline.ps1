@@ -2,7 +2,7 @@
 # 对应卡:07-7
 <#
 .SYNOPSIS
-  L4 周期性巡检(只读):核对 L2 基线是否被改动,输出"巡检通过 / 需人工介入"。
+  L4 周期性巡检(只读):核对 L2 基线是否被改动,输出三值("通过 / 不通过 / 需人工介入")。
 .DESCRIPTION
   依据设计文档 7.1 与不变量 I1/I3,核对四项:① BootOrder 首位是否仍是 Windows Boot Manager(比对 02-firmware-entries.txt);
   ② 挂载 ESP 后对 \EFI\Microsoft\ 逐文件比对 02-esp-backup\manifest.sha256(清单格式见 backup-esp.ps1);
@@ -10,12 +10,12 @@
   **只读**:不修改任何内容(挂载 ESP 只为读取,收尾必然卸载);唯一输出是控制台文本与 -Json 的单行 JSON。
   CLI 契约(设计 03 第 2 节):-Check 是**缺省**且只读;本脚本没有任何写动作,故 -Apply 与 -Check **同义**(都只做只读巡检),但显式接受该开关;两者同时给按用法错误 64(与全仓一致)。
   夹具钩子(仅离线验证,真机留空):DBK_IS_ADMIN=1/0(强制管理员判定)、DBK_MOUNTVOL_EXE(假 mountvol,
-    自己把调用写进 $env:DBK_CALLS);挂载与收尾卸载都走库层 Invoke-DbkExe——PS 5.1 下原生命令往 stderr 写字
+    自己把调用写进 $env:DBK_CALLS)、DBK_FW_TEXT / DBK_BM_TEXT(替代 bcdedit /enum firmware 与 /enum {bootmgr});挂载与收尾卸载都走库层 Invoke-DbkExe——PS 5.1 下原生命令往 stderr 写字
     + `2>&1` 会抛 NativeCommandError 并带走整个脚本,卸载失败不静默:单列一条“② ESP 卸载”需人工判据。
   本文件必须保存为 UTF-8 with BOM(Windows PowerShell 5.1 对无 BOM 的 .ps1 按 ANSI 解码,中文会解析失败)。
   用法(仓库根目录、以管理员身份运行 Windows PowerShell;多设备时 -BaselineDir 指到 baseline\<设备别名>):
     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-baseline.ps1 -Check -BaselineDir baseline
-  退出码:0 = 四项全部通过;1 = 需人工介入(含读不到基线或读不到现场状态);9 = 非 Windows 会话;64 = 用法错误。
+  退出码:0 = 四项全部通过;1 = 不通过(基线确实被改动);2 = 需人工介入(读不到基线或读不到现场状态,无法比对);9 = 非 Windows 会话;64 = 用法错误。
 #>
 [CmdletBinding()]
 param(
@@ -33,14 +33,16 @@ $WBM = 'Windows Boot Manager|Windows 启动管理器'
 $results = @()
 
 function Add-Result {
-  param([string]$Item, [bool]$Ok, [string]$Detail)
+  # State 三值:通过 / 不通过(基线确实被改动) / 需人工介入(读不到或无法比对)
+  param([string]$Item, [string]$State, [string]$Detail)
   $d = ((([string]$Detail) -replace "`r?`n", ' ') -replace '\s+', ' ').Trim()
   if ($d.Length -gt 400) { $d = $d.Substring(0, 400) + ' ...' }
-  $script:results += [pscustomobject]@{ Item = $Item; Ok = $Ok; Detail = $d }
+  $script:results += [pscustomobject]@{ Item = $Item; State = $State; Detail = $d }
 }
 
 function Get-FirmwareText {
   # 只读枚举:失败(非管理员 / 非 UEFI / 无 bcdedit)返回 $null,由调用方给中文提示
+  if ($env:DBK_FW_TEXT) { return (Get-Content -LiteralPath $env:DBK_FW_TEXT -Raw -Encoding UTF8) }
   $out = $null
   try { $out = (& bcdedit /enum firmware 2>&1 | Out-String) } catch { return $null }
   if ($LASTEXITCODE -ne 0 -or -not $out -or $out.Trim().Length -eq 0) { return $null }
@@ -88,27 +90,28 @@ $order = @()
 if ($fw) { $order = @(Get-BootOrderGuids $fw) }
 
 # ① BootOrder 首位
-if (-not $fw) { Add-Result '① BootOrder 首位' $false '读不到固件启动条目(bcdedit /enum firmware 失败:需管理员权限或非 UEFI 启动),无法核对' }
-elseif ($order.Count -eq 0) { Add-Result '① BootOrder 首位' $false '固件条目里解析不到 displayorder 行,无法核对' }
+if (-not $fw) { Add-Result '① BootOrder 首位' '需人工介入' '读不到固件启动条目(bcdedit /enum firmware 失败:需管理员权限或非 UEFI 启动),无法核对' }
+elseif ($order.Count -eq 0) { Add-Result '① BootOrder 首位' '需人工介入' '固件条目里解析不到 displayorder 行,无法核对' }
 else {
   $first = $order[0]; $fd = ''; $cur = ''
   foreach ($line in ($fw -split "`r?`n")) {
     if ($line -match '^\s*(identifier|标识符)\s+(\{[^}]+\})') { $cur = $Matches[2]; $fd = ''; continue }
     if ($cur -eq $first -and $line -match '^\s*(description|描述)\s+(\S.*?)\s*$') { $fd = $Matches[2] }
   }
-  $ok = ($first -eq '{bootmgr}' -or $fd -match $WBM)
+  $state = '通过'
+  if (-not ($first -eq '{bootmgr}' -or $fd -match $WBM)) { $state = '不通过' }
   $d = '当前首位 ' + $first + ' ' + $fd
-  if (-not $baseFirst) { $d += ';基线 ' + $baseFwPath + ' 取不到首位(无法比对,按人工核对)'; $ok = $false }
+  if (-not $baseFirst) { $d += ';基线 ' + $baseFwPath + ' 取不到首位(无法比对,按人工核对)'; $state = '需人工介入' }
   elseif ($baseFirst -eq $first) { $d += ';与基线一致' }
-  else { $d += ';基线首位为 ' + $baseFirst + '(不一致)'; $ok = $false }
-  Add-Result '① BootOrder 首位' $ok ($d + ';判据:首位必须是 Windows Boot Manager(I1)')
+  else { $d += ';基线首位为 ' + $baseFirst + '(不一致)'; $state = '不通过' }
+  Add-Result '① BootOrder 首位' $state ($d + ';判据:首位必须是 Windows Boot Manager(I1)')
 }
 
 # ② ESP \EFI\Microsoft\ 逐文件比对
 $man = Join-Path $BaselineDir '02-esp-backup\manifest.sha256'
 $want = @{}; $diff = @(); $espErr = ''
-if (-not (Test-Path -LiteralPath $man)) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('缺基线清单 ' + $man + ';先跑 scripts\windows\backup-esp.ps1 生成 L2 基线') }
-elseif (-not $isAdmin) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false '非管理员会话,无法挂载 ESP 做逐文件比对(mountvol /s 需要管理员)' }
+if (-not (Test-Path -LiteralPath $man)) { Add-Result '② ESP\EFI\Microsoft\ 比对' '需人工介入' ('缺基线清单 ' + $man + ';先跑 scripts\windows\backup-esp.ps1 生成 L2 基线') }
+elseif (-not $isAdmin) { Add-Result '② ESP\EFI\Microsoft\ 比对' '需人工介入' '非管理员会话,无法挂载 ESP 做逐文件比对(mountvol /s 需要管理员)' }
 else {
   $mp = ''; $mounted = $false; $unmountErr = ''
   $mountvol = 'mountvol'; if ($env:DBK_MOUNTVOL_EXE) { $mountvol = $env:DBK_MOUNTVOL_EXE }
@@ -140,30 +143,31 @@ else {
       else { Write-DbkLog ('mountvol ' + $mp + ' /d 退出码 0') }
     }
   }
-  if ($unmountErr) { Add-Result '② ESP 卸载' $false $unmountErr }
-  if ($espErr) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('ESP 比对失败:' + $espErr) }
-  elseif ($want.Count -eq 0) { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('基线清单里没有 EFI/Microsoft/ 条目,清单可能不完整:' + $man) }
-  elseif ($diff.Count -eq 0) { Add-Result '② ESP\EFI\Microsoft\ 比对' $true ('\EFI\Microsoft\ 下 ' + $want.Count + ' 个文件与基线逐文件一致;ESP 上无新增文件') }
-  else { Add-Result '② ESP\EFI\Microsoft\ 比对' $false ('差异 ' + $diff.Count + ' 项(共比对 ' + $want.Count + ' 项):' + (($diff | Select-Object -First 10) -join '; ')) }
+  if ($unmountErr) { Add-Result '② ESP 卸载' '需人工介入' $unmountErr }
+  if ($espErr) { Add-Result '② ESP\EFI\Microsoft\ 比对' '需人工介入' ('ESP 比对失败:' + $espErr) }
+  elseif ($want.Count -eq 0) { Add-Result '② ESP\EFI\Microsoft\ 比对' '需人工介入' ('基线清单里没有 EFI/Microsoft/ 条目,清单可能不完整:' + $man) }
+  elseif ($diff.Count -eq 0) { Add-Result '② ESP\EFI\Microsoft\ 比对' '通过' ('\EFI\Microsoft\ 下 ' + $want.Count + ' 个文件与基线逐文件一致;ESP 上无新增文件') }
+  else { Add-Result '② ESP\EFI\Microsoft\ 比对' '不通过' ('差异 ' + $diff.Count + ' 项(共比对 ' + $want.Count + ' 项):' + (($diff | Select-Object -First 10) -join '; ')) }
 }
 
 # ③ {bootmgr} 的 path
 $bmText = ''; $rc = 1
-try { $bmText = (& bcdedit /enum '{bootmgr}' 2>&1 | Out-String); $rc = $LASTEXITCODE } catch { $rc = 1 }
+if ($env:DBK_BM_TEXT) { $bmText = Get-Content -LiteralPath $env:DBK_BM_TEXT -Raw -Encoding UTF8; $rc = 0 }
+else { try { $bmText = (& bcdedit /enum '{bootmgr}' 2>&1 | Out-String); $rc = $LASTEXITCODE } catch { $rc = 1 } }
 $curPath = ''; if ($rc -eq 0) { $curPath = Get-PathLine $bmText }
 $basePath = ''
 if ($baseFw) { $i = $baseFw.IndexOf('==== bcdedit /enum {bootmgr} ===='); if ($i -ge 0) { $basePath = Get-PathLine $baseFw.Substring($i) } }
-if (-not $curPath) { Add-Result '③ {bootmgr} 的 path' $false '读不到当前 {bootmgr} 的 path(需管理员权限或非 UEFI 启动)' }
-elseif (-not $basePath) { Add-Result '③ {bootmgr} 的 path' $false ('当前 path = ' + $curPath + ';基线里取不到 path,无法比对(按人工核对)') }
-elseif ($curPath.ToLower() -eq $basePath.ToLower()) { Add-Result '③ {bootmgr} 的 path' $true ('当前与基线一致:' + $curPath) }
-else { Add-Result '③ {bootmgr} 的 path' $false ('与基线不一致:当前 ' + $curPath + ';基线 ' + $basePath + '(I3:绝不允许第三方改动 {bootmgr} 的 path)') }
+if (-not $curPath) { Add-Result '③ {bootmgr} 的 path' '需人工介入' '读不到当前 {bootmgr} 的 path(需管理员权限或非 UEFI 启动)' }
+elseif (-not $basePath) { Add-Result '③ {bootmgr} 的 path' '需人工介入' ('当前 path = ' + $curPath + ';基线里取不到 path,无法比对(按人工核对)') }
+elseif ($curPath.ToLower() -eq $basePath.ToLower()) { Add-Result '③ {bootmgr} 的 path' '通过' ('当前与基线一致:' + $curPath) }
+else { Add-Result '③ {bootmgr} 的 path' '不通过' ('与基线不一致:当前 ' + $curPath + ';基线 ' + $basePath + '(I3:绝不允许第三方改动 {bootmgr} 的 path)') }
 
 # ④ BitLocker 状态
 $baseBl = ''
 $repPath = Join-Path $BaselineDir '02-preflight-report.md'
 if (Test-Path -LiteralPath $repPath) {
-  $m = [regex]::Match((Get-Content -LiteralPath $repPath -Raw -Encoding UTF8), '(?m)^\|\s*BitLocker 保护状态\s*\|([^|\r\n]*)\|')
-  if ($m.Success) { $baseBl = $m.Groups[1].Value.Trim() }
+  $repTxt = Get-Content -LiteralPath $repPath -Raw -Encoding UTF8
+  if ($repTxt) { $m = [regex]::Match($repTxt, '(?m)^\|\s*BitLocker 保护状态\s*\|([^|\r\n]*)\|'); if ($m.Success) { $baseBl = $m.Groups[1].Value.Trim() } }
 }
 $curBl = ''
 try {
@@ -175,18 +179,21 @@ try {
 $curState = ''; $baseState = ''
 if ($curBl -match 'ProtectionStatus=On|保护已开启|保护已打开|保护: 已打开|Protection On') { $curState = 'On' } elseif ($curBl -match 'FullyEncrypted|完全加密|保护已关闭|保护已暂停|保护关闭|Protection Off') { $curState = 'Off+FullyEncrypted' } elseif ($curBl -match 'ProtectionStatus=Off|未加密|未启用|FullyDecrypted') { $curState = 'Off' }
 if ($baseBl -match 'ProtectionStatus=On|保护已开启|保护已打开|保护: 已打开|Protection On') { $baseState = 'On' } elseif ($baseBl -match 'FullyEncrypted|完全加密|保护已关闭|保护已暂停|保护关闭|Protection Off') { $baseState = 'Off+FullyEncrypted' } elseif ($baseBl -match 'ProtectionStatus=Off|未加密|未启用|FullyDecrypted') { $baseState = 'Off' }
-if (-not $curState) { Add-Result '④ BitLocker 状态' $false ('读不到当前 BitLocker 状态(需管理员权限):' + $curBl) }
-elseif (-not $baseState) { Add-Result '④ BitLocker 状态' $false ('当前 ' + $curBl + ';基线报告里取不到 BitLocker 状态,无法比对:' + $repPath) }
-elseif ($curState -eq $baseState) { Add-Result '④ BitLocker 状态' $true ('与基线一致:基线"' + $baseBl + '";当前 ' + $curBl) }
-else { Add-Result '④ BitLocker 状态' $false ('发生变化(提示人工确认):基线"' + $baseBl + '"->当前 ' + $curBl + ';若确有变更,须重做 L2 基线') }
+if (-not $curState) { Add-Result '④ BitLocker 状态' '需人工介入' ('读不到当前 BitLocker 状态(需管理员权限):' + $curBl) }
+elseif (-not $baseState) { Add-Result '④ BitLocker 状态' '需人工介入' ('当前 ' + $curBl + ';基线报告里取不到 BitLocker 状态,无法比对:' + $repPath) }
+elseif ($curState -eq $baseState) { Add-Result '④ BitLocker 状态' '通过' ('与基线一致:基线"' + $baseBl + '";当前 ' + $curBl) }
+else { Add-Result '④ BitLocker 状态' '不通过' ('发生变化(提示人工确认):基线"' + $baseBl + '"->当前 ' + $curBl + ';若确有变更,须重做 L2 基线') }
 
 # 结论(-Json 模式下人读输出必须闭嘴,否则 stdout 不止一行 JSON;① / ② / ③ 行是验收总控的解析输入,格式不得改)
-$bad = @($results | Where-Object { -not $_.Ok })
+$fail = @($results | Where-Object { $_.State -eq '不通过' })
+$manual = @($results | Where-Object { $_.State -eq '需人工介入' })
 if (-not $script:DbkJson) {
   Write-Host 'L2 基线巡检(只读;不修改系统任何设置,ESP 只在比对期间临时挂载并卸载)'
   Write-Host ('基线目录:' + [System.IO.Path]::GetFullPath($BaselineDir))
-  foreach ($r in $results) { Write-Host ($r.Item + ' -> ' + $(if ($r.Ok) { '通过' } else { '需人工介入' }) + ':' + $r.Detail) }
+  foreach ($r in $results) { Write-Host ($r.Item + ' -> ' + $r.State + ':' + $r.Detail) }
 }
-if ($bad.Count -eq 0) { Write-DbkExit -Status PASS -Message '巡检通过:四项与 L2 基线一致(BootOrder 首位、ESP\EFI\Microsoft\ 文件哈希、{bootmgr} path、BitLocker 状态)。' }
-foreach ($b in $bad) { Add-DbkCheck ('失败项:' + $b.Item + ':' + $b.Detail) }
-Write-DbkExit -Status FAIL -Message ('需人工介入:' + $bad.Count + ' 项 —— ' + (($bad | ForEach-Object { $_.Item }) -join '、') + ';处置:按 docs/03-windows.md 的 03-6(preflight.ps1)与 baseline/README.md 核对;确认改动属实且必要后,重做 L2 基线(backup-esp.ps1 + preflight.ps1)再继续。')
+if ($fail.Count -eq 0 -and $manual.Count -eq 0) { Write-DbkExit -Status PASS -Message '巡检通过:四项与 L2 基线一致(BootOrder 首位、ESP\EFI\Microsoft\ 文件哈希、{bootmgr} path、BitLocker 状态)。' }
+foreach ($b in $fail) { Add-DbkCheck ('失败项:' + $b.Item + ':' + $b.Detail) }
+foreach ($m in $manual) { Add-DbkCheck ('需人工:' + $m.Item + ':' + $m.Detail) }
+if ($fail.Count -gt 0) { Write-DbkExit -Status FAIL -Message ('不通过:' + $fail.Count + ' 项 —— ' + (($fail | ForEach-Object { $_.Item }) -join '、') + ';处置:按 docs/03-windows.md 的 03-6(preflight.ps1)与 baseline/README.md 核对;确认改动属实且必要后,重做 L2 基线(backup-esp.ps1 + preflight.ps1)再继续。') }
+Write-DbkExit -Status 需人工 -Message ('需人工介入:' + $manual.Count + ' 项 —— ' + (($manual | ForEach-Object { $_.Item }) -join '、') + ';多为读不到现场状态(非管理员 / 非 UEFI)或基线产物缺失;处置:跑 preflight.ps1 -Apply 生成基线,或换管理员会话重跑。')

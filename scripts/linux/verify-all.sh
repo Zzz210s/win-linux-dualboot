@@ -14,7 +14,9 @@ set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$SRC/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$SRC/dbk-cli.sh"
-OUTDIR="$ROOT/baseline"; CONFIRM=0; ARGS=()
+# 缺省落点 = <baseline>/auto/(与 Windows 侧 verify-all.ps1 同口径):baseline/08-verification.md 是**人填写版**,
+# 缺省写那里会把它盖掉(真源 docs/08-verification.md 的「注意同名覆盖」)。
+OUTDIR="$ROOT/baseline/auto"; CONFIRM=0; ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --out-dir) [ -n "${2:-}" ] || { dbk_usage; dbk_note "用法错误: --out-dir 缺取值(输出目录)"; exit "$DBK_USAGE"; }; OUTDIR="$2"; shift 2 ;;

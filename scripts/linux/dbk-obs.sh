@@ -88,6 +88,7 @@ dbk_status_tag() {
     fail) printf 'FAIL' ;;
     manual) printf '需人工' ;;
     skip) printf '跳过' ;;
+    usage) printf '用法错误' ;;
     *) printf '%s' "${1:-}" ;;
   esac
 }

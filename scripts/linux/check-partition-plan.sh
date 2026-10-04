@@ -24,6 +24,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
+# 按 --track 显式选卡(脚本头是三卡集合 02-3,04-2,07-5,缺省会取首个 02-3):L → 02-3,D → 04-2;--step 仍可显式选。
+case "$TRACK" in L) DBK_STEP="${DBK_STEP:-02-3}" ;; D) DBK_STEP="${DBK_STEP:-04-2}" ;; esac
 dbk_assert_step
 dbk_log_default "check-partition-plan"
 case "$TRACK" in L|D) ;; *) dbk_usage; dbk_note "用法错误: --track 只认 L / D(实为 '$TRACK')"; exit "$DBK_USAGE" ;; esac

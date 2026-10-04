@@ -2,7 +2,8 @@
 # 共享日志与参数工具:由 scripts/linux/ 下的 L4 脚本(storage/hardening/mount-shared/xdg-redirect/graphics/first-boot)source。
 # 拆出来的原因与家目录重定向相同——每份代码文件不超过 200 行,且多个脚本的日志实现原本逐字重复。
 # 调用约定:调用方先设置 LOG(日志文件路径,可用 DBK_LOG 覆盖),再使用 log()/die()/need_val()/dbk_json_escape()。
-# dbk_json_escape 是 JSON 字符串转义的唯一实现(scripts/linux/dbk-cli.sh 也复用它,不重复定义)。
+# dbk_json_escape 与 dbk_json_unescape 是 JSON 字符串转义/反转义的唯一实现(互逆;总控 dbk.sh 也复用)。
+# DBK_LOG_TO_STDERR=1 时 log() 的人读副本改走 stderr(--json 模式下 stdout 只留一行 JSON);默认仍走 stdout。
 # 本文件只定义函数:不设置 shell 选项、不执行任何动作(调用方自己 set -euo pipefail)。
 # 可观测性纪律(设计第 2 节):本库不得吞 stderr——日志目录/文件写不进去时必须把失败打到 stderr,不许 2>/dev/null 蒙掉。
 LOG="${LOG:-/var/log/dbk/dbk.log}"
@@ -10,7 +11,7 @@ LOG="${LOG:-/var/log/dbk/dbk.log}"
 log() {
   local line dir
   line="$(date '+%Y-%m-%d %H:%M:%S%z') $*"
-  printf '%s\n' "$line"
+  if [ "${DBK_LOG_TO_STDERR:-0}" = 1 ]; then printf '%s\n' "$line" >&2; else printf '%s\n' "$line"; fi
   dir="$(dirname "$LOG")"
   if ! mkdir -p "$dir" || [ ! -w "$dir" ]; then
     printf 'dbk: 日志目录不可写,本条只留在 stderr: %s\n' "$dir" >&2
@@ -50,4 +51,23 @@ dbk_json_escape() {
     s="${s//$c/$hex}"
   done
   printf '%s' "$s"
+}
+
+# dbk_json_unescape <已转义文本>:dbk_json_escape 的逆运算(单遍左到右)。
+#   必须单遍:顺序替换会把 `\\n`(字面反斜杠+n)误当作换行。支持 \n \t \r \" \\ \u00XX;结尾孤立反斜杠原样保留。
+dbk_json_unescape() {
+  local s="${1:-}" out="" c n hex
+  while [ -n "$s" ]; do
+    c="${s:0:1}"
+    if [ "$c" != '\' ]; then out+="$c"; s="${s:1}"; continue; fi
+    s="${s:1}"; n="${s:0:1}"
+    case "$n" in
+      n) out+=$'\n' ;; t) out+=$'\t' ;; r) out+=$'\r' ;; '"') out+='"' ;; '\') out+='\' ;;
+      u) hex="${s:1:4}"; printf -v c '%b' "\\u${hex}"; out+="$c"; s="${s:5}"; continue ;;
+      '') out+='\'; continue ;;
+      *) out+='\'; out+="$n" ;;
+    esac
+    s="${s:1}"
+  done
+  printf '%s' "$out"
 }
