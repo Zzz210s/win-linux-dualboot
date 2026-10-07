@@ -3,13 +3,12 @@
 # 破坏性:1
 # L4 卡 05-1:把共享数据盘(D: 整块 NTFS)以 ntfs3 挂到 /mnt/shared,挂载成功后调用 xdg-redirect.sh 做家目录重定向。
 # 判据(--check,零写):① blkid 能解析 UUID 且文件系统是 ntfs;② /etc/fstab 有 /mnt/shared 的目标 ntfs3 行;
-#   ③ 该分区当前挂在 /mnt/shared 且挂载选项含 rw。只读判定**不做写测试**(写测试是写动作,只在 --apply 成功路径做)。
-# --apply(需要 root,且必须 --yes):备份 fstab(.dbk.bak,仅首次)-> 补写缺失行 -> 建挂载点 -> daemon-reload
-#   -> mount -a -> 写测试(.dbk-write-test)-> bash xdg-redirect.sh --apply --yes -> 复读判据。幂等:重跑只补缺失。
-# 注:快照分区与快照体系已作废(设计 04 第 7 节明确本方案不引入快照体系),本脚本只挂共享盘。
-# 设计依据:设计 3.16 / 4.5 / 5.3(共享盘与四条前提)、02 设计 5 节(D: ≈635GiB NTFS)。夹具级验证,真机未跑。
-# 用法:mount-shared.sh [--uuid <SHARED_UUID>(或 DBK_SHARED_UUID)] [--user <name>] [--template <fstab 片段>]
-#   [--check|--apply] [--dry-run] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
+#   ③ 该分区当前挂在 /mnt/shared 且挂载选项含 rw;④ 未挂载时做 NTFS 脏卷探测(不带 force 的 rw 临时挂载,成功即卸载 = 干净;
+#   dirty -> 2 需人工、需 root 才能探测 -> 2;优先级:硬判据 1 > 脏卷/force 2 > 全过 0。只读判定**不做写测试**(写测试只在 --apply 成功路径做)。
+# --apply(需要 root,且必须 --yes):备份 fstab(.dbk.bak,仅首次)-> 补写缺失行 -> 建挂载点 -> daemon-reload -> mount -a
+#   -> 写测试(.dbk-write-test)-> bash xdg-redirect.sh --apply --yes -> 复读判据。幂等:重跑只补缺失。
+# 注:快照分区与快照体系已作废(设计 04 第 7 节)。设计依据:3.16 / 4.5 / 5.3、02 设计 5 节(D: ≈635GiB NTFS)。夹具级验证,真机未跑。
+# 用法:mount-shared.sh [--uuid <SHARED_UUID>(或 DBK_SHARED_UUID)] [--user <name>] [--template <fstab 片段>] [--check|--apply] [--dry-run] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
@@ -44,6 +43,14 @@ dbk_enable_errtrap
 fstab_cur() { awk -v m="$SHARED_MNT" '!/^[[:space:]]*#/ && $2==m' "$FSTAB" 2>/dev/null || true; }
 mnt_target() { findmnt -rn -o TARGET "$SHARED_MNT" 2>/dev/null | head -n 1 || true; }
 mnt_src() { findmnt -rn -o SOURCE,FSTYPE,OPTIONS -T "$SHARED_MNT" 2>/dev/null | head -n 1 || true; }
+ntfs_probe() {   # NTFS 脏卷探测(零依赖):不带 force 的 rw 挂载成功 = 干净(立刻卸载);失败且输出含 dirty = 脏卷;其余 = 判不了
+  local tm out
+  tm="$(mktemp -d)"; out="$(mount -t ntfs3 -o rw "$DEV" "$tm" 2>&1)" && { umount "$tm" 2>/dev/null || dbk_add_check "警告: 探测用的临时挂载点 $tm 未能卸载(探测结论仍为卷干净),重启前请人工 umount 后复核"; rmdir "$tm" 2>/dev/null || true; return 0; }
+  rmdir "$tm" 2>/dev/null || true
+  case "$out" in *[Dd][Ii][Rr][Tt][Yy]*) return 1 ;; esac
+  case "$out" in *"permission denied"*|*"must be superuser"*|*"only root"*|*"Operation not permitted"*) return 3 ;; esac
+  return 2
+}
 
 resolve_dev() {   # 只读:UUID -> 设备与文件系统类型
   DEV=""; FSTYPE=""
@@ -73,16 +80,12 @@ ISSUES=(); MANUAL=(); EXTRA_MANUAL=()   # EXTRA_MANUAL:--apply 路径产生的"�
 
 # fstab 行结构判据:UUID + 挂载点 + fstype 相等,且选项里含必含集合(顺序无关,不看整行字符串)。
 fstab_match() {
-  local line="$1" opts
-  [ "$(printf '%s\n' "$line" | awk '{print $1}')" = "UUID=$UUID" ] || return 1
-  [ "$(printf '%s\n' "$line" | awk '{print $2}')" = "$SHARED_MNT" ] || return 1
-  [ "$(printf '%s\n' "$line" | awk '{print $3}')" = ntfs3 ] || return 1
-  opts="$(printf '%s\n' "$line" | awk '{print $4}')"
-  case ",$opts," in *,windows_names,*) ;; *) return 1 ;; esac
-  case ",$opts," in *,nofail,*) ;; *) return 1 ;; esac
-  case ",$opts," in *,uid=*) ;; *) return 1 ;; esac
-  case ",$opts," in *,gid=*) ;; *) return 1 ;; esac
-  case ",$opts," in *,umask=*) ;; *) return 1 ;; esac
+  local f1 f2 f3 opts need
+  read -r f1 f2 f3 opts _ <<<"$1"
+  [ "$f1" = "UUID=$UUID" ] && [ "$f2" = "$SHARED_MNT" ] && [ "$f3" = ntfs3 ] || return 1
+  for need in windows_names nofail uid= gid= umask=; do
+    case ",$opts," in *",$need"*) ;; *) return 1 ;; esac
+  done
   return 0
 }
 
@@ -110,15 +113,22 @@ judge() {         # 只读判定:判据 -> checks/ISSUES/MANUAL
     src="$(mnt_src)"
     dbk_add_check "$SHARED_MNT 已挂载: $src"
     case "$src" in *"rw"*) dbk_add_check "挂载选项含 rw(可写)" ;; *) ISSUES+=("$SHARED_MNT 挂载选项不含 rw(当前只读)") ;; esac
+    fopt="$(awk -v m="$SHARED_MNT" '$2==m && $4 ~ /(^|,)force(,|$)/ {print $4}' "${DBK_PROC_MOUNTS:-/proc/mounts}" 2>/dev/null || true)"
+    [ -z "$fopt" ] || MANUAL+=("$SHARED_MNT 的挂载选项含 force(绕过脏卷探测):先卸载,回 Windows 跑 chkdsk /f 后再挂")
   else
-    ISSUES+=("$SHARED_MNT 未挂载(或挂的是本机目录,不是共享分区)")
+    prc=3; if [ -n "$DEV" ] && [ "$FSTYPE" = ntfs ]; then prc=0; ntfs_probe || prc=$?; fi
+    case "$prc" in
+      0) dbk_add_check "NTFS 读写探测通过(卷干净):不带 force 的 rw 挂载成功并已立刻卸载"; ISSUES+=("$SHARED_MNT 未挂载(或挂的是本机目录,不是共享分区)") ;;
+      1) MANUAL+=("共享盘疑似脏卷(dirty):$SHARED_MNT 未挂载;回 Windows 跑 chkdsk /f,不要用 force 强挂") ;;
+      2) MANUAL+=("NTFS 读写探测失败(非 dirty):$SHARED_MNT 未挂载,请人工核对卷状态与设备 $DEV") ;;
+      3) MANUAL+=("NTFS 脏卷探测需要 root:$SHARED_MNT 未挂载;普通用户下 mount 会因权限失败,请用 sudo 重跑 --check") ;;
+      *) ISSUES+=("$SHARED_MNT 未挂载(或挂的是本机目录,不是共享分区)") ;;
+    esac
   fi
-  if [ -n "$TARGET_USER" ] && id -u "$TARGET_USER" >/dev/null 2>&1; then
-    if [ "$(id -u "$TARGET_USER")" != 1000 ]; then
-      MANUAL+=("用户 $TARGET_USER 的 uid≠1000,而挂载选项固定 uid=1000:共享盘属主会与预期不一致")
-    fi
-  elif [ -n "$TARGET_USER" ]; then
+  if [ -n "$TARGET_USER" ] && ! id -u "$TARGET_USER" >/dev/null 2>&1; then
     MANUAL+=("无法解析目标用户 '$TARGET_USER'(桌面用户名需人工确认)")
+  elif [ -n "$TARGET_USER" ] && [ "$(id -u "$TARGET_USER")" != 1000 ]; then
+    MANUAL+=("用户 $TARGET_USER 的 uid≠1000,而挂载选项固定 uid=1000:共享盘属主会与预期不一致")
   fi
   return 0
 }
@@ -162,7 +172,6 @@ apply_run() {     # 唯一的写路径(库层已保证 --apply 必带 --yes)
     systemctl daemon-reload || dbk_add_check "警告: systemctl daemon-reload 失败"
     mount -a || dbk_obs "警告: mount -a 返回非零(带 nofail 的条目失败不致命),继续做挂载校验"
   fi
-  resolve_dev
   if [ "$(findmnt -rn -o SOURCE -T "$SHARED_MNT" 2>/dev/null | head -n 1 || true)" != "$DEV" ]; then
     dbk_add_check "分区未挂载到 $SHARED_MNT(fstab 行已写入,带 nofail)"
     dbk_exit FAIL "分区未挂载到 $SHARED_MNT:fstab 行已保留(带 nofail,不阻断启动),修正后重跑本脚本;回退见文档回滚节"

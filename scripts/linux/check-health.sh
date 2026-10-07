@@ -9,7 +9,8 @@
 #   ④ systemctl is-system-running = running(degraded → 失败;过渡态 → 需人工);
 #   ⑤ 根分区余量 ≥10%(df -P /)。
 # 记录项(取不到 → 2;不影响通过与否):Secure Boot 密钥注册(mok_check)、模块加载来源(nvidia / nouveau)、
-#   待更新(有已下载并排入下次启动的改动 → 需重启才生效)、journald 是否持久化。
+#   待更新(有已下载并排入下次启动的改动 → 需重启才生效)、journald 是否持久化、`/etc` 漂移条数
+#   (ostree admin config-diff;只报告,不作判据、不影响退出码 —— 回滚不回退 /etc)。
 # 只读保证:本脚本只有读动作;--apply 与 --check 输出相同(不改任何文件、不装包、不重启服务)。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误。
 # 用法: check-health.sh [--check|--apply] [--json] [--log <路径>] [--step NN-K] [-h]
@@ -33,7 +34,7 @@ dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "check-health"
 
-SC_STR="${DBK_SYSTEMCTL:-systemctl}"; DF_STR="${DBK_DF:-df}"
+SC_STR="${DBK_SYSTEMCTL:-systemctl}"; DF_STR="${DBK_DF:-df}"; OSTREE_CMD="${DBK_OSTREE:-ostree}"
 JRNL_DIR="${DBK_JOURNAL_DIR:-/var/log/journal}"
 SC=(); DF=()
 read -r -a SC <<<"$SC_STR"; read -r -a DF <<<"$DF_STR"
@@ -112,7 +113,7 @@ check_root_free() {
 }
 # 记录项:Secure Boot 密钥注册、模块加载来源、待更新、journald 持久化(取不到只记需人工)
 check_record() {
-  local rc mod mrc prc
+  local rc mod mrc prc cdiff cn
   rc=0
   if mok_check; then rc=0; else rc=$?; fi
   case "$rc" in
@@ -135,6 +136,13 @@ check_record() {
     *) MANUAL+=("待更新:读不到部署状态,无法判断是否有待重启的改动(需人工)") ;;
   esac
   if [ -d "$JRNL_DIR" ]; then dbk_add_check "journald 持久化:存在 $JRNL_DIR"; else MANUAL+=("journald 未持久化:$JRNL_DIR 不存在(见 05-7)"); fi
+  # 只报告项:/etc 漂移条数(ostree admin config-diff)。回滚不回退 /etc,漂移只提示、不作判据、不影响退出码。
+  if cdiff="$(command "$OSTREE_CMD" admin config-diff 2>/dev/null)"; then
+    cn="$(printf '%s\n' "$cdiff" | grep -c . || true)"
+    dbk_add_check "记录项:/etc 漂移 ${cn:-0} 条(ostree admin config-diff;只报告,不作判据)"
+  else
+    dbk_add_check "记录项: 无法读 /etc 漂移(ostree admin config-diff 不可用;只报告,不影响退出码）"
+  fi
 }
 
 check_all() {
