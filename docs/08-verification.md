@@ -11,7 +11,7 @@
 - Fedora 侧:`scripts/linux/verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual]`
 - Windows 侧:`scripts/windows/verify-all.ps1 [-Check|-Apply] [-BaselineDir <目录>] [-OutDir <目录>] [-ConfirmManual]`
 
-能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。**自动化覆盖的侧别**(两侧合计 44 项中的 23 项有自动判定):Fedora 侧 `scripts/linux/verify-all.sh` 自动判定 **A1 / A5 / A7 / B1 / B2 / B3 / B4 / B5 / B6 / B8 / B9 / B11 / E1 / E2 / F2 / F4 / F5 / F6 / F7 / F8 / F9**;Windows 侧 `scripts/windows/verify-all.ps1` 自动判定 **A1 / A3 / A4 / A5 / A7 / E1 / E2**;其余按「需人工」登记。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到缺省落点 `<baseline>/auto/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录(如 `baseline/auto/win/` 与 `baseline/auto/linux/`),再把两份汇总人工合并进填写版(避免互相覆盖)。**汇总落点(2026-10-04 改)**:两个总控的**缺省汇总落点是 `<baseline>/auto/08-verification.md`**——不再落在人填写版 `baseline/08-verification.md` 上,那份填写版只手工维护;带 `--out-dir`/`-OutDir` 时按参数指到别的目录。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
+能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。**自动化覆盖的侧别**(两侧合计 45 项中的 23 项有自动判定):Fedora 侧 `scripts/linux/verify-all.sh` 自动判定 **A1 / A5 / A7 / B1 / B2 / B3 / B4 / B5 / B6 / B8 / B9 / B11 / E1 / E2 / F2 / F4 / F5 / F6 / F7 / F8 / F9**;Windows 侧 `scripts/windows/verify-all.ps1` 自动判定 **A1 / A3 / A4 / A5 / A7 / E1 / E2**;其余按「需人工」登记。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到缺省落点 `<baseline>/auto/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录(如 `baseline/auto/win/` 与 `baseline/auto/linux/`),再把两份汇总人工合并进填写版(避免互相覆盖)。**汇总落点(2026-10-04 改)**:两个总控的**缺省汇总落点是 `<baseline>/auto/08-verification.md`**——不再落在人填写版 `baseline/08-verification.md` 上,那份填写版只手工维护;带 `--out-dir`/`-OutDir` 时按参数指到别的目录。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
 
 **执行顺序建议**:A -> B -> C -> F -> D -> E。D 组含"真做一次退役"与"真做一次原地重装",做完这台设备上可能已没有 Linux 或已被格式化,必须排最后(F 组要在 D 组真做之前完成);E 组是归档收尾。**验收期间不改分区表、不改固件设置**(设计 I4)。
 
@@ -85,7 +85,7 @@
 
 这组全绿才可以进下一步
 
-### F. 健壮性组(F1-F9)
+### F. 健壮性组(F1-F10)
 
 - [ ] F1 部署回滚演练 + 原地重装演练(参考设备必做) -> 看到:**真做一次**:按 `05-9` 先 `--pin` 固定当前部署,更新或分层一次,再 `rollback-deploy.sh --apply --yes` 回到上一部署,重启后桌面可用、`nvidia` 模块仍加载、`/var` 下的用户数据仍在(`/home` 是 `/var/home` 的符号链接,回滚不回退数据),最后 `--unpin`;并按 `07-4` 或 `07-5` 完整推演一次原地重装(只格 `C:` 或只格 root),确认 `D:` 上的数据与 `~` 下要留的文件在重装前后哈希不变(需人工)
 - [ ] F2 部署级回滚可用 -> 看到:`bash scripts/linux/rollback-deploy.sh --check` 能读出部署列表与回滚候选(部署数 ≥ 2,索引 1 = 上一部署);`--pin <索引> --yes` / `--unpin <索引> --yes` 能固定与解除当前部署(脚本判定)
@@ -96,8 +96,9 @@
 - [ ] F7 OOM 防护 -> 看到:`systemctl is-active systemd-oomd` 为 `active`;`zramctl` 有 `/dev/zram0`,大小约 `min(RAM/2, 8GiB)`(脚本判定)
 - [ ] F8 磁盘健康 -> 看到:`systemctl is-active smartd` 为 `active`;`smartctl -H <DISK>` 报 `SMART overall-health self-assessment test result: PASSED`(脚本判定)
 - [ ] F9 挂载稳健 -> 看到:`awk '!/^[[:space:]]*#/ && NF>=4 && $2!="/" {print $2, $4}' /etc/fstab` 逐行核对——L4 写入的共享盘行与 swapfile 行(以及独立 `/boot` 行)都带 `nofail`;`/boot/efi` 属必需挂载,**不加** `nofail`;`findmnt --verify` 不报 error(脚本判定)
+- [ ] F10 启动失败自动回滚演练(参考设备必做) -> 看到:在 `setup-greenboot.sh` 就位后**故意让健康检查失败**(例如临时把 `/etc/greenboot/check/required.d/60-dbk-health.sh` 改成 `exit 1`),重启两次后自动退回上一部署、桌面可用、`BootOrder` 首位仍是 Windows Boot Manager;随后复原该文件并重跑 `bash scripts/linux/setup-greenboot.sh --check` 复检为绿(需人工;设计 06 第 4 节)
 
-脚本:Fedora 侧由 `scripts/linux/verify-all.sh` 判定 F2、F4–F9(F5 复用 `scripts/linux/set-updates.sh --check`,F2 复用 `scripts/linux/rollback-deploy.sh --check`);F1 是"真做一次"的演练,两侧都记 `需人工`。
+脚本:Fedora 侧由 `scripts/linux/verify-all.sh` 判定 F2、F4–F9(F5 复用 `scripts/linux/set-updates.sh --check`,F2 复用 `scripts/linux/rollback-deploy.sh --check`);**引导器状态不在本组的自动条目内** —— 它由 `07-7` 周期巡检与 `05-7`/`05-10` 的重启前手工跑 `bash scripts/linux/check-bootloader.sh --check`(总控不调它);F1 是"真做一次"的演练,F10 是"故意失败"的回滚演练,两侧都记 `需人工`。
 
 这组全绿才可以进下一步
 

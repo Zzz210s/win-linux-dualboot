@@ -91,16 +91,16 @@
 
 ### 07-7 周期巡检(Windows 大版本 / 累积更新之后)
 
-做:每次更新之后复核四项基线,顺带看 Linux 侧的系统体检与模块签名;只看不改。
+做:每次更新之后复核 Windows 侧四项基线,并跑 Linux 侧系统体检、模块签名、引导器与 root 文件系统巡检;只看不改。
   1. 管理员会话跑 Windows 侧巡检(`-Check` 缺省且只读;本脚本没有任何写动作,`-Apply` 与 `-Check` 同义)
      看到:四项逐条给三值结果"通过 / 不通过 / 需人工介入"——① `BootOrder` 首位仍是 Windows Boot Manager;② `\EFI\Microsoft\` 与 `manifest.sha256` 逐文件一致;③ `{bootmgr}` 的 `path` 与基线一致;④ BitLocker 状态与 `02-preflight-report.md` 的记录一致
-  2. 在 Silverblue 里跑系统体检与模块签名
-     看到:`scripts/linux/check-health.sh --check` 报 PASS(部署列表可读、会话为 wayland、显卡来源与计划一致、更新策略为只检查/下载、根分区余量 ≥10%)或逐条给出失败项;`scripts/linux/check-signature.sh --check` 报 PASS(签名者非空且 Secure Boot enabled)或"需人工"
+  2. 在 Silverblue 里跑系统体检、模块签名、引导器与 btrfs 巡检
+     看到:`scripts/linux/check-health.sh --check` 报 PASS(部署列表可读、会话为 wayland、显卡来源与计划一致、更新策略为只检查/下载、根分区余量 ≥10%,输出另含一行 `ostree admin config-diff` 的 `/etc` 漂移条数)或逐条给出失败项;`scripts/linux/check-signature.sh --check` 报 PASS(签名者非空且 Secure Boot enabled)或"需人工";`scripts/linux/check-bootloader.sh --check` 报 PASS(引导器未落后、`/boot/loader/grub.cfg` 在位、BLS 条目数 ≥ 部署数且 ≥ 2);`scripts/linux/check-integrity.sh --check` 报 PASS(`btrfs device stats /` 各项错误计数为 0;非 btrfs 或读不到 -> 需人工),非零错误计数即硬失败
   3. 逐项复核镜像来源:`sudo rpm-ostree status` 显示的来源(镜像与分支)与计划一致,分层包列表(`layered packages`)与部署记录一致
      看到:来源行与 `05-3` 指定的 ublue NVIDIA 镜像/分支逐字对应;分层包列表与计划一致(不一致就按 `05-3` / `05-9` 处置)
-  4. 把巡检输出连同结论记进 `baseline/` 或清单备注
-     看到:四项结论与偏差都有文字;没有为了"让基线成立"去改 `baseline/` 的既有记录
-脚本:scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline;scripts/linux/check-health.sh --check;scripts/linux/check-signature.sh --check
+  4. 把巡检输出连同结论(含 `/etc` 漂移条数)记进 `baseline/` 或清单备注
+     看到:六项巡检结论与偏差都有文字;没有为了"让基线成立"去改 `baseline/` 的既有记录
+脚本:scripts/windows/verify-baseline.ps1 -Check -BaselineDir baseline;scripts/linux/check-health.sh --check;scripts/linux/check-signature.sh --check;scripts/linux/check-bootloader.sh --check;scripts/linux/check-integrity.sh --check
 坑:更新之后 ESP 出现差异要当"引导被接管"处理,先按 `07-1` 判层,而不是先重做基线;`bcdboot` 重建过 BCD 的设备,②项的差异属预期(记备注);签名者取不到时不要关 Secure Boot(那会破坏 ublue 镜像内预签名 nvidia 模块的路径),补救走 `05-3`。
 出错时:① 或 ③ 不符 -> 按 `07-3` / `07-6` 复原并把偏差写进备注;更新后两个系统都进不去但分区与文件都在 -> 属 SBAT / DBX 类事故(微软 2024-08 起推送的 DBX 会把旧 SBAT 判为过旧):清 SBAT 策略(Windows 侧清 `SbatLevel` 注册表值,Linux 侧 `sudo mokutil --set-sbat-policy delete`)后再按 `07-3` / `07-6` 复原;具体键值名与命令**以官方公告为准**。
 

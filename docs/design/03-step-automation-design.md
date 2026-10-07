@@ -187,10 +187,10 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 05-4 | 时间(RTC 走 UTC) | `linux/set-time.sh` |
 | 05-5 | 蓝牙配对密钥同步 | `linux/bt-keys-sync-wrapper.sh` |
 | 05-6 | zram 与 swapfile | `linux/storage.sh` |
-| 05-7 | journald 与更新策略 | `linux/set-journald.sh` + `linux/set-updates.sh`(调 `dbk-update.sh`;`rpm-ostreed-automatic` 只 `check`/`download`、不自动应用) |
+| 05-7 | journald 与更新策略 | `linux/set-journald.sh` + `linux/set-updates.sh`(调 `dbk-update.sh`;`rpm-ostreed-automatic` 只 `check`/`download`、不自动应用)+ `linux/check-bootloader.sh`(引导器状态与更新后复读) |
 | 05-8 | SSH 与 SMART | `linux/set-remote-health.sh`(分层装 `smartmontools`;`sshd` 与 `smartd` 用 `systemctl enable --now`) |
-| 05-9 | **部署级回滚与变更前 pin** | `linux/rollback-deploy.sh`(调 `dbk-rollback.sh`:列出部署 / `--pin` / `--check` / `--apply` 回滚到上一部署) |
-| 05-10 | 发行版升级(约 6 个月一次) | `linux/upgrade-release.sh`(前置 `rpm-ostree pin` 与留档 -> `rpm-ostree rebase` -> 后置复检) |
+| 05-9 | **部署级回滚与变更前 pin** | `linux/rollback-deploy.sh`(调 `dbk-rollback.sh`:列出部署 / `--pin` / `--check` / `--apply` 回滚到上一部署 / `--prune` 清理 pending 与 rollback 部署)+ `linux/setup-greenboot.sh`(greenboot 健康检查与自动回滚) |
+| 05-10 | 发行版升级(约 6 个月一次) | `linux/upgrade-release.sh`(前置 `rpm-ostree pin` 与留档 -> `rpm-ostree rebase` -> 后置复检)+ `linux/check-bootloader.sh`(重启前复读引导器) |
 | 05-11 | 回 Windows 入口 | `linux/reboot-to-windows.sh` |
 | 05-12 | 落 L4 产物 | `linux/collect-l4.sh` |
 | 05-13 | L4 汇总执行(可选) | `linux/first-boot.sh` + `linux/hardening.sh` |
@@ -200,7 +200,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 07-4 | 只重装 Windows | `windows/verify-windows-baseline.ps1`(安装人工) |
 | 07-5 | 只重装 Silverblue | `linux/check-partition-plan.sh --track D`(安装人工;含"ESP 与 `/boot` 绝不格式化"断言) |
 | 07-6 | 基线回滚 | `windows/restore-esp.ps1` |
-| 07-7 | 周期巡检 | `windows/verify-baseline.ps1` + `linux/check-health.sh` + `linux/check-signature.sh` |
+| 07-7 | 周期巡检 | `windows/verify-baseline.ps1` + `linux/check-health.sh` + `linux/check-signature.sh` + `linux/check-bootloader.sh` + `linux/check-integrity.sh` |
 | 07-8 | 应急纪律 | 人工(纪律条款;卡内标注"本条无脚本") |
 | 07-9 | 归位引导顺序 | `windows/restore-boot-order.ps1` |
 | 07-10 | 备份现状 | `windows/backup-esp.ps1 -OutDir D:\dbk-l5-backup` |
@@ -225,7 +225,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | **已删除**(Kubuntu 专属,本次回切后不再存在) | `linux/rollback-pkg.sh`(包级回退)、`linux/step-snap-free.sh`(snap 规避);原子版上由部署级回滚与"无 snap 机制"取代。`linux/dbk-ostree.sh`、`linux/graphics-mok.sh` 两个名字在更早的 Kubuntu 切换中已删除,本次由 `dbk-pkg.sh` / `dbk-driver.sh` 承担其职责 |
 | 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受基础系统切换影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约;四个都已在 2026-09-24 补齐(`backup-esp` 更早带 `-Check`;`set-bootnext` 见第 9 节 K5 行,`preflight` 与 `verify-baseline` 见第 9 节 K6 行):`-Check` 缺省且零写、`-Apply` 才落盘(`preflight` 的 `-Apply` 写体检报告,`verify-baseline` 无写动作故 `-Apply` 与 `-Check` 同义)、`-Json`/`-Log`/`-Yes`/`-Step` 与库层一致。唯一保留差异:`preflight` 的 `-Json` 仍是它自己的查询 schema(`script`/`only`/`rows[]`/`red`/`yellow`/`verdict`),不套用第 2 节的契约 JSON,所以 `dbk.ps1 <preflight 步骤号> -Json` 只能得到总控合成的失败记录(含原因文本,不静默) |
 
-**合计**:动作卡 **47 张**(01 四 + 02 四 + 03 九 + 04 四 + 05 十三 + 07 十三),对应**步骤脚本 45 个**——其中 `check-partition-plan.sh` 服务 02-3/04-2/07-5 三张卡,`verify-windows-baseline.ps1` 服务 03-1/07-4,`backup-esp.ps1` 服务 03-8/07-10,`verify-baseline.ps1`+`check-health.sh`+`check-signature.sh` 共服务 07-7;另有**库与接口 15 个**(两侧 `dbk-cli`、两侧 `dbk-obs`、`dbk-log.sh`、`dbk-head.sh`、`dbk-pkg.sh`、`dbk-update.sh`、`dbk-rollback.sh`、`dbk-driver.sh`、`dbk-win-probe.ps1`、`dbk.sh`、`dbk.ps1`、`verify-all.sh`、`verify-all.ps1`)、**仓库自检 4 个**(`check-docs.sh`、`check-docs-lib.sh`、`check-docs-repo.sh`、`check-scripts.sh`)与**步骤索引 2 个**(`linux/steps.tsv`、`windows/steps.tsv`)。**口径**(本行与第 8 节代价表同口径,已按仓库实际重算)= 卡:各手册 `### NN-K` 标题总数 = **47 张**(`docs/10-faq.md` 的 `### 10-K` 是问答条目,不计入);步骤脚本:`scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = **45**;库与接口 = 不带 `# 对应卡:` 的库文件数 = **15**。
+**合计**:动作卡 **47 张**(01 四 + 02 四 + 03 九 + 04 四 + 05 十三 + 07 十三),对应**步骤脚本 48 个**——其中 `check-partition-plan.sh` 服务 02-3/04-2/07-5 三张卡,`verify-windows-baseline.ps1` 服务 03-1/07-4,`backup-esp.ps1` 服务 03-8/07-10,`verify-baseline.ps1`+`check-health.sh`+`check-signature.sh`+`check-bootloader.sh`+`check-integrity.sh` 共服务 07-7;另有**库与接口 15 个**(两侧 `dbk-cli`、两侧 `dbk-obs`、`dbk-log.sh`、`dbk-head.sh`、`dbk-pkg.sh`、`dbk-update.sh`、`dbk-rollback.sh`、`dbk-driver.sh`、`dbk-win-probe.ps1`、`dbk.sh`、`dbk.ps1`、`verify-all.sh`、`verify-all.ps1`)、**仓库自检 4 个**(`check-docs.sh`、`check-docs-lib.sh`、`check-docs-repo.sh`、`check-scripts.sh`)与**步骤索引 2 个**(`linux/steps.tsv`、`windows/steps.tsv`)。**口径**(本行与第 8 节代价表同口径,已按仓库实际重算)= 卡:各手册 `### NN-K` 标题总数 = **47 张**(`docs/10-faq.md` 的 `### 10-K` 是问答条目,不计入);步骤脚本:`scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = **48**;库与接口 = 不带 `# 对应卡:` 的库文件数 = **15**。
 
 ## 7. 夹具测试要求(每个脚本的最低验证)
 
@@ -240,7 +240,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 | 项 | 代价 |
 |---|---|
-| 规模 | 动作卡 **47 张** + **45 个步骤脚本** + **15 个库与总控入口**(与第 6 节合计同口径,已按仓库实际重算:卡 = 各手册 `### NN-K` 标题总数 = 47 张;步骤脚本 = `scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = 45;库与总控 = 不带 `# 对应卡:` 的库文件数 = 15);仓库脚本类文件总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **66 个**(45 步骤脚本 + 15 库与总控 + 4 仓库自检 + 2 步骤索引);实施任务从 21 个增到约 29 个 |
+| 规模 | 动作卡 **47 张** + **48 个步骤脚本** + **15 个库与总控入口**(与第 6 节合计同口径,已按仓库实际重算:卡 = 各手册 `### NN-K` 标题总数 = 47 张;步骤脚本 = `scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = 48;库与总控 = 不带 `# 对应卡:` 的库文件数 = 15);仓库脚本类文件总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **69 个**(48 步骤脚本 + 15 库与总控 + 4 仓库自检 + 2 步骤索引);实施任务从 21 个增到约 29 个 |
 | 审查 | 每个脚本都要过"实现 + 审查 + 修复轮",工作量约翻倍 |
 | **验证等级** | 这些脚本**全部无法在真机上验证**(无 Fedora 装机环境 / 无第二台 Windows)→ 只有夹具级验证。文档与**脚本头**都必须标注"夹具级验证,真机未跑";`08-verification.md` 的参考设备首次真跑即是对全套脚本的首次真机验证 |
 | 收益 | 每步可自动判定(减少"照着文档敲错"),危险步骤有前置断言与复读(比人手工点更安全),卡与脚本双向绑定(C9)防脱钩 |
@@ -270,3 +270,4 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 2026-09-25 | **计数行按仓库实际重算(实施计划任务 17)**:第 6 节合计与第 8 节代价表统一为 **47 张动作卡 + 45 个步骤脚本 + 15 个库与接口**(口径:卡 = 各手册 `### NN-K` 标题总数,`docs/10-faq.md` 的 `### 10-K` 不计;步骤脚本 = `scripts/{linux,windows}/steps.tsv` 脚本条目去重数;库与接口 = 不带 `# 对应卡:` 的库文件数),仓库脚本类文件总数 **66 个**(45 + 15 + 4 仓库自检 + 2 步骤索引);删掉"设计口径 47 / 手册实测 48,差 1 张待删 snap 卡"与"当前含待删的 `step-snap-free.sh` / `rollback-pkg.sh`"两处中间态说明(两卡已随任务 12/14 删除) |
 | 2026-09-27 | **C5 豁免收窄 + 脚本头契约拆分(v0.2.1 复审修正)**:C5 的历史豁免改为**窄口径**(仅「## 变更历史」段与「| YYYY-MM-DD |」表格行;宽词表豁免因实测白丢 13 条活引用而回退);`dbk_header_*` 三函数拆出 `scripts/linux/dbk-head.sh`,c9d 白名单 18 -> **19 项**、库与总控入口 14 -> **15 个**、仓库脚本文件总数 65 -> **66 个**;新增夹具「活引用同行含历史措辞必须报 C5」 |
 | 2026-09-28 | **独立审查后的两批修复**:① Linux 侧 5 个写系统脚本补 `# 破坏性:1` 与 `--yes` 门槛(`reboot-to-windows` / `set-time` / `set-journald` / `set-updates` / `set-remote-health`,`steps.tsv` 破坏性列 0→1);② `pkg_needs_reboot` 补 `"staged"` 键存在性护栏(键缺失 → 2,与 `dbk-rollback` 对称);③ `check-partition-plan` 的"检查跳过"改"需人工";④ `collect-l4` 不再吞接口 stderr;⑤ `verify-all.sh` 实现 `--step` 校验/过滤 + B9 判据中英双口径;⑥ Windows 侧 `backup-esp.ps1` 补全 CLI 契约并改缺省只读、`mountvol /d` 走 `Invoke-DbkExe` 容错、`preflight.ps1` 的 115GiB 文案与 root fstype 期望回切 btrfs |
+| 2026-10-06 | **批次 M1(原子机制)文档侧计数重算 + 新增步骤脚本**:新增 `scripts/linux/check-bootloader.sh`(卡 05-7/05-10/07-7:引导器状态与更新后复读断言)与 `scripts/linux/setup-greenboot.sh`(卡 05-9:greenboot 健康检查与自动回滚);`dbk-rollback.sh` 增 `--prune`(`--apply --prune --yes` 才执行,被 `pin` 的部署绝不删);`check-health.sh` 增 `ostree admin config-diff` 漂移条数,并拆出 `check-integrity.sh`(root btrfs `device stats` / scrub)。卡与脚本数同步为 **47 张动作卡 + 48 个步骤脚本 + 15 个库与接口**(仓库脚本类文件总数 66 -> **69**),第 6 节合计、第 8 节代价表与本行同口径重算;卡 05-1/05-3/05-7/05-9/05-10 与 07-7 交叉引用同步 |

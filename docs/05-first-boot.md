@@ -21,11 +21,11 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   2. 前提三:挂载选项固定 `rw,uid=1000,gid=1000,umask=022,windows_names,nofail,noatime`(`ntfs3` 没有 POSIX 权限位,`windows_names` 阻止创建 Windows 非法文件名)
      看到:`templates/fstab.snippet` 的共享盘行选项齐备;核对脚本对缺项记 FAIL
   3. 先空跑再执行:`sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --check` -> 加 `--apply --yes`
-     看到:空跑逐条列出 checks(首次执行时"fstab 尚未写入"判 FAIL 属预期);`--apply` 报 PASS,`findmnt /mnt/shared` 为 `ntfs3`、选项含 `rw`/`windows_names`/`nofail`,写测试创建并删除 `/mnt/shared/.dbk-write-test` 成功
+     看到:空跑逐条列出 checks(首次执行时"fstab 尚未写入"判 FAIL 属预期);`--check` 用 `ntfs3` 的不带 `force` 的**读写探测**(挂到临时挂载点、成功即立刻卸载)判卷是否 dirty,探测失败记**需人工**并提示回 Windows 跑 `chkdsk /f`;`--apply` 报 PASS,`findmnt /mnt/shared` 为 `ntfs3`、选项含 `rw`/`windows_names`/`nofail`,写测试创建并删除 `/mnt/shared/.dbk-write-test` 成功
   4. 前提四(设计 5.3):抄下"不要在共享盘上做的事"——不放 `~/.config`/`~/.ssh`/`~/.gnupg` 等配置与凭据目录;不放依赖符号链接、硬链接、可执行位或大小写敏感重命名的代码仓库;不放需要权限位或 setuid 语义的脚本与服务数据;不在 Linux 侧对共享盘做大目录批量重命名或移动;不按"最近下载"整目录清理(`D:\Downloads` 两边共用);共用目录里不放依赖后缀匹配的临时产物;关键目录在别处保留第二份备份
      看到:这份清单已抄进本机部署记录;清单里的东西一律留在本地 root
 脚本:sudo bash scripts/linux/mount-shared.sh --uuid <SHARED_PART_UUID> --check / --apply --yes
-坑:`fstab` 行必须带 `nofail`(分区缺失或写坏时不阻断启动,设计 4.5);Windows 处于休眠或快速启动状态时绝不让 Linux 挂载共享盘。
+坑:`fstab` 行必须带 `nofail`(分区缺失或写坏时不阻断启动,设计 4.5);Windows 处于休眠或快速启动状态时绝不让 Linux 挂载共享盘;卷 dirty(未在 Windows 跑 `chkdsk /f`)时**不要强挂**,`force` 会绕过探测把卷写坏。
 出错时:读不到 UUID -> 与 `baseline/02-partitions.txt` 交叉核对后重跑,不要改成 `C:` 或 Linux 分区;写测试失败 -> 先查 `03-2` 与 `manage-bde -status D:`,不要反复重挂。
 
 ### 05-2 家目录数据重定向(只重定向文档类目录)
@@ -46,7 +46,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 做:把系统 `rebase` 到 ublue 的 **NVIDIA 变体**(镜像内 nvidia 模块**已预签名**),再重启进 MOK 界面做**一次性密钥注册**(设计 02 第 3 节 D2、设计 06 第 2 节 D3)。
   1. 先看现状:`sudo bash scripts/linux/graphics.sh --check`
      看到:四项判据(① `modinfo -F signer nvidia` 非空 ② `mokutil --list-enrolled` 含 ublue 密钥 ③ `lsmod` 有 `nvidia` ④ `XDG_SESSION_TYPE` 为 `wayland`);零写;未 rebase / 未重启 / 未注册 MOK 的 ①②③ 在 `--check` 下记 **FAIL**(退出 1),④不符也记 FAIL;只有 ①②③ 读不到时(接口返 2)才记"需人工"
-  2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`(镜像形态已核实 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = gts / stable / stable-daily / latest)。**脚本在 rebase 前先做版本一致性前置断言**(`driver_release_guard`):本机 Fedora 主版本(读 `/etc/os-release` 的 `VERSION_ID`)必须等于你**按 ublue 官方文档核对后声明的目标版本** —— **不写死 stream ↔ 版本的映射**(stream 集合与对应版本会随版本演进变),先查文档再声明:`sudo DBK_UBLUE_FEDORA=44 bash scripts/linux/graphics.sh --apply --yes`;不一致或未声明 → 退出码 2 需人工且**不发出 rebase**;确实要跨版本时才显式给 `DBK_ALLOW_CROSS_RELEASE=1`,重启后生效
+  2. 提交 rebase:`sudo bash scripts/linux/graphics.sh --apply --yes`(镜像形态已核实 `ghcr.io/ublue-os/bluefin-nvidia:<stream>`,streams = `stable` / `latest` / `testing`(+ `beta`);`stable-daily` 已被上游移除)。**脚本在 rebase 前先做版本一致性前置断言**(`driver_release_guard`):本机 Fedora 主版本(读 `/etc/os-release` 的 `VERSION_ID`)必须等于你**按 ublue 官方文档核对后声明的目标版本** —— **不写死 stream ↔ 版本的映射**(stream 集合与对应版本会随版本演进变),先查文档再声明:`sudo DBK_UBLUE_FEDORA=44 bash scripts/linux/graphics.sh --apply --yes`;不一致或未声明 → 退出码 2 需人工且**不发出 rebase**;确实要跨版本时才显式给 `DBK_ALLOW_CROSS_RELEASE=1`,重启后生效
      看到:断言通过时报 PASS"已 rebase 到 ublue 的 NVIDIA 变体:需重启"(未通过则报"版本一致性前置断言未通过"且 `rpm-ostree rebase` 一次都没发),并提示重启后在 MOK 界面完成注册;重启后 `nvidia-smi` 有输出、`lsmod` 有 `nvidia`、`modinfo -F signer nvidia` 非空
   3. 一次性 MOK 注册(必须人工,接口不代跑):重启进 MOK 界面按提示完成注册(已核实:任务 `ujust enroll-secure-boot-key`、密码 `universalblue`、待导入密钥 `/etc/pki/akmods/certs/akmods-ublue.der`;若 Secure Boot 已开启,ublue/Bazzite 文档建议先关再注册、注册后重开),也可在会话内跑 `ujust enroll-secure-boot-key` 后再重启一次;随后复跑 `--check` 四项
      看到:`mokutil --list-enrolled` 含 ublue 密钥;四项全过;注册只需做一次,不是每次更新都重来
@@ -55,7 +55,7 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
   5. nouveau 兜底:桌面起不来时不要长按电源,按 `07-2` 从 GRUB 提示符回 Windows;能在 GRUB 菜单选上一部署就用旧部署启动,或按 `05-9` 回滚到 stock 部署(回滚后由 nouveau 起桌面)
      看到:系统仍可用;处置顺序是"选上一部署 / 回滚 -> rebase 回 stock 部署 -> 才考虑发行版问题"
 脚本:sudo bash scripts/linux/graphics.sh --check / --apply --yes
-坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码已于 2026-09-27 核实(见本卡第 2/3 步;上游端口或分支改名时以 ublue 发布页为准)。**stream ↔ Fedora 版本的对应关系随版本演进,以 ublue 官方文档为准**:不要凭记忆或旧笔记填 `DBK_UBLUE_FEDORA`,也不要在没核对的情况下用 `DBK_ALLOW_CROSS_RELEASE=1` 跨版本(跨版本 rebase 会换掉整个发行版基线)。
+坑:本步**不关 Secure Boot、不自签密钥** —— 模块签名由 ublue 镜像内预置,自签反而会破坏上游的预签名路径(设计 02 第 3 节 D2);Turing(RTX 2000 / GTX 16xx)及以后的显卡应走 `-nvidia-open` 变体(老 proprietary 镜像自 Aurora 43 起停建),镜像名按参考设备的显卡型号在 ublue 发布页复核;**本步只判"签名者非空 + ublue 密钥已注册 + nvidia 已加载"三项,不判镜像来源与 Secure Boot 链整体**,那两项由 `07-7` 的巡检承担;镜像名、`ujust` 任务名与 MOK 密码已于 2026-09-27 核实(见本卡第 2/3 步;上游端口或分支改名时以 ublue 发布页为准)。**stream ↔ Fedora 版本的对应关系随版本演进,以 ublue 官方文档为准**:不要凭记忆或旧笔记填 `DBK_UBLUE_FEDORA`,也不要在没核对的情况下用 `DBK_ALLOW_CROSS_RELEASE=1` 跨版本(跨版本 rebase 会换掉整个发行版基线)。
 出错时:版本一致性前置断言未过(退出码 2)-> 按接口输出核对本机版本与所选 stream 的目标版本后重跑;确实要跨版本才给 `DBK_ALLOW_CROSS_RELEASE=1`。装完黑屏 -> 按 `10-1` 处置(显卡驱动专项见 `10-21`);驱动不认(`lsmod` 有 `nouveau`、无 `nvidia`)-> 按 `05-9` 回滚到上一部署,不要在这一步反复试。签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`。
 
 ### 05-4 时间(RTC 走 UTC)
@@ -108,7 +108,9 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
      看到:写入的 `rpm-ostreed` 片段(`templates/rpm-ostreed.snippet`)含 `AutomaticUpdatePolicy=check`,不含"自动应用/自动重启"的取值;`systemctl is-enabled rpm-ostreed-automatic.timer` 为 enabled
   3. 变更(升级/分层)前复核一次:`sudo bash scripts/linux/set-updates.sh --check`
      看到:三项判据全过;配置被改回自动应用时这里变 FAIL,按 `05-9` 固定当前部署后再处理
-脚本:sudo bash scripts/linux/set-journald.sh --check / --apply --yes;sudo bash scripts/linux/set-updates.sh --check / --apply --yes
+  4. **重启前先跑** `sudo bash scripts/linux/check-bootloader.sh --check`
+     看到:引导器更新后 `/boot/loader/grub.cfg` 必须在位、BLS 条目不得为 0;否则**不要重启**,先走 `07-2` / `07-6`(上游出过 `bootupctl update` 后 grub.cfg 丢失 -> 掉进 `grub>` 的形态)
+脚本:sudo bash scripts/linux/set-journald.sh --check / --apply --yes;sudo bash scripts/linux/set-updates.sh --check / --apply --yes;sudo bash scripts/linux/check-bootloader.sh --check
 坑:自动应用与自动重启同"变更前先备份与留档"直接冲突;原子版没有"只装安全更新"这个粒度,别照搬 Ubuntu 的包粒度口径 —— 语义就是"只检查/下载"(设计 06 第 2 节 D5);`/var` 不属于部署,日志不随回滚丢失(`journalctl -b -1` 可回看上一轮启动)。
 出错时:journald 起不来 -> 看 `journalctl -u systemd-journald` 定位;定时器未 enabled -> 手工 enable 后重跑,不要改成自动应用。
 
@@ -136,7 +138,13 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
      看到:脚本报"已排入下次启动";**重启前当前系统照常可用、也未被改动**(想反悔,重启前再跑一次本步)
   4. 用完后解除固定:`sudo bash scripts/linux/rollback-deploy.sh --unpin 0 --yes`
      看到:该部署的 `pinned` 标记消失;`/home` 是 `/var/home` 的符号链接,**不属于部署,回滚不丢用户数据**
-脚本:sudo bash scripts/linux/rollback-deploy.sh --check / --apply --yes / --pin <索引> --yes / --unpin <索引> --yes
+  5. 清理候选先看后做:`sudo bash scripts/linux/rollback-deploy.sh --check --prune` 报告会删掉哪些 pending 与 rollback 部署,确认后再 `sudo bash scripts/linux/rollback-deploy.sh --apply --prune --yes`
+     看到:`--check --prune` 列出候选且零写;`--apply --prune --yes` **被 `pin` 的部署绝不删**,只删未被固定的 pending / rollback 部署
+  6. 启动失败自动回滚:先 `sudo bash scripts/linux/setup-greenboot.sh --check`,再 `sudo bash scripts/linux/setup-greenboot.sh --apply --yes` 写健康检查(不自动装 `greenboot`,除非显式 `--install-greenboot`)
+     看到:`--check` 报 `greenboot` 是否预装与 `/etc/greenboot/check/required.d/60-dbk-health.sh` 是否与模板逐字一致;健康检查失败时 greenboot 自动退回上一部署
+  7. 回滚前后对比 `/etc`:`ostree admin config-diff`
+     看到:回滚前后各跑一次并记下漂移条数 —— **回滚不回退 `/etc`**,漂移要人工处置
+脚本:sudo bash scripts/linux/rollback-deploy.sh --check / --apply --yes / --pin <索引> --yes / --unpin <索引> --yes / --check --prune / --apply --prune --yes;sudo bash scripts/linux/setup-greenboot.sh --check / --apply --yes
 坑:**"回滚可用"的唯一判据是部署数 ≥ 2**,不是"已 pin";索引随重启与新部署变化,必须即读即用;回滚只是把上一部署排为下次启动,不立刻替换正在运行的系统。
 出错时:部署列表读不到 -> 用 `sudo` 重跑或人工 `sudo rpm-ostree status` 核对;回滚后仍起不来 -> 在 GRUB 菜单选上一部署,或按 `07-1` 判层,不要直接重装。
 
@@ -147,9 +155,11 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
      看到:五项判据(部署列表可读 / 当前部署已 `pin` / `baseline/` 在位、可备份 / 更新策略仍是"只检查/下载" / 已指定升级目标分支 `DBK_RELEASE_REF`);当前部署未 pin 或更新策略不符判 FAIL;部署列表读不到、`baseline/` 缺失与未给 `DBK_RELEASE_REF` 记"需人工"(退出 2),先补齐再谈升级
   2. 执行:`DBK_RELEASE_REF='<远程:分支>' sudo bash scripts/linux/upgrade-release.sh --apply --yes`
      看到:脚本先把当前部署固定(pin),再复核五条前置(任一未达成即不执行),然后把 `baseline/` 备份到 `<backup-dir>/<时间戳>-baseline/`,最后提交 rebase 到目标分支并提示重启(分支号每 6 个月推进一次,实施时按 Fedora 官方公告取值)
-  3. 重启后复核:`sudo bash scripts/linux/upgrade-release.sh --check` 与 `sudo bash scripts/linux/graphics.sh --check`
+  3. **重启前先跑** `sudo bash scripts/linux/check-bootloader.sh --check`
+     看到:引导器更新后 `/boot/loader/grub.cfg` 必须在位、BLS 条目不得为 0;否则**不要重启**,先走 `07-2` / `07-6`
+  4. 重启后复核:`sudo bash scripts/linux/upgrade-release.sh --check` 与 `sudo bash scripts/linux/graphics.sh --check`
      看到:版本已更新;会话仍为 `wayland`;`nvidia-smi` 与 `modinfo -F signer nvidia` 正常(签名与 Secure Boot 状态细查见 `07-7` 的 `scripts/linux/check-signature.sh`);不满意则按 `05-9` 回滚到已固定的部署
-脚本:sudo bash scripts/linux/upgrade-release.sh --check / --apply --yes
+脚本:sudo bash scripts/linux/upgrade-release.sh --check / --apply --yes;sudo bash scripts/linux/check-bootloader.sh --check
 坑:**没固定当前部署、没留档就不要升级** —— 翻车后没有唯一的退回目标;升级 = rebase 到下一个发行版分支,不是包管理器的 dist-upgrade;升级不动 Windows 分区与启动顺序(I1-I4)。
 出错时:当前部署未 pin 或 `baseline/` 缺失 -> 先补齐再升级;升级后起不来 -> 开机菜单选旧部署启动,或按 `07-1` 判层,不要直接重装。
 

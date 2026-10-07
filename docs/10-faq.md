@@ -4,7 +4,7 @@
 
 ## 怎么用
 
-1. 先在下面的症状速查表里按现象定位卡号(`10-1` … `10-28`);
+1. 先在下面的症状速查表里按现象定位卡号(`10-1` … `10-30`);
 2. 读该卡的 3 行处置;卡尾的 `脚本:` 行给出能一条 `--check` 判定的脚本(全部默认只读,`--apply` / `-Apply` / `-Yes` 才动手);
 3. 按卡尾 `->` 的指向回阶段手册的操作卡执行,再回 [08-verification.md](08-verification.md) 复判。
 
@@ -46,8 +46,10 @@
 | `10-26` | Windows 侧为什么用 LTSC 而不是专业版 | `scripts/windows/verify-windows-baseline.ps1 -Check -Track D` |
 | `10-27` | 为什么不能用评估版 LTSC ISO | `scripts/windows/verify-install-media.ps1 -Check` |
 | `10-28` | LTSC 没有 Microsoft Store 怎么办 | 无(用 `Get-AppxPackage -Name Microsoft.WindowsStore` 看是否已装) |
+| `10-29` | 更新 / 引导器更新后重启掉进 `grub>` | `scripts/linux/check-bootloader.sh --check` |
+| `10-30` | Linux 下往共享盘写数据安全吗(卷 dirty / `force` 挂载) | `scripts/linux/mount-shared.sh --check` |
 
-## 症状卡(28 张)
+## 症状卡(30 张)
 
 ### 10-1 装完黑屏 / 进不去桌面(只有鼠标指针)
 
@@ -274,6 +276,22 @@
 -> `03-3`;设计 9 第 36/37/38 条
 脚本:无(用 `Get-AppxPackage -Name Microsoft.WindowsStore` 看是否已装)
 
+### 10-29 更新 / 引导器更新后重启掉进 `grub>`
+
+- 先不要重装:固件条目还在、只是 GRUB 配置没了,按 `07-2` 从 `grub>` 提示符回去(优先路二回 Windows);Secure Boot 保持开启。
+- 进系统后先跑 `sudo bash scripts/linux/check-bootloader.sh --check`,看 `/boot/loader/grub.cfg` 是否在位、BLS 条目是否为 0 —— 引导器更新后必须复读这两项,不满足就不重启。
+- 复读失败按 `07-6` 重建引导;`bootupctl` 缺失记"需人工"不算失败(老镜像不判 FAIL)。
+-> `05-7`、`05-10`、`07-2`、`07-6`
+脚本:`scripts/linux/check-bootloader.sh --check`
+
+### 10-30 Linux 下往共享盘写数据安全吗(卷 dirty / `force` 挂载)
+
+- 安全的前提是四条前提都在位(`03-2` 关快速启动与休眠、`D:` 未加密、挂载选项齐备、不在共享盘上做依赖 POSIX 语义的工作);缺任一条都有写坏风险。
+- `--check` 会用 `ntfs3` 的不带 `force` 的读写探测判卷是否 dirty;失败会提示回 Windows 跑 `chkdsk /f`,**不要强挂** —— `force` 绕过脏卷检查,等于主动写坏。
+- 怀疑已被写坏:立刻卸载或改只读挂载,回 Windows 先确认快速启动与休眠仍是关闭状态,再跑 `chkdsk /f`。
+-> `03-2`、`05-1`、`05-2`
+脚本:`scripts/linux/mount-shared.sh --check`
+
 ## 分阶段风险速查(5 张)
 
 **总表在 [design/00-design.md](design/00-design.md) 第 9 节(38 条),原子版增补的风险在 [design/02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md) 第 9 节。** 下面每张卡只给"本阶段最可能踩的坑 + 一句话缓解",首列条目号与总表逐条对应,不复制后果列。
@@ -332,6 +350,8 @@
 | 22 | 家目录重定向后应用不兼容 | 只重定向文档类目录;出问题还原 `user-dirs.dirs` 的 `.dbk.bak` 备份 | `05-2` |
 | 15 / 16 | 反复强断电源 / 把硬件故障误判为双系统问题 | 用 SysRq `S` -> `U` -> `B`;两个系统一起异常先查硬件,先不要格式化分区 | `07-8`、`10-7`、`10-8` |
 | 34 | `rebase` 后分层包与镜像不配套 / ublue 镜像名漂移 | 用版本化标签而非 `latest`;变更前后各复检一次镜像来源、模块签名与会话类型;**stream ↔ Fedora 版本由 `driver_release_guard` 在 rebase 前断言**(未声明/不一致 → 2 且不发 rebase,以 ublue 官方文档为准核对目标版本) | `05-3`、`05-10`、`07-7` |
+| 11 / 13 | 更新后重启前没复读引导器,掉进 `grub>` | 升级 / 引导器更新后重启前先跑 `check-bootloader.sh --check`(grub.cfg 在位、BLS 条目不为 0);已掉进去按 `07-2` 回去,不要重装 | `05-7`、`05-10`、`10-29` |
+| 11 / 13 | 共享盘在卷 dirty 时被强挂写坏 | 挂载前先跑 `--check` 的读写探测(不带 `force`);dirty 就回 Windows 跑 `chkdsk /f`,不要强挂 | `05-1`、`10-30` |
 
 脚本:`scripts/linux/mount-shared.sh --check`;`scripts/linux/set-updates.sh --check`;`scripts/linux/check-health.sh --check`;`scripts/linux/set-remote-health.sh --check`
 

@@ -147,3 +147,4 @@
 
 - 2026-09-25:首版。记录用户四项决定(回切、Silverblue、方式 B、薄接口),给出接口层契约、脚本/手册/夹具三层改动清单、13 条修复存活审计要求、风险与非目标、5 批实施批次。
 - 2026-10-03:四项待核实收口同步 —— stream ↔ Fedora 版本改由 `driver_release_guard` 前置断言强制(不写死映射);`#284` 缓解路径写实(装前核对 → 失败转救援、不重排分区表)并把"在已有 Windows ESP 的盘上装成功"定为参考设备必测项 A10;同盘双 ESP 改为设备侧必测项 A9。KMS `GracePeriodRemaining` 不再换算天数。
+- 2026-10-06:批次 M1 六项机制落地 —— 引导器复读断言(`check-bootloader.sh`;上游 #595 的"update 后 grub.cfg 丢失"形态)、greenboot 健康检查与自动回滚(`setup-greenboot.sh` + 验收 F10)、部署清理(`rollback-deploy.sh --prune`,pin 保护)、btrfs 完整性(`check-integrity.sh`,自 check-health 拆出)、NTFS 脏卷零依赖探测(`mount-shared.sh`)、`/etc` 漂移可见化(`ostree admin config-diff` 只报告)。验收条目 44 → 45,步骤脚本 45 → 48。

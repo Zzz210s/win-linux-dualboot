@@ -4,7 +4,7 @@
 
 一套可复现、可安全撤除的 Windows 11 IoT Enterprise LTSC 2024 + Fedora 44 Silverblue 双系统部署手册,面向同规格的全新设备。
 
-本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**47 张动作卡、45 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
+本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**47 张动作卡、48 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
 
 材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 38 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
 
@@ -196,13 +196,13 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 - **C. 双系统切换组(C1-C3)**:一次性 `BootNext` 进 Linux 且不改默认项、一键回 Windows、切换三次后顺序仍稳定。
 - **D. 可撤除性组(D1-D6)**:L5 五步退役完整推演、系统盘隔离逐项核对、两条原地重装路径各走一遍、非重装的引导修复路径已被证明可用。
 - **E. 记录组(E1-E5)**:产物齐全且未入库、偏差回写到设备参数表。
-- **F. 健壮性组(F1-F9)**:真做一次部署回滚演练加一次原地重装演练(先 `--pin`、更新或分层一次、`rollback-deploy.sh --apply --yes`、重启后 `nvidia` 仍加载且 `/var` 数据仍在、最后 `--unpin`;并确认 `D:` 上的数据仍在)、部署回滚与变更前备份可用、journald 持久化、更新策略与配置一致(只 `check`/`download`,不自动应用、不自动重启)、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、L4 写入的挂载项带 `nofail` 而 `/boot/efi` 刻意不加。
+- **F. 健壮性组(F1-F10)**:真做一次部署回滚演练加一次原地重装演练(先 `--pin`、更新或分层一次、`rollback-deploy.sh --apply --yes`、重启后 `nvidia` 仍加载且 `/var` 数据仍在、最后 `--unpin`;并确认 `D:` 上的数据仍在)、部署回滚与变更前备份可用、journald 持久化、更新策略与配置一致(只 `check`/`download`,不自动应用、不自动重启)、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、L4 写入的挂载项带 `nofail` 而 `/boot/efi` 刻意不加。任何引导器更新之后重启之前先复读引导器(`check-bootloader.sh --check`:`/boot/loader/grub.cfg` 在位、BLS 条目不为 0,**否则不要重启**),并真做一次 greenboot 自动回滚演练(F10:故意让健康检查失败)。
 
 两侧总控是 [scripts/linux/verify-all.sh](scripts/linux/verify-all.sh) 与 [scripts/windows/verify-all.ps1](scripts/windows/verify-all.ps1),都只做只读判定;两侧都落汇总时用 `--out-dir` / `-OutDir` 指到与人工填写版不同的目录,避免互相覆盖。未勾选项只有在落成"已知例外"并写明影响面时才可接受,否则该设备判为未完成。至少一台设备完整跑通,才能称为"参考实现"——目前还没有。
 
 ## 风险
 
-已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**38 条**),按阶段的速查与 **28 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Fedora 侧 NVIDIA 驱动签名与一次性 ublue MOK 注册、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Anaconda 误把 `/boot/efi` 指向 Windows 的 ESP(上游 issue #284)、原子基础层的 `rebase` 落到坏内核或坏驱动、把硬件故障误判成双系统问题。
+已知故障类型连同缓解手段登记在 [docs/design/00-design.md](docs/design/00-design.md) 第 9 节(**38 条**),按阶段的速查与 **30 张**症状卡在 [docs/10-faq.md](docs/10-faq.md)。覆盖:Intel VMD/RAID 控制器模式、改分区表或固件触发的 BitLocker 恢复提示、Windows 更新重写自己那块 ESP 与 SBAT/DBX 事件、Fedora 侧 NVIDIA 驱动签名与一次性 ublue MOK 注册、Fast Startup 与双写 NTFS、固件只认第一块盘、安装时选错目标盘、两系统间时间与蓝牙状态分裂、`ntfs3` 写入导致共享盘损坏、Anaconda 误把 `/boot/efi` 指向 Windows 的 ESP(上游 issue #284)、原子基础层的 `rebase` 落到坏内核或坏驱动、把硬件故障误判成双系统问题。
 
 Windows 激活也作为一条风险登记:手册只写流程并外链上游项目,不随仓库分发任何激活脚本,仓库里也确实没有这类脚本。安装介质校验按厂商现实分开写:Fedora Silverblue ISO 按官方 `*-CHECKSUM` 文件与其 GPG 签名比对;Windows ISO 官方未发布 Windows 11 镜像的 SHA-256 哈希,只做“官方下载域 + 官方安装器校验”([docs/01-firmware.md](docs/01-firmware.md))。
 

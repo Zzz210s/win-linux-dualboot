@@ -34,7 +34,7 @@
 | 镜像 | **Fedora 44 Silverblue**(原子 GNOME 桌面) | Fedora 官方原子桌面之一,F44 与 Workstation 同代(GNOME 50) |
 | 桌面 | GNOME 50,Wayland 会话 | 与既有设计一致;ublue 的 GNOME 变体验证最充分 |
 | 等价替换(可选) | **Kinoite**(原子 KDE,Plasma 6.6.4)+ ublue 的 **Aurora-nvidia** | 若改用 KDE,本设计其余各条不变 |
-| 生命周期 | 13 个月;发行版升级 = `rpm-ostree rebase`(见第 4 节) | 与 D2/D3 同族 |
+| 生命周期 | 13 个月;发行版升级 = `bootc switch`(上游现行口径,`rpm-ostree rebase` 仍可用;见第 4 节) | 与 D2/D3 同族 |
 
 同族其他原子桌面(F44):Sway Atomic、Budgie Atomic、COSMIC Atomic —— 不纳入本方案,仅记录存在。
 
@@ -52,7 +52,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 目标镜像 | `ostree-image-signed:docker://ghcr.io/ublue-os/bluefin-nvidia:latest`(GNOME);KDE 用 Aurora 的 NVIDIA 变体 |
+| 目标镜像 | `ostree-image-signed:docker://ghcr.io/ublue-os/bluefin-nvidia:latest`(GNOME);KDE 用 Aurora 的 NVIDIA 变体;**Turing(RTX 2000 / GTX 16xx)及以后的显卡用 `-nvidia-open` 变体**(老 proprietary 镜像自 Aurora 43 起停建),参考设备按显卡型号在 ublue 发布页定名 |
 | MOK 注册 | `ujust enroll-secure-boot-key`;上游 MOK 密码为 `universalblue`;重启后在 MOK 界面确认 |
 | 判据(`看到:`) | `mokutil --list-enrolled` 含 ublue 的密钥;`modinfo -F signer nvidia` 非空;`lsmod` 有 `nvidia`;`rpm-ostree status` 显示的镜像来源与版本与计划一致 |
 | 可逆性 | `rebase` 可逆(可 rebase 回 stock Silverblue);该动作本身在回滚能力之内 |
@@ -64,6 +64,7 @@
 |---|---|
 | stock Silverblue + 手工自签 akmods(按 #499 的 workaround 自建密钥、纳入部署、每次内核更新重签) | 上游已知易碎,额外维护一套签名流程;**列为回退分支**,仅在不愿用 ublue 镜像时启用 |
 | stock Silverblue + 仅 nouveau | 等于砍掉 RTX 3060,与"都不砍"冲突 |
+| **Windows 独占程序改走 VFIO / 显卡直通**(在 Linux 里跑 Windows 3D 应用) | 单张 NVIDIA 卡无法同时供宿主与客户机;双系统已有原生 Windows,不必在 Linux 里再跑一个;一份 LTSC 授权不能两处同时用。**替代**:非 3D 的 Windows 独占程序跑轻量 VM,需要 3D 时重启回 Windows |
 | 关闭 Secure Boot | 推翻既有不变量,且牵动 Windows 侧策略 |
 
 ## 4. 更新、升级与回滚(D3,替代 snapper 体系)
@@ -73,7 +74,7 @@
 | 更新模型 | `rpm-ostree` 每次更新产生**新 deployment**;GRUB 菜单列出各部署(含版本/时间戳) |
 | 一键回滚 | **开机菜单选上一个部署** 或 `rpm-ostree rollback`(切换下一此启动的部署) |
 | 自动更新策略 | `rpm-ostreed-automatic`(`/etc/rpm-ostreed.conf` 的 `AutomaticUpdatePolicy = check`/`download`/`stage`);默认只下载不应用 → 与既有"**不自动重启、变更前先固定当前部署**"一致 |
-| 发行版升级 | 先 `rpm-ostree pin` 固定当前部署 → `rpm-ostree rebase fedora:fedora/45/x86_64/silverblue`(ublue 变体用其对应分支)→ 重启 → 复检(会话仍 Wayland、`nvidia` 模块仍加载、桌面可用)→ 不满意则回滚到固定部署 |
+| 发行版升级 | 先 `rpm-ostree pin` 固定当前部署 → **上游现行口径** `sudo bootc switch --enforce-container-sigpolicy ghcr.io/ublue-os/<image>:<stream>`(镜像模式;`rpm-ostree rebase fedora:fedora/45/x86_64/silverblue` 仍可用)→ 重启 → 复检(会话仍 Wayland、`nvidia` 模块仍加载、桌面可用)→ 不满意则回滚到固定部署 |
 | 部署固定与清理 | 新增脚本 `dbk-rollback.sh`:列出部署、pin/unpin、回滚、回滚后复检;清理用 `rpm-ostree cleanup`(保留策略见卡) |
 | **关键语义(必须写清)** | `/var` 与 `/home`(`/home` 是到 `/var/home` 的符号链接)**不属于部署**,**不随回滚回退** → **回滚系统不会丢用户数据**(这是原子版相对 btrfs 快照回滚的固有优点) |
 | 分层安装 | 系统级工具(如 `smartmontools`)用 `rpm-ostree install` 分层,**每次分层需重启**;GUI 应用优先 Flatpak;开发环境走 `toolbox`/`distrobox` |
@@ -158,7 +159,7 @@
 | 组 | 增补项 |
 |---|---|
 | A(引导安全) | **两个 ESP 互不干扰**:Fedora 侧操作后 `\EFI\Microsoft\` 逐文件不变;`BootOrder` 首位仍是 Windows Boot Manager。并新增两条**设备侧必测项**:**A9 固件识别两块 ESP**、**A10 Anaconda 在已有 Windows ESP 的盘上装成功**(参考设备必测;判据与步骤见 `docs/08-verification.md`) |
-| F(健壮性) | **部署回滚演练**(真做一次):`rpm-ostree rollback` → 重启 → 桌面可用 → 复检模块加载 → 再回滚回来;并确认"**用户数据在回滚后仍存在**"(`/var` 不被回退) |
+| F(健壮性) | **部署回滚演练**(真做一次):`rpm-ostree rollback` → 重启 → 桌面可用 → 复检模块加载 → 再回滚回来;并确认"**用户数据在回滚后仍存在**"(`/var` 不被回退)。新增 **F10 启动失败自动回滚演练**(greenboot:故意让健康检查失败 -> 重启两次 -> 退回上一部署,且 `BootOrder` 首位仍是 Windows Boot Manager) |
 | B(系统功能) | 新增:`rpm-ostree status` 显示 ublue 镜像来源;分层包列表与计划一致 |
 
 **风险增补 6 条**:Anaconda 双系统安装失败(#284)、双 ESP 固件支持、`rpm-ostree` 下 akmods 不签名(#499)、akmods 卡内核升级(#632)、`rebase` 后驱动状态变化(镜像内模块版本与内核需配套)、ublue 镜像的命名/分支漂移与信任(须记录来源与版本,可 rebase 回 stock)。
@@ -174,6 +175,9 @@
 | Anaconda 在已有 ESP 的盘上装 Silverblue 失败(#284,2022-05 建单、自 F34) | 上游 issue(**截至 2026-09 仍开**,无修复记录) | 中高(缓解路径 = 装前核对 + 失败转 `07-rescue.md`,参考设备必测项 = A10) |
 | `rpm-ostree install` 下 akmods 不签名(#499)、akmods 卡内核升级(#632) | 上游 issue | 高 |
 | ublue NVIDIA 镜像预签名 + `ujust enroll-secure-boot-key`(MOK 密码 `universalblue`)| `ublue-os/akmods` README、ublue 官方脚本与论坛帖 | 中高(**镜像名/分支/任务名须在实施时复核**) |
+| ublue 的 stream 集合 = `stable` / `latest` / `testing`(+ `beta`);`stable-daily` 已被上游移除 | ublue 官方发布说明(2026-10 核实) | 高 |
+| NVIDIA 变体分叉:Turing(RTX 2000 / GTX 16xx)及以后走 `-nvidia-open`;老 proprietary 镜像自 Aurora 43 起停建 | ublue 官方发布说明(2026-10 核实) | 中高(**参考设备须按显卡型号定镜像名**) |
+| 上游升级口径已是 `sudo bootc switch --enforce-container-sigpolicy ghcr.io/ublue-os/<image>:<stream>`(镜像模式);`rpm-ostree rebase` 仍可用 | ublue / Bazzite 官方文档(2026-10 核实) | 中高 |
 | `/var`(`/home`)不随部署回滚 | ostree 部署模型(官方文档) | 高 |
 
 ## 11. 变更历史
@@ -182,3 +186,4 @@
 |---|---|
 | 2026-09-19 | 初版:取代传统版变体设计。基础系统改 Fedora 44 Silverblue(原子)、NVIDIA 改 ublue rebase + MOK、回滚改部署级(去 snapper/grub-btrfs/快照)、双系统改独立 ESP + 独立 `/boot`、引入三轨道结构、给出脚本与文档影响面、增补验收与 6 条风险、标注证据等级与须复核项 |
 | 2026-10-03 | 四项待核实收口:第 5 节的"需实测项"改为**设备侧必测项**(验收 A9,给可执行步骤与共用 ESP 分支);第 6 节的 `#284` 缓解路径写实(装前核对 → **失败转救援、不重排分区表**)并把"在已有 Windows ESP 的盘上装成功"定为参考设备必测项(A10);第 9 节验收增补与第 10 节事实等级同步(#284 标"截至 2026-09 仍开")。**不变量与分区数值未动** |
+| 2026-10-06 | 机制与口径同步(批次 M1 文档侧):① 事实表补 ublue stream 集合(`stable-daily` 已移除)、NVIDIA `-nvidia-open` 分叉与 Aurora 43 起停建 proprietary、升级口径已是 `bootc switch`(镜像模式,`rpm-ostree rebase` 仍可用);② 决策表新增"Windows 独占程序改走 VFIO / 显卡直通"被否项(单张 NVIDIA 卡 + 双系统已有原生 Windows + 一份 LTSC 授权不能两处同时用;替代 = 非 3D 独占跑轻量 VM 或重启回 Windows);③ 第 9 节 F 组增补 **F10 启动失败自动回滚演练**(greenboot)。引导器状态与更新后复读断言、部署清理、btrfs 巡检、NTFS 脏卷探测与 `/etc` 漂移可见化的落点见 `03-step-automation-design.md` 与各卡 |
