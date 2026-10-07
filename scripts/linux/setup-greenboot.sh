@@ -38,7 +38,8 @@ RPM_CMD="${DBK_RPM:-rpm}"
 LINUX_DIR="${DBK_LINUX_DIR:-$HERE}"
 GUIDE="两条路:① 分层安装(经 dbk-pkg.sh 的 pkg_ensure greenboot,重启后生效);② 不装 greenboot,改用 systemd 单元 + ostree 回滚钩子自建启动失败计数。"
 
-render_tpl() { sed "s|@DBK_LINUX_DIR@|$LINUX_DIR|g" "$TPL"; }
+# 渲染并确保 LF:模板若被 CRLF 化(Windows 检出),装到 /etc 后 shebang 会变成 bad interpreter。
+render_tpl() { sed -e "s|@DBK_LINUX_DIR@|$LINUX_DIR|g" -e 's/\r$//' "$TPL"; }
 rpm_installed() { command "$RPM_CMD" -q greenboot >/dev/null 2>&1; }
 
 ISSUES=(); MANUAL=(); EXTRA_MANUAL=()   # EXTRA_MANUAL:--apply 路径产生的"需人工"项(judge 会重置 MANUAL,不清空它)

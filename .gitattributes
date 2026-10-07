@@ -7,3 +7,6 @@
 *.tsv text eol=lf
 *.md  text eol=lf
 .gitattributes text eol=lf
+# 模板会被脚本原样装到 /etc 再被系统执行(如 greenboot 健康检查):必须 LF,否则 CRLF 的 shebang
+# 在 Linux 上是 "bad interpreter" —— Windows 检出(core.autocrlf=true)会把没写规则的文件改成 CRLF。
+*.snippet text eol=lf
