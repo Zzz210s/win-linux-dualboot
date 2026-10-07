@@ -165,6 +165,7 @@ BADF="$(awk '!/^[[:space:]]*#/ && NF>=4 { if ($2=="/") next; if ($2=="/boot/efi"
 if [ ! -r "$FSTAB" ]; then item F9 manual "读不到 $FSTAB;手动核对:非 root 条目都带 nofail,/boot/efi 不带" "05-1"
 elif [ -n "$BADF" ]; then item F9 fail "fstab 挂载选项不合判据:$(printf '%s' "$BADF" | tr '\n' ' ')" "05-1"
 else item F9 pass "fstab 非 root 条目均带 nofail,/boot/efi 未加 nofail" "05-1"; fi
+item F10 manual "启动失败自动回滚演练(参考设备必做):setup-greenboot.sh 就位后故意让健康检查失败(临时把 /etc/greenboot/check/required.d/60-dbk-health.sh 改成 exit 1),重启两次应自动退回上一部署、桌面可用、BootOrder 首位仍是 Windows Boot Manager;随后复原并重跑 setup-greenboot.sh --check 复检为绿" "05-9"
 # ===== --step 过滤与计数(执行器语义:见脚本头;非法值 64,不落任何产物)=====
 KNOWN="$(printf '%s\n' "${R[@]}" | cut -d'|' -f5 | sort -u | tr '\n' ' ')"
 if [ -n "$STEP_SEL" ] && ! printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL "; then

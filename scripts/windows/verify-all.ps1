@@ -152,6 +152,7 @@ Add-Manual F6 F '在 Fedora 侧 systemctl is-active sshd 应为 active,并从另
 Add-Manual F7 F '在 Fedora 侧 systemd-oomd 为 active 且 zramctl 有 /dev/zram0' '05-6'
 Add-Manual F8 F '在 Fedora 侧 smartd 为 active 且 smartctl -H 报 PASSED' '05-8'
 Add-Manual F9 F '在 Fedora 侧 fstab 非 root 条目都带 nofail,/boot/efi 不带' '05-1'
+Add-Manual F10 F '在 Fedora 侧故意让 greenboot 健康检查失败(60-dbk-health.sh 改为 exit 1)后重启两次,应自动退回上一部署、桌面可用、BootOrder 首位仍是 Windows;复原后 setup-greenboot.sh --check 复检为绿(参考设备必做)' '05-9'
 
 # ===== -Step 过滤与计数(执行器 -Step 语义:见脚本头与设计 03 第 5 节)=====
 $known = @($script:Items | ForEach-Object { $_.Card } | Sort-Object -Unique)

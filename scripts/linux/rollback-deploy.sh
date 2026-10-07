@@ -14,8 +14,9 @@
 # 与本步有关的纪律:回滚只是把上一部署排为下次启动,重启前当前系统照常可用、也未被改动(想反悔重启前再跑一次);
 #   回滚前若想保住当前部署不被垃圾回收,先按索引 0 固定它(接口 rollback_pin,索引口径见 dbk-rollback.sh 头部)。
 # 退出码:0 PASS / 1 FAIL / 2 需人工 / 9 跳过 / 64 用法错误(脚本头声明了破坏性,--apply 缺 --yes 由库层拒且零写)。
-# 用法: rollback-deploy.sh [--check|--apply|--pin <索引>|--unpin <索引>] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
-#   三种动作互斥:--check(缺省,零写) / --apply --yes(回滚到上一部署) / --pin N --yes 与 --unpin N --yes(固定/解除固定)。
+# 用法: rollback-deploy.sh [--check|--apply|--pin <索引>|--unpin <索引>|--prune] [--json] [--log <路径>] [--yes] [--step NN-K] [-h]
+#   动作互斥:--check(缺省,零写) / --apply --yes(回滚到上一部署) / --pin N --yes 与 --unpin N --yes(固定/解除固定)
+#   / --check --prune 与 --apply --prune --yes(清理 pending 与 rollback 部署;被 pin 的部署绝不删;也经 dbk-rollback.sh 入口)。
 #   pin 属人工执行:总控 verify-all.sh 的 chk_step 只传 --check/--list,不接受 --pin,卡片里的「变更前 pin」靠人手动跑。
 # 注入(夹具用):DBK_RPM_OSTREE 由环境透传给 dbk-rollback.sh;本脚本不写发行版命令字面量(规则 S-1)。
 set -euo pipefail
@@ -29,7 +30,7 @@ log() { dbk_obs "$*"; }
 dbk_enable_errtrap
 # --pin / --unpin 不在 dbk-cli.sh 的通用参数表里(且是 05-9 的独立动作),先在本脚本摘出来——纯内存,零写;
 # 其余参数原样交给 dbk_parse_args。索引合法性不在这里判:交给 rollback_pin/rollback_unpin 的 1(调用方给错)。
-PIN_ACT=""; PIN_IDX=""; MODE_GIVEN=0; DBK_ARGV=()
+PIN_ACT=""; PIN_IDX=""; MODE_GIVEN=0; PRUNE=0; DBK_ARGV=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --pin|--unpin)
@@ -37,12 +38,17 @@ while [ "$#" -gt 0 ]; do
       if [ "$#" -lt 2 ]; then dbk_note "用法错误: $1 后面要给部署索引(0 = 当前启动,1 = 上一部署)"; exit "$DBK_USAGE"; fi
       PIN_ACT="${1#--}"; PIN_IDX="$2"; shift 2 ;;
     --check|--apply) MODE_GIVEN=1; DBK_ARGV+=("$1"); shift ;;
+    --prune) PRUNE=1; shift ;;
     *) DBK_ARGV+=("$1"); shift ;;
   esac
 done
 dbk_parse_args ${DBK_ARGV[@]+"${DBK_ARGV[@]}"}
 if [ -n "$PIN_ACT" ] && [ "$MODE_GIVEN" -eq 1 ]; then
   dbk_note "用法错误: pin/unpin 是独立动作,不能与 --check/--apply 混用"
+  exit "$DBK_USAGE"
+fi
+if [ "$PRUNE" -eq 1 ] && [ -n "$PIN_ACT" ]; then
+  dbk_note "用法错误: --prune 与 --pin/--unpin 不能混用(清理与固定是两件事)"
   exit "$DBK_USAGE"
 fi
 dbk_assert_step
@@ -99,6 +105,49 @@ finish() {
   if [ "$REBOOT" = 0 ]; then hint=";已有排入下次启动的部署改动,请重启使其生效"; fi
   dbk_exit PASS "$msg:部署级回滚这一路可用$hint"
 }
+
+# --prune:清理 pending 与 rollback 部署(缺省只报告)。前置断言:被 pin 的部署绝不被删(跳过并在输出里说明)。
+PRUNE_UNPROT_P=0; PRUNE_UNPROT_R=0; PRUNE_PROT=0; PRUNE_LINES=""
+prune_plan() {
+  local line flags
+  PRUNE_UNPROT_P=0; PRUNE_UNPROT_R=0; PRUNE_PROT=0; PRUNE_LINES=""
+  if ! LIST="$(deployments_list)"; then return 2; fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    flags="${line#* }"
+    case "$flags" in
+      *"[pinned]"*) PRUNE_PROT=$((PRUNE_PROT + 1)); PRUNE_LINES="$PRUNE_LINES
+  [保护] $line —— 被 pin,绝不删" ;;
+      *"[staged"*) PRUNE_UNPROT_P=$((PRUNE_UNPROT_P + 1)); PRUNE_LINES="$PRUNE_LINES
+  [pending] $line" ;;
+      *"[当前启动]"*) ;;
+      *) PRUNE_UNPROT_R=$((PRUNE_UNPROT_R + 1)); PRUNE_LINES="$PRUNE_LINES
+  [rollback] $line" ;;
+    esac
+  done <<<"$LIST"
+  return 0
+}
+prune_run() {
+  local rc
+  rc=0; prune_plan || rc=$?
+  case "$rc" in
+    0) ;;
+    2) dbk_exit 需人工 "读不到部署列表:无法给出清理计划(原因见上面库层输出)" ;;
+    *) dbk_exit FAIL "部署列表判定返回未知状态码 $rc" ;;
+  esac
+  log "清理计划(索引 版本 标记):$PRUNE_LINES"
+  if [ "$PRUNE_PROT" -gt 0 ]; then log "保护:有 $PRUNE_PROT 个部署带 pinned 标记,本脚本跳过它们(绝不被删)。"; fi
+  if [ "$DBK_MODE" != apply ]; then
+    dbk_exit PASS "清理计划(只报告,零写):pending=$PRUNE_UNPROT_P rollback=$PRUNE_UNPROT_R 保护=$PRUNE_PROT"
+  fi
+  dbk_need_yes "清理 pending/rollback 部署($ROLLBACK_CMD cleanup)" "$ROLLBACK_CMD cleanup --pending" "$ROLLBACK_CMD cleanup --rollback"
+  if [ "$PRUNE_UNPROT_P" -gt 0 ]; then rollback_cleanup pending || dbk_exit FAIL "清理 pending 部署失败(见上面库层输出)"; dbk_add_action "已清理 pending 部署"; dbk_mark_changed; fi
+  if [ "$PRUNE_UNPROT_R" -gt 0 ]; then rollback_cleanup rollback || dbk_exit FAIL "清理 rollback 部署失败(见上面库层输出)"; dbk_add_action "已清理 rollback 部署"; dbk_mark_changed; fi
+  [ $((PRUNE_UNPROT_P + PRUNE_UNPROT_R)) -gt 0 ] || dbk_add_action "没有可清理项(候选为空或全部被 pin 保护)"
+  dbk_exit PASS "部署清理已执行:pending=$PRUNE_UNPROT_P rollback=$PRUNE_UNPROT_R 保护=$PRUNE_PROT"
+}
+
+if [ "$PRUNE" -eq 1 ]; then prune_run; fi
 
 if [ -n "$PIN_ACT" ]; then
   if [ "$PIN_ACT" = pin ]; then

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# DBK 启动健康检查(greenboot 的 required 检查;由 scripts/linux/setup-greenboot.sh 安装到
+#   /etc/greenboot/check/required.d/60-dbk-health.sh)。
+# 单一真源:本文件(templates/greenboot-health.snippet);安装时把 @DBK_LINUX_DIR@ 注入为 scripts/linux 目录。
+# 判据(全部委派给真源脚本与路径,不在这里复写阈值):check-health.sh --check(含根余量 ≥10%、会话类型、
+#   显卡来源、更新策略、部署列表)、check-signature.sh --check、共享盘挂载点已存在。任一判 1 -> exit 1。
+# 口径:退出码 1(FAIL)才算失败;2(需人工)不阻断启动(与全仓退出码语义一致)。
+# greenboot 连续失败达到阈值后自动退回上一部署(启动失败自动回滚);本脚本只读,不改系统状态。
+set -uo pipefail
+DBK_LINUX_DIR="${DBK_LINUX_DIR:-@DBK_LINUX_DIR@}"
+fail=0
+rc=0; bash "$DBK_LINUX_DIR/check-health.sh" --check >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 1 ] && fail=1
+rc=0; bash "$DBK_LINUX_DIR/check-signature.sh" --check >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 1 ] && fail=1
+findmnt -rn -o TARGET "${DBK_SHARED_MNT:-/mnt/shared}" >/dev/null 2>&1 || fail=1   # 路径可注入,与 mount-shared.sh 同源
+# 根分区余量不在此处复写:check-health.sh --check 已经判它(阈值单一真源),避免两处阈值漂移。
+exit "$fail"

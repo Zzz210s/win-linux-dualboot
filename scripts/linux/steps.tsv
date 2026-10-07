@@ -11,9 +11,12 @@
 05-6	scripts/linux/storage.sh	1	zram 与 swapfile(优先核对 zram-generator,不符才按模板兜底;不配休眠;需 --yes)
 05-7	scripts/linux/set-journald.sh	1	journald 持久化
 05-7	scripts/linux/set-updates.sh	1	更新策略:rpm-ostreed-automatic 只检查/下载、不自动应用与不自动重启
+05-7	scripts/linux/check-bootloader.sh	1	重启前复读引导器状态:grub.cfg 在位且非空 + BLS 条目数 ≥ 部署数且 ≥ 2
 05-8	scripts/linux/set-remote-health.sh	1	SSH 与 SMART:分层安装 smartmontools + enable --now sshd smartd
-05-9	scripts/linux/rollback-deploy.sh	1	部署级回滚
+05-9	scripts/linux/rollback-deploy.sh	1	部署级回滚(含 --prune 清理 pending/rollback 部署;被 pin 的部署绝不删)
+05-9	scripts/linux/setup-greenboot.sh	1	启动失败自动回滚:写 greenboot 健康检查(不自动装 greenboot;--install-greenboot 才经 dbk-pkg 分层安装)
 05-10	scripts/linux/upgrade-release.sh	1	发行版升级:前置 pin + 备份 baseline/ -> rpm-ostree rebase -> 重启后复检(需 --yes)
+05-10	scripts/linux/check-bootloader.sh	1	升级后重启前复读引导器状态(与 05-7 同一脚本)
 05-11	scripts/linux/reboot-to-windows.sh	1	一次性重启进 Windows(不改 BootOrder)
 05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md(发行版/驱动来源与 MOK/部署列表与 pin/待更新)
 05-13	scripts/linux/first-boot.sh	1	L4 汇总执行(可选):按顺序跑各模块并聚合结果
@@ -21,5 +24,7 @@
 07-1	scripts/linux/triage.sh	0	判层:只读采集分区/挂载/固件条目/两块 ESP 内容/部署列表与错误日志,给判层结论与建议卡号
 07-2	scripts/linux/gen-grub-rescue-commands.sh	0	从 GRUB 提示符回去:生成两套可复制命令(不执行、不改启动顺序)
 07-5	scripts/linux/check-partition-plan.sh	0	只重装 Silverblue:装前核对 Fedora 三块分区与 Windows 侧不被触碰(安装人工,ESP 绝不格式化)
-07-7	scripts/linux/check-health.sh	0	周期巡检(Linux 侧):会话/部署级回滚可用/显卡来源/更新策略/systemd 状态/根分区余量(--check;Windows 侧见 verify-baseline.ps1)
+07-7	scripts/linux/check-health.sh	0	周期巡检(Linux 侧):会话/部署级回滚可用/显卡来源/更新策略/systemd 状态/根分区余量/etc 漂移条数(--check;Windows 侧见 verify-baseline.ps1)
+07-7	scripts/linux/check-bootloader.sh	1	周期巡检(Linux 侧):引导器状态与 BLS 条目(与 05-7/05-10 同一脚本)
+07-7	scripts/linux/check-integrity.sh	0	周期巡检(Linux 侧):root btrfs device stats 错误计数与 scrub 结论
 07-7	scripts/linux/check-signature.sh	0	周期巡检(Linux 侧):nvidia 模块签名者与 Secure Boot 状态(未签名/未开启 → 需人工,指向 05-3)

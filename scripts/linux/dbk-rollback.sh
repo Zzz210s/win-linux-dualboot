@@ -18,6 +18,7 @@
 #   rollback_to_previous  0 = 已把上一部署排为下次启动(重启后生效)/ 1 = 失败
 #   rollback_needs_reboot 0 = 有已排入下次启动的部署改动(staged,需重启)/ 1 = 无 / 2 = 读不到状态(需人工)
 #     护栏:JSON 读到了但整段没有 "staged": 键(字段名漂移)→ 2 需人工;键在且为 false → 1。
+#   rollback_cleanup <pending|rollback>  0 = 已清理 / 1 = 失败(参数非法也走 1;pin 的部署由 rpm-ostree 自身保护)。CLI 入口(--prune)见 rollback-deploy.sh
 # 索引口径:与 ostree 的部署索引一致 —— 0 = 当前启动,1 = 上一部署(回滚候选),依次递增;就是 deployments_list
 #   每行行首打印的序号(官方文档口径:ostree admin pin 的 INDEX,0 = booted、1 = rollback)。索引会随重启与
 #   新部署变化,调用方要「即读即用」(先 deployments_list,再把同一批序号喂给 rollback_pin/rollback_unpin)。
@@ -25,7 +26,8 @@
 #   在任何取不到、解析不了的情况下**一律返回 2(需人工)**,绝不 fail-open 成「0 个部署」或「无待重启」——
 #   这是"回滚这条路是否可用"的唯一自动判据。调用方必须显式处理 2(case 里给 2 单独一支),丢进 *) 当失败
 #   处理会把「需人工」误记成 FAIL。
-# 本文件只定义函数与常量:不设置 shell 选项、不执行任何动作(调用方自己 set -euo pipefail 或逐项汇总)。
+# 本文件只定义函数与常量:不设置 shell 选项、不执行任何动作(调用方自己 set -euo pipefail 或逐项汇总);CLI 入口在 rollback-deploy.sh。
+#   **末尾禁止追加任何条件语句**:被 source 时它返回 1,而调用方普遍带 `set -e`,会让整个脚本静默退 1 且零输出(2026-10-06 实测:11 个调用方全挂、k1 50 条断言变红)。
 # 夹具级验证,真机未跑。环境注入(夹具用):DBK_RPM_OSTREE 覆盖 rpm-ostree 命令(可含路径)。
 # 待核实(以官方文档为准):rpm-ostree status --json 的 deployments[].version / .pinned / .booted / .staged
 #   字段名;人读 status 的 Version: 行顺序与 --json 的 deployments[] 顺序一致(本库靠它把两个来源对上);
@@ -137,7 +139,6 @@ deployments_count() {
   n="$(printf '%s\n' "$list" | grep -c . || true)"
   case "${n:-0}" in ''|0) return 2 ;; esac
   printf '%s\n' "$n"
-  return 0
 }
 
 # 执行一个改动部署状态的子命令:0 = 成功 / 1 = 失败(原因已落日志)。体内一律 command(见 dbk-cli.sh 头部约定)。
@@ -176,6 +177,10 @@ rollback_unpin() {
 # 退回上一部署:把上一部署排为下次启动(重启后生效;重启前当前系统未变)。
 rollback_to_previous() {
   _rb_run "已把上一部署排为下次启动(重启后生效)" rollback
+}
+
+rollback_cleanup() {   # 清理部署:pending|rollback -> 0 = 已清理 / 1 = 失败(pin 的部署由 rpm-ostree 自身保护)
+  case "${1:-}" in pending) _rb_run "已清理 pending 部署" cleanup --pending ;; rollback) _rb_run "已清理 rollback 部署" cleanup --rollback ;; *) _rb_note "错误: rollback_cleanup 只认 pending|rollback,得到 '${1:-}'"; return 1 ;; esac
 }
 
 # 0 = 有已排入下次启动的部署改动(staged;需重启)/ 1 = 无 / 2 = 读不到状态(需人工)。
