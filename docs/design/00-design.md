@@ -1,6 +1,6 @@
 # 设计方案:Windows 11 IoT Enterprise LTSC 2024 + Fedora 44 Silverblue(原子版)双系统
 
-日期:2026-09-17(初版)/ 2026-09-25(修订九)/ 2026-09-29(修订十)/ 2026-10-03(修订十一)/ 2026-10-06(修订十二)
+日期:2026-09-17(初版)/ 2026-09-25(修订九)/ 2026-09-29(修订十)/ 2026-10-03(修订十一)/ 2026-10-06(修订十二)/ 2026-10-06(修订十三)
 状态:已定稿(待实施计划)
 适用:单块 NVMe、UEFI、混合显卡、允许整盘格式化的设备类
 
@@ -185,7 +185,7 @@
 |---|---|
 | 内容 | 三条可独立执行的轨道 + 一个共用底座,定义见 1.4 |
 | 目的 | 满足"任一系统可单独安装";让"简化"落在单系统场景与文档组织上 |
-| 边界 | **不砍任何既有机制**(MOK 注册、`ntfs3` 共享盘、每卡一脚本、双模式 CLI、C1–C9 自检、A–F 验收、KMS 脚本激活全部保留) |
+| 边界 | **不砍任何既有机制**(MOK 注册、`ntfs3` 共享盘、每卡一脚本、双模式 CLI、C1–C9 自检、A–G 验收、KMS 脚本激活全部保留) |
 | 文档影响 | 手册按轨道重排(见第 4 节的文档映射),双系统专属内容收敛为 4 张增量卡 |
 
 ---
@@ -659,3 +659,4 @@ UUID=<D: 分区 UUID>  /mnt/shared  ntfs3  rw,uid=1000,gid=1000,umask=022,window
 | 2026-09-29 | **修订十:Windows 侧由 Windows 11 专业版改为 Windows 11 IoT Enterprise LTSC 2024**(底版 24H2 / build 26100,支持到 2034-10;用户 2026-09-29 决定)。决策 3.1 更新系统组合并在被否栏保留"专业版";决策 3.10 明确只用 KMS、**明确排除 HWID**,并写明 GVLK 随版本、官方 KMS client keys 页为真源、镜像须为正式版;第 9 节风险表新增 4 条(正式 LTSC 镜像来源 / Store 默认缺失 / OEM 工具 / 媒体编解码器)后共 **38 条**;3.20 事实表与第 11 节来源补微软 LTSC 生命周期页、KMS client keys 页、"支持 LTSC 有限"声明与 MAS issue #613;4.1 介质改为正式版 LTSC 镜像。**分区数值与卡号一字未动**。 |
 | 2026-10-03 | **修订十一:四项待核实收口**(不改变四条不变量 I1–I4,不改变任何分区数值):① ublue stream ↔ Fedora 版本改为**前置断言**(`dbk-driver.sh` 的 `driver_release_guard`:本机 `VERSION_ID` 主版本 vs 操作员按 ublue 官方文档核对后声明的 `DBK_UBLUE_FEDORA`,不一致或未声明 → 2 且**不发出 rebase**,`DBK_ALLOW_CROSS_RELEASE=1` 才能显式跨版本),文档侧为 05-3 卡、设计 02/06 与 10-faq;② 上游 `#284` 缓解路径写实(装前 `check-partition-plan.sh` → **失败即转 `07-rescue.md`,不就地重排分区表**)并把"Anaconda 在已有 Windows ESP 的盘上装成功"定为参考设备必测项(A10);③ 同盘双 ESP 从"待实测"改为**设备侧必测项**(A9:两条条目都在 + 分别重启各进一个系统),失败走"共用 ESP 分支"(第 10 节补触发条件与 I3 的替代保障);④ Windows 侧 `GracePeriodRemaining` 不再换算天数(只原样记录并标"单位未核实",判定只用 `LicenseStatus`)。验收 A 组 8 → 10 条(两侧总控条目数 42 → 44),设计 02/06、手册 04/05/07/10、两份 README 与 `00-overview` 偏离项表同步 |
 | 2026-10-06 | **修订十二:批次 M1 六项机制落地**(不改变四条不变量 I1–I4,不改变任何分区数值):① 引导器状态与更新后复读断言(新 `check-bootloader.sh`:`/boot/loader/grub.cfg` 在位、BLS 条目 ≥ 部署数且 ≥2、`bootupctl status` 大小写无关判定;上游 Silverblue #595 的"update 后 grub.cfg 丢失"形态 → 1 且提示不要重启),接进 `05-7`/`05-10`/`07-7`;② greenboot 健康检查与启动失败自动回滚(新 `setup-greenboot.sh` + `templates/greenboot-health.snippet`;**不自动装包**,需显式 `--install-greenboot`),验收新增 **F10**(参考设备必做的"故意做坏"回滚演练);③ 部署清理 `rollback-deploy.sh --prune`(缺省只报告、**pin 的部署绝不删**);④ root 是 btrfs → 新增 `check-integrity.sh`(`btrfs device stats` 非零即硬失败,scrub 结论只报告),自 `check-health.sh` 拆出;⑤ NTFS 共享盘脏卷防护(`mount-shared.sh` 的零依赖读写探测:成功即干净、dirty → 2 并提示回 Windows 跑 `chkdsk /f`、`force` 挂载 → 2);⑥ `/etc` 漂移可见化(`ostree admin config-diff` 条数进巡检,只报告、不影响退出码)。验收条目 44 → **45**(F 组新增 F10),步骤脚本 45 → **48**(新增 check-bootloader / setup-greenboot / check-integrity),库与接口仍 15 个 |
+| 2026-10-06 | **修订十三:批次 E 体验层**(不改变四条不变量 I1–I4,不改变任何分区数值):① 交互层用 fish(新增 `set-interactive.sh` + Homebrew 薄接口 `dbk-brew.sh`;脚本解释器仍是 bash);② 默认应用绑定(`templates/mimeapps.tsv` + `set-default-apps.sh`,覆盖文件管理器/PDF/图片/压缩包/文本);③ 虚拟桌面工作流(`templates/workflow.tsv` + `set-workflow.sh`,不换合成器);④ 应用清单与替代映射(`templates/apps.tsv` + `check-apps.sh`,**VFIO 为被否项**);⑤ 配置快照与复原(`export-config.sh` + `import-config.sh`,五份快照落 `baseline/config/`,重装后一条命令回灌)。验收新增 **G 组(G1-G3,三条均可脚本判定)**,组选择符从 `08-A-F` 改为 `08-A-G`,条目数 45 → **48**;卡 47 → **52**,步骤脚本 48 → **54**,库与接口 15 → **16**(dbk-brew) |

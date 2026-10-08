@@ -1,4 +1,4 @@
-# 验收:唯一判据与 A-F 六组勾选卡
+# 验收:唯一判据与 A-G 七组勾选卡
 
 本文件在流程中的位置:上一份 `07-rescue.md` -> 本份 -> 下一份 `10-faq.md`
 
@@ -11,9 +11,9 @@
 - Fedora 侧:`scripts/linux/verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual]`
 - Windows 侧:`scripts/windows/verify-all.ps1 [-Check|-Apply] [-BaselineDir <目录>] [-OutDir <目录>] [-ConfirmManual]`
 
-能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。**自动化覆盖的侧别**(两侧合计 45 项中的 23 项有自动判定):Fedora 侧 `scripts/linux/verify-all.sh` 自动判定 **A1 / A5 / A7 / B1 / B2 / B3 / B4 / B5 / B6 / B8 / B9 / B11 / E1 / E2 / F2 / F4 / F5 / F6 / F7 / F8 / F9**;Windows 侧 `scripts/windows/verify-all.ps1` 自动判定 **A1 / A3 / A4 / A5 / A7 / E1 / E2**;其余按「需人工」登记。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到缺省落点 `<baseline>/auto/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录(如 `baseline/auto/win/` 与 `baseline/auto/linux/`),再把两份汇总人工合并进填写版(避免互相覆盖)。**汇总落点(2026-10-04 改)**:两个总控的**缺省汇总落点是 `<baseline>/auto/08-verification.md`**——不再落在人填写版 `baseline/08-verification.md` 上,那份填写版只手工维护;带 `--out-dir`/`-OutDir` 时按参数指到别的目录。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
+能自动的项由脚本判定(下表条式末尾标 `脚本判定`),不能自动的由脚本输出 `需人工` 并给手动核对步骤(标 `需人工`,提示写在条式里)。**自动化覆盖的侧别**(两侧合计 48 项中的 26 项有自动判定):Fedora 侧 `scripts/linux/verify-all.sh` 自动判定 **A1 / A5 / A7 / B1 / B2 / B3 / B4 / B5 / B6 / B8 / B9 / B11 / E1 / E2 / F2 / F4 / F5 / F6 / F7 / F8 / F9 / G1 / G2 / G3**;Windows 侧 `scripts/windows/verify-all.ps1` 自动判定 **A1 / A3 / A4 / A5 / A7 / E1 / E2**;其余按「需人工」登记。`--check`/`-Check` 只打印(零写);`--apply`/`-Apply` 才把汇总写到缺省落点 `<baseline>/auto/08-verification.md`(汇总含「已知例外」表与结论行,失败项带编号与关联卡)。两侧都跑时用 `--out-dir`/`-OutDir` 指向两个不同目录(如 `baseline/auto/win/` 与 `baseline/auto/linux/`),再把两份汇总人工合并进填写版(避免互相覆盖)。**汇总落点(2026-10-04 改)**:两个总控的**缺省汇总落点是 `<baseline>/auto/08-verification.md`**——不再落在人填写版 `baseline/08-verification.md` 上,那份填写版只手工维护;带 `--out-dir`/`-OutDir` 时按参数指到别的目录。人工项默认让退出码为 2;执行人按清单逐条核对完成后加 `--confirm-manual`/`-ConfirmManual`,人工项记为「需人工(已确认)」并不再计入退出码。
 
-**执行顺序建议**:A -> B -> C -> F -> D -> E。D 组含"真做一次退役"与"真做一次原地重装",做完这台设备上可能已没有 Linux 或已被格式化,必须排最后(F 组要在 D 组真做之前完成);E 组是归档收尾。**验收期间不改分区表、不改固件设置**(设计 I4)。
+**执行顺序建议**:A -> B -> C -> G -> F -> D -> E。G 组是活系统上的配置固化与快照,必须排在 D 组的退役/重装之前(G3 的快照就是重装后回到当前配置的依据);D 组含"真做一次退役"与"真做一次原地重装",做完这台设备上可能已没有 Linux 或已被格式化,必须排最后(F 组要在 D 组真做之前完成);E 组是归档收尾。**验收期间不改分区表、不改固件设置**(设计 I4)。
 
 ### A. 引导安全组(A1-A10)
 
@@ -79,7 +79,7 @@
 - [ ] E2 `baseline/` 未入库 -> 看到:`git status --porcelain` 不含任何 `baseline/` 条目;`git ls-files baseline/` 只列出 `baseline/README.md`;`git check-ignore -v baseline/02-partitions.txt` 命中 `.gitignore` 的 `baseline/*` 规则(脚本判定)
 - [ ] E3 本次与设备参数表的偏差已回写 -> 看到:每条偏差都有明确归属——设备级(分区偏移/UUID/实测容量)进 `baseline/`,方案级(固件只认第一块盘、WinRE 占用预留等)进 [00 入口](00-overview.md) 的偏离项处置表;没有只记在口头或聊天里的偏差(需人工)
 - [ ] E4 已知例外在案 -> 看到:每个未勾选项都在汇总的「已知例外」表里有条目、原因、影响面、是否阻塞"参考实现"判定、后续动作;确实没有例外时该表保留「(无)」(需人工)
-- [ ] E5 参考实现判定 -> 看到:至少一台设备 A-F 全绿(或未勾选项都在 E4 里有在案例外且不阻塞判定);未达到时明确写出"当前设备非参考实现"及其缺口(需人工)
+- [ ] E5 参考实现判定 -> 看到:至少一台设备 A-G 全绿(或未勾选项都在 E4 里有在案例外且不阻塞判定);未达到时明确写出"当前设备非参考实现"及其缺口(需人工)
 
 脚本:E1 与 E2 由两侧总控自动判定(E1 在 Windows 侧 `verify-all.ps1` 实现:核对 `baseline/` 十一件产物;E2 查 `git status` / `git ls-files`);E3-E5 由执行人填写,总控只在汇总里留出「已知例外」表。
 
@@ -102,11 +102,21 @@
 
 这组全绿才可以进下一步
 
+### G. 体验组(G1-G3)
+
+- [ ] G1 默认应用绑定与清单一致 -> 看到:`sudo bash scripts/linux/set-default-apps.sh --check` 退出码 0,逐行 `mime -> desktop` 与 `templates/mimeapps.tsv` 全对(文件管理器 / PDF / 图片 / 压缩包 / 文本);退出码 2 表示某个应用还没装(先做 `05-17`),退出码 1 才是绑定与清单不符(脚本判定)
+- [ ] G2 必需应用在位 -> 看到:`bash scripts/linux/check-apps.sh --check` 退出码 0;清单里每个必需项都在位(Flatpak 查 `flatpak info`、Homebrew 查 `brew list --formula`、原生查 `command -v`);可选行缺失只记一行、不影响结论;每个 Windows 常用软件在清单里都有归属(原生 / Flatpak / 网页 / 回 Windows)(脚本判定)
+- [ ] G3 配置快照与现状无漂移 -> 看到:`bash scripts/linux/export-config.sh --check` 退出码 0(五份快照 `dconf.txt` / `etc-config-diff.txt` / `flatpak-apps.txt` / `brew-bundle.txt` / `layered-pkgs.txt` 与现状逐文件一致);退出码 2 = 有漂移或快照缺失,核对差异后重跑 `--apply --yes` 刷新(脚本判定;漂移不是错误,是快照该更新了)
+
+脚本:G1 由 `scripts/linux/set-default-apps.sh --check` 判定;G2 由 `scripts/linux/check-apps.sh --check` 判定;G3 由 `scripts/linux/export-config.sh --check` 判定;Windows 侧总控把三条都按「在 Fedora 侧跑」记入汇总。**回滚不回退 `/etc` 与 `~/.config`**(设计 06 第 4 节),所以 G3 的快照是重装后回到当前配置的唯一依据,必须在 D 组的退役/重装之前落一次。
+
+这组全绿才可以进下一步
+
 ## 验证
 
-- **逐组按勾选判定**:A、B、C、D、E、F 六组各自"全勾"即该组通过;六组全通过且 E4 的例外清单核对无误,该设备验收通过。
+- **逐组按勾选判定**:A、B、C、D、E、F、G 七组各自"全勾"即该组通过;七组全通过且 E4 的例外清单核对无误,该设备验收通过。
 - **通过定义**(逐字保留,来源:(设计 8)):任一组存在未勾选项且无在案记录的"已知例外" → 该设备判为未完成。至少一台设备完整跑通,方可称为"参考实现"。
-- **结论落盘**:在 `baseline/08-verification.md` 末尾写四行——① 六组逐组结论(A-F:通过/未通过);② 已知例外条数与编号;③ 参考实现判定(是/否,否的话列出缺口);④ 验收日期与执行人。机器汇总本身以"结论: 通过|待人工|不通过"收尾,两者一并留档。
+- **结论落盘**:在 `baseline/08-verification.md` 末尾写四行——① 七组逐组结论(A-G:通过/未通过);② 已知例外条数与编号;③ 参考实现判定(是/否,否的话列出缺口);④ 验收日期与执行人。机器汇总本身以"结论: 通过|待人工|不通过"收尾,两者一并留档。
 - **逐项判据优先于整体退出码**:总控退出码 0/1/2 只作参考(2 = 还有人工项未确认);`verify-baseline.ps1` 的退出码 1 也可能只来自 BitLocker 状态这一项的预期差异——判据看 ① ② ③ 三个逐项行,不是看整体退出码。
 - **维持条件(不属于勾选范围)**:每次 Windows 大版本更新或累积更新之后,按 `07-7` 重跑四项巡检;验收通过不等于永久通过。
 - **文档自检**:本文件改动后运行 `bash scripts/repo/check-docs.sh docs/08-verification.md`,期望 `check-docs: OK`;同时 `git status --porcelain` 里不得出现 `baseline/` 条目。
@@ -116,7 +126,7 @@
 任一组出现未勾选项时,**停手**做三件事,不要靠"装完了"往前推:
 
 1. **A 组不过**:先进固件设置界面把 `BootOrder` 首位设回 Windows Boot Manager(设计 I1),**不得**改用 `efibootmgr -o`(I2);引导本身有问题按 `07-rescue.md` 分类处置。**A9 不过**(固件只认一个 ESP)-> 记偏离项并按设计第 10 节走「共用 ESP 分支」,不要反复重装;**A10 不过**(Anaconda 在含 Windows ESP 的盘上中止)-> 不要重装、不要就地重排分区表,按 `07-1` 判层后进 `07-rescue.md` 手工修,最坏退回轨道 W。
-2. **B/C/F 组不过**:按对应卡的 `出错时:` 走;`fstab`/家目录/驱动这类改动都可逆,先回退到上一状态再做变更(回退动作见 [checklists/rollback.md](../checklists/rollback.md))。
+2. **B/C/F/G 组不过**:按对应卡的 `出错时:` 走;`fstab`/家目录/驱动这类改动都可逆,先回退到上一状态再做变更(回退动作见 [checklists/rollback.md](../checklists/rollback.md))。
 3. **D 组不过或中途反悔**:退役/重装的不可逆项动手前先做一次基线备份(`07-10`);只想停用 Linux 而不删,走 `07-13` 的变体。
 
 每一项的"怎么做"命令都能在本次设备上复跑并得到同一结论;证据(命令输出、脚本退出码、产物路径)与勾选一并写进 `baseline/08-verification.md`。

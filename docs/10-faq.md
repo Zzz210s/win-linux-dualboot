@@ -292,6 +292,22 @@
 -> `03-2`、`05-1`、`05-2`
 脚本:`scripts/linux/mount-shared.sh --check`
 
+### 10-31 终端 / 默认应用 / 工作区这些"手感"设置,重装后还要点一遍吗
+
+- 不用点:`05-14`(交互 shell)、`05-15`(默认应用)、`05-16`(虚拟桌面工作流)三项的期望状态都写在 `templates/` 的真源模板里(交互 shell 走 Homebrew 通道,不用 `rpm-ostree install` 分层),重装后按 `05-18` 的配置快照一条命令回灌。
+- 顺序:先在活系统上把这些定下来 -> `sudo bash scripts/linux/export-config.sh --apply --yes` 落五份快照 -> 重装后 `sudo bash scripts/linux/import-config.sh --apply --yes` 回灌并自检。
+- **回滚不回退 `/etc` 与 `~/.config`**(部署级回滚只管系统层),所以这套快照是"回到当前配置"的唯一依据,必须在退役/重装(`D` 组)之前落一次;自动判定见验收 `G` 组。
+-> `05-14`、`05-15`、`05-16`、`05-18`
+脚本:`scripts/linux/export-config.sh --check`;`scripts/linux/import-config.sh --apply --yes`
+
+### 10-32 Windows 独占软件在 Linux 侧怎么用(VFIO 为什么不采纳)
+
+- 按 `templates/apps.tsv` 逐项定归属,四种通道:原生开源替代(GIMP / Blender / Shotcut 等)、Flatpak、网页版、**重启回 Windows**;`bash scripts/linux/check-apps.sh --check` 会断言必需项在位。
+- **不用 VFIO / 显卡直通**:单张 NVIDIA 卡无法同时供宿主与客户机,双系统已有原生 Windows 不必再跑一个,而且一份 LTSC 授权不能两处同时用(设计 02 决策表 `D7` 与被否项)。
+- 非 3D 的 Windows 独占才考虑轻量 VM;需要 3D 时直接重启回 Windows(`05-11` 的入口)。
+-> `05-11`、`05-17`
+脚本:`scripts/linux/check-apps.sh --check`
+
 ## 分阶段风险速查(5 张)
 
 **总表在 [design/00-design.md](design/00-design.md) 第 9 节(38 条),原子版增补的风险在 [design/02-fedora-atomic-variant-design.md](design/02-fedora-atomic-variant-design.md) 第 9 节。** 下面每张卡只给"本阶段最可能踩的坑 + 一句话缓解",首列条目号与总表逐条对应,不复制后果列。

@@ -4,7 +4,7 @@
 
 一套可复现、可安全撤除的 Windows 11 IoT Enterprise LTSC 2024 + Fedora 44 Silverblue 双系统部署手册,面向同规格的全新设备。
 
-本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**47 张动作卡、48 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
+本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**52 张动作卡、54 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
 
 材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 38 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
 
@@ -189,13 +189,14 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 
 ## 验收
 
-是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分六组:
+是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分七组:
 
 - **A. 引导安全组(A1-A10)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线逐文件一致、`{bootmgr}` 的 `path` 未变、全程没写过永久启动顺序、fedora 条目位于末尾、两块 ESP 互不干扰,含一次**可逆的撤除演练**,并含两条**设备侧必测项**:固件识别两块 ESP(A9,参考设备必做、其他设备推荐)与 Anaconda 在已有 Windows ESP 的盘上装成功(A10,参考设备必做)。
 - **B. 系统功能组(B1-B11)**:Wayland 会话且无 X11 可选、显卡驱动正常且有 nouveau 兜底、模块签名者非空、Secure Boot 仍开启且未引入自签密钥、驱动来源为 ublue 预签名 NVIDIA 镜像、一次性 MOK 注册已完成(`mokutil --list-enrolled`)、`ntfs3` 读写挂载带 `nofail`、共享盘双向可见、家目录重定向生效、RTC 用 UTC、切换系统后蓝牙无需重配、`fwupd` 能识别设备。
 - **C. 双系统切换组(C1-C3)**:一次性 `BootNext` 进 Linux 且不改默认项、一键回 Windows、切换三次后顺序仍稳定。
 - **D. 可撤除性组(D1-D6)**:L5 五步退役完整推演、系统盘隔离逐项核对、两条原地重装路径各走一遍、非重装的引导修复路径已被证明可用。
 - **E. 记录组(E1-E5)**:产物齐全且未入库、偏差回写到设备参数表。
+- **G. 体验组(G1-G3)**:交互 shell、默认应用、虚拟桌面工作流与应用清单都按 `templates/` 下的真源模板固化,配置快照可让重装后一条命令回到当前配置(脚本判定)。
 - **F. 健壮性组(F1-F10)**:真做一次部署回滚演练加一次原地重装演练(先 `--pin`、更新或分层一次、`rollback-deploy.sh --apply --yes`、重启后 `nvidia` 仍加载且 `/var` 数据仍在、最后 `--unpin`;并确认 `D:` 上的数据仍在)、部署回滚与变更前备份可用、journald 持久化、更新策略与配置一致(只 `check`/`download`,不自动应用、不自动重启)、SSH 可达、`systemd-oomd` 与 zram 生效、`smartd` 报告 PASSED、L4 写入的挂载项带 `nofail` 而 `/boot/efi` 刻意不加。任何引导器更新之后重启之前先复读引导器(`check-bootloader.sh --check`:`/boot/loader/grub.cfg` 在位、BLS 条目不为 0,**否则不要重启**),并真做一次 greenboot 自动回滚演练(F10:故意让健康检查失败)。
 
 两侧总控是 [scripts/linux/verify-all.sh](scripts/linux/verify-all.sh) 与 [scripts/windows/verify-all.ps1](scripts/windows/verify-all.ps1),都只做只读判定;两侧都落汇总时用 `--out-dir` / `-OutDir` 指到与人工填写版不同的目录,避免互相覆盖。未勾选项只有在落成"已知例外"并写明影响面时才可接受,否则该设备判为未完成。至少一台设备完整跑通,才能称为"参考实现"——目前还没有。

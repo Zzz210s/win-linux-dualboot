@@ -37,7 +37,7 @@
 | # | 决策 | 内容 | 被否方案与原因 |
 |---|---|---|---|
 | **D1** | 基础系统 | **Fedora 44 Silverblue**(原子版,GNOME 50,Wayland;支持约 13 个月,2026-04 GA) | Kinoite(Plasma)列为等价替换(02 号设计已分析:ublue `Aurora-nvidia`),本次不选,理由是 bluefin 的 NVIDIA 路径验证最充分 |
-| **D2** | 发行版薄接口 | 脚本层把差异压到**四个接口**(装包/更新/回滚/驱动),接口一律是**库文件**;步骤脚本不得出现包管理器字面量,由新规则 **S-1** 强制 | 散在各脚本(现状):下次切换仍要改 20 个文件 |
+| **D2** | 发行版薄接口 | 脚本层把差异压到**五个接口**(装包/更新/回滚/驱动/Homebrew 通道),接口一律是**库文件**;步骤脚本不得出现包管理器字面量,由新规则 **S-1** 强制 | 散在各脚本(现状):下次切换仍要改 20 个文件 |
 | **D3** | NVIDIA 与 Secure Boot | 安装后 `rpm-ostree rebase` 到 ublue 的 NVIDIA 变体(镜像内模块已预签名)+ **一次性 MOK 注册**;保留 nouveau 兜底 | RPM Fusion `akmods` 直装(原子版下不签名模块,已由 02 号设计否决);关闭 Secure Boot(降低整机安全基线) |
 | **D4** | 回滚机制 | **部署级**:`rpm-ostree status` 列部署 + pin/unpin + `rpm-ostree rollback`,回滚后复检 | 包级回退(原子版里没有"改单个包再退回"的粒度)、快照体系(用户已明确否决) |
 | **D5** | 更新策略 | 只**检查/下载**,绝不自动应用与自动重启(`/etc/rpm-ostreed.conf`) | "只装安全更新"(apt 粒度,原子版没有该维度):语义如实替换为"只检查/下载",并写进卡与术语表 |
@@ -47,7 +47,7 @@
 
 ## 3. 薄接口层(第 1 节,已确认)
 
-四个接口一律为**库文件**(头 `# 库文件:非步骤脚本`),不带卡号;步骤脚本只调接口。
+五个接口一律为**库文件**(头 `# 库文件:非步骤脚本`),不带卡号;步骤脚本只调接口(`dbk-brew.sh` 于 2026-10-06 批次 E 加入:交互层与配置快照走 Homebrew,同样不许在步骤脚本里直呼 `brew`)。
 
 | 接口 | 覆盖 | 变量面(= Fedora 原子版) | 关键语义 |
 |---|---|---|---|
@@ -58,7 +58,7 @@
 
 **接口命名纪律**:接口名**不带发行版或实现痕迹**(`dbk-pkg.sh`,不是 `dbk-ostree.sh` —— 后者等于承认"下次切换还要再改一遍名字";该文件历史上已被改名两轮)。
 
-**强制手段 S-1(新增到 `scripts/repo/check-scripts.sh`)**:除上述四个接口文件外,任何 `scripts/linux/*.sh` 出现 `apt-get` / `apt ` / `dpkg` / `snap ` / `rpm-ostree` / `dnf` 字面量即 FAIL。没有这条,薄接口只是口号。(配套:`check-docs-lib.sh` 的白名单与 `03-step-automation-design.md` 的 C9d 名单同步,避免夹具 F7 变红。)
+**强制手段 S-1(新增到 `scripts/repo/check-scripts.sh`)**:除上述五个接口文件外,任何 `scripts/linux/*.sh` 出现 `apt-get` / `apt ` / `dpkg` / `snap ` / `rpm-ostree` / `dnf` / `brew install` 字面量即 FAIL。没有这条,薄接口只是口号。(配套:`check-docs-lib.sh` 的白名单与 `03-step-automation-design.md` 的 C9d 名单同步,避免夹具 F7 变红。)
 
 ## 4. 脚本层语义回切(第 2 节,已确认)
 
@@ -94,7 +94,7 @@
 | `02-partitioning.md` | ESP 改名 + 轨道 L 布局说明回切 |
 | `03-windows.md` | 只同步引用;Windows 侧步骤不动 |
 | `07-rescue.md` | `\EFI\ubuntu\` → `\EFI\fedora\`;原地重装 Linux 改为**先试部署回滚、再谈重装**(保留不可逆警告与次序) |
-| `08-verification.md` | A–F 组判据回切;B 组换回 MOK/显卡来源;F 组换成部署回滚演练;删 snap 四条判据;自动化覆盖侧别表同步 |
+| `08-verification.md` | A–G 组判据回切(G 组为批 E 体验层);B 组换回 MOK/显卡来源;F 组换成部署回滚演练;删 snap 四条判据;自动化覆盖侧别表同步 |
 | `10-faq.md` | snap 相关卡改写为"为什么选原子版:这类问题被结构性消灭";新增"分层安装为什么要重启""回滚还是重装""rebase 会不会丢数据" |
 | `00-overview.md` / `01-firmware.md` | 系统名、寿命(13 个月)、轨迹同步;不变量与参数表数值不变 |
 | `checklists/deploy.md` / `checklists/rollback.md` | 回滚清单改部署级 |
@@ -147,4 +147,5 @@
 
 - 2026-09-25:首版。记录用户四项决定(回切、Silverblue、方式 B、薄接口),给出接口层契约、脚本/手册/夹具三层改动清单、13 条修复存活审计要求、风险与非目标、5 批实施批次。
 - 2026-10-03:四项待核实收口同步 —— stream ↔ Fedora 版本改由 `driver_release_guard` 前置断言强制(不写死映射);`#284` 缓解路径写实(装前核对 → 失败转救援、不重排分区表)并把"在已有 Windows ESP 的盘上装成功"定为参考设备必测项 A10;同盘双 ESP 改为设备侧必测项 A9。KMS `GracePeriodRemaining` 不再换算天数。
+- 2026-10-06:批次 E 体验层 —— 新增卡 05-14…05-18 与六个步骤脚本、薄接口 `dbk-brew.sh` 与三份真源模板;决策表新增 `D7`(体验层不换 DE、走 Homebrew);验收新增 G 组三条(组选择符 `08-A-F` → `08-A-G`),条目 45 → 48。
 - 2026-10-06:批次 M1 六项机制落地 —— 引导器复读断言(`check-bootloader.sh`;上游 #595 的"update 后 grub.cfg 丢失"形态)、greenboot 健康检查与自动回滚(`setup-greenboot.sh` + 验收 F10)、部署清理(`rollback-deploy.sh --prune`,pin 保护)、btrfs 完整性(`check-integrity.sh`,自 check-health 拆出)、NTFS 脏卷零依赖探测(`mount-shared.sh`)、`/etc` 漂移可见化(`ostree admin config-diff` 只报告)。验收条目 44 → 45,步骤脚本 45 → 48。

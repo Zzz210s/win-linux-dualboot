@@ -202,4 +202,71 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 坑:退出码不能当判据(恒为 0);编排顺序是 `storage -> hardening -> mount-shared -> graphics`,其中 `hardening` 的 R1/R2 是**只读核对**(R2 的部署级回滚演练见 `05-9`);**本卡两个脚本都声明了 `# 破坏性:1`,`--apply` 缺 `--yes` 会退 64 且零写**(与其它破坏性脚本同口径)。
 出错时:摘要未写出 -> 核对日志目录写权限后重跑;某模块 fail -> 按摘要的模块名看 `/var/log/dbk/<模块>.log` 定位,再单卡重跑。
 
-L4 的整机验收见 [08-verification.md](08-verification.md) 的 A-F 六组(B 组与 F 组覆盖本阶段的共享盘与健壮性判据);逐项回退动作见 [checklists/rollback.md](../checklists/rollback.md)。
+### 05-14 交互层(交互 shell 用 fish;脚本解释器仍是 bash)
+
+做:交互 shell 换成 `fish`(走 ublue 自带的 **Homebrew** 通道,不用 `rpm-ostree install` 分层——分层会拖慢每次更新),同时**显式保持脚本解释器仍是 bash**(shebang 与 `/bin/sh` 一律不动)。
+  1. 先空跑:`sudo bash scripts/linux/set-interactive.sh --check`
+     看到:五项判定(brew 可用 / fish 在位 / 该用户登录 shell 已是 fish / `/etc/shells` 含 fish 路径 / `/bin/sh` 未被换成 fish);零写
+  2. 装 fish(可选,也可手工 `brew install fish`):`sudo bash scripts/linux/set-interactive.sh --apply --install-fish --yes`
+     看到:`brew install fish` 经 `dbk-brew.sh` 执行;brew 不可用时记**需人工**并给出通道说明(脚本不自动装 brew)
+  3. 应用登录 shell:`sudo bash scripts/linux/set-interactive.sh --apply --yes`
+     看到:备份 `/etc/shells`(`.dbk.bak`,仅首次)-> 追加 fish 路径 -> `chsh -s <fish> <user>` -> 复读五项;幂等(已是目标状态时不写)
+  4. 复核:重开一个终端
+     看到:`echo $SHELL` 指向 fish、`fish -c 'echo ok'` 输出 `ok`;再跑任一 `scripts/linux/*.sh` 仍由 bash 解释
+脚本:sudo bash scripts/linux/set-interactive.sh --check / --apply --yes [--install-fish]
+坑:fish 只能当**交互** shell —— 步骤脚本必须继续 `#!/usr/bin/env bash`(门禁会扫 shebang);`chsh` 只认 `/etc/shells` 里的路径,所以"追加"与"chsh"必须同一次执行;改 `/etc/shells` 前必须留备份(改坏会让所有用户登录失败)。
+出错时:`chsh` 报 shell 不在 `/etc/shells` -> 确认追加成功再重跑;fish 不在 PATH -> 用 `--fish <绝对路径>` 指定(brew 缺省 `/home/linuxbrew/.linuxbrew/bin/fish`)。
+
+### 05-15 默认应用绑定(按清单逐项核对 xdg-mime)
+
+做:按 `templates/mimeapps.tsv`(文件管理器 / PDF / 图片 / 压缩包 / 文本)把默认应用钉死,省掉每次"打开方式"的手动选择。
+  1. 先空跑:`sudo bash scripts/linux/set-default-apps.sh --check`
+     看到:逐行打印 `mime -> 期望 desktop -> 当前值`;一致 = PASS;应用未安装(desktop 文件缺失)= **需人工**(先去 `05-17` 装),绑定与清单不符 = FAIL;零写
+  2. 执行:`sudo bash scripts/linux/set-default-apps.sh --apply --yes`
+     看到:备份 `~/.config/mimeapps.list`(`.dbk.bak`,仅首次)-> 逐行 `xdg-mime default <desktop> <mime>` -> 复读全绿
+  3. 抽验:`xdg-mime query default application/pdf`
+     看到:输出与清单一致;想换 okular / gwenview / Ark / kate 时改**清单**的说明列并重跑,不要手改 `mimeapps.list`
+脚本:sudo bash scripts/linux/set-default-apps.sh --check / --apply --yes
+坑:清单是唯一真源(`templates/mimeapps.tsv`);`xdg-mime` 必须按目标用户上下文跑(`sudo -u` + `--user`),否则写成 root 的 `~/.config` 而脚本仍可能报 PASS。
+出错时:绑不上 -> 先确认该 `.desktop` 在 `/usr/share/applications` 或 `~/.local/share/applications`;查询为空 -> 该 mime 没注册任何应用,去 `05-17` 补装。
+
+### 05-16 虚拟桌面工作流(工作区与核心快捷键)
+
+做:按 `templates/workflow.tsv` 用 `gsettings` 固定虚拟桌面工作流(工作区数量、关掉动态工作区、前两个工作区的直达快捷键);**不换合成器**(niri / KDE 列为非目标)。
+  1. 先空跑:`sudo bash scripts/linux/set-workflow.sh --check`
+     看到:逐行打印 `schema key = 当前值(期望值)`;一致 = PASS,不符 = FAIL,schema/key 不存在或 `gsettings` 取不到 = **需人工**;零写
+  2. 执行:`sudo bash scripts/linux/set-workflow.sh --apply --yes`
+     看到:先 `dconf dump /org/gnome/` 备份到 `~/.config/dbk/workflow.dbk.bak`(仅首次)-> 逐行 `gsettings set` -> 复读全绿;幂等
+  3. 复核:按 `Super+1` / `Super+2` 切工作区
+     看到:直接跳到第 1/2 个工作区;`gsettings get org.gnome.desktop.wm.preferences num-workspaces` 与清单一致
+脚本:sudo bash scripts/linux/set-workflow.sh --check / --apply --yes
+坑:改 `gsettings` 要按目标用户跑(`sudo -u` + 该用户的 dbus 会话),root 改的是 root 自己的配置;`dynamic-workspaces` 为 true 时工作区数量由窗口数决定,清单里必须把它与 `num-workspaces` 一起钉住。
+出错时:`gsettings set` 报 schema 不存在 -> 该 GNOME 版本没有这个键,**改清单去掉这行**而不是硬塞;改坏了用备份回灌:`dconf load /org/gnome/ < ~/.config/dbk/workflow.dbk.bak`。
+
+### 05-17 应用清单与替代映射(必需项在位;Windows 独占怎么分流)
+
+做:按 `templates/apps.tsv` 核对必需应用在位,并按通道分流:原生 / Flatpak / Homebrew / **网页版** / **回 Windows**(非 3D 的 Windows 独占才考虑轻量 VM)。
+  1. 先空跑:`bash scripts/linux/check-apps.sh --check`
+     看到:逐行打印 `名称(通道) -> 在位/缺失`;必需项缺失 = FAIL,可选项缺失只记一行;`flatpak`/`brew` 取不到 = **需人工**;零写(本脚本 `--apply` 与 `--check` 相同,不装任何东西)
+  2. 缺东西时按通道装:`flatpak install flathub <id>` / `brew install <公式>`(脚本不代装,避免把"装哪个"变成隐式决定)
+     看到:重跑 `--check` 由 FAIL 转 PASS,新装项出现在 `flatpak list` / `brew list` 里
+  3. **明确否掉 VFIO / 显卡直通**(设计 02 决策表):单张 NVIDIA 卡、双系统已有原生 Windows、一份 LTSC 授权不能两处同时用;需要 Windows 专属软件时按清单里的 `win` 通道重启回 Windows
+     看到:`templates/apps.tsv` 里每个常用 Windows 软件都有归属(原生 / Flatpak / 网页 / 回 Windows),没有"待定"项
+脚本:bash scripts/linux/check-apps.sh --check(只读;`--apply` 同)
+坑:清单是唯一真源;`web`/`win` 通道**不算缺失**(浏览器或重启回 Windows 即满足),别写成必需项;Flatpak 要写 application id(`org.gnome.Loupe`),不是显示名。
+出错时:flatpak 报 remote 不存在 -> 先手工 `flatpak remote-add --if-not-exists flathub ...`(脚本不代做);brew 公式名不对 -> `brew search <关键词>` 后回填清单。
+
+### 05-18 配置快照与复原(重装后一条命令回到当前配置)
+
+做:把"能被快照带走"的配置落成五份文本快照,重装或换机后按快照复原;除 `dconf` 外还含 `/etc` 漂移、Flatpak 清单、Homebrew 清单与分层包。
+  1. 先空跑:`bash scripts/linux/export-config.sh --check`
+     看到:现场重新生成五份快照并与 `baseline/config/` 逐文件比对;快照缺失 = **需人工**(先做第 2 步),有漂移 = **需人工**并打印差异前几行,无差异 = PASS;零写
+  2. 落快照:`sudo bash scripts/linux/export-config.sh --apply --yes`
+     看到:写出 `baseline/config/{dconf.txt,etc-config-diff.txt,flatpak-apps.txt,brew-bundle.txt,layered-pkgs.txt}` 与 `manifest.txt`(时间戳 + 各文件 sha256);复读为 PASS
+  3. 复原(重装或新机后跑):`sudo bash scripts/linux/import-config.sh --apply --yes`
+     看到:先把现状另存到 `baseline/config/pre-import-<时间戳>/` -> 逐项复原(dconf 回灌、Flatpak 按清单补装、Homebrew 走 `brew bundle`)-> **分层包不自动装**(打印命令并记需人工)-> 末尾自检:重新 dump 与快照比对,不等即 FAIL
+脚本:bash scripts/linux/export-config.sh --check / sudo bash scripts/linux/export-config.sh --apply --yes;sudo bash scripts/linux/import-config.sh --apply --yes
+坑:**回滚不回退 `/etc`、也不回退 `~/.config`** —— "当前配置"要靠这套快照留档,不能指望 `rpm-ostree rollback`;`import` 前必须留 `pre-import-*` 备份(脚本自动做),否则会把现状盖掉;分层包是唯一"不可快照"的项,只能按打印的命令人工执行。
+出错时:`dconf load` 报错 -> 看 `dconf.txt` 是否被编辑器改坏(必须原样文本);`brew bundle` 失败 -> 逐条 `brew install`,与清单对齐后重跑 `--check`。
+
+L4 的整机验收见 [08-verification.md](08-verification.md) 的 A-G 七组(B 组与 F 组覆盖本阶段的共享盘与健壮性判据,G 组覆盖本页的体验层);逐项回退动作见 [checklists/rollback.md](../checklists/rollback.md)。

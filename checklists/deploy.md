@@ -80,10 +80,15 @@
 - `[ ]` L4-11 建立"回 Windows 的入口":一次性 `BootNext` 或厂商菜单键 | 脚本:`scripts/linux/reboot-to-windows.sh --check`;`scripts/windows/set-bootnext.ps1 -Check`(执行加 `-Apply -Yes` / `--apply --yes`) | 判据:至少一个可用,且都不改 `BootOrder`(I1/I2) | 卡:`05-11`
 - `[ ]` L4-12 落 L4 两份产物 | 脚本:`scripts/linux/collect-l4.sh --check`(落盘加 `--apply`) | 判据:`baseline/04-first-boot.md` 与 `baseline/04-robustness.md` 在位 | 卡:`05-12`
 - `[ ]` L4-13 (可选)按顺序汇总跑一遍 L4 各模块 | 脚本:`scripts/linux/first-boot.sh --check`;`scripts/linux/hardening.sh --check`(执行时 `--apply --yes`,缺 `--yes` 退 64 零写) | 判据:单项失败不改整体退出码,只在摘要里标出失败项 | 卡:`05-13`
+- `[ ]` L4-14 交互层:交互 shell 用 fish(经 Homebrew 通道,**脚本解释器仍是 bash**) | 脚本:`scripts/linux/set-interactive.sh --check`(装 fish 加 `--install-fish`,执行加 `--apply --yes`) | 判据:`echo $SHELL` 指向 fish、`fish -c 'echo ok'` 输出 `ok`;`/bin/sh` 未被换成 fish | 卡:`05-14`
+- `[ ]` L4-15 默认应用绑定:按 `templates/mimeapps.tsv` 钉死文件管理器 / PDF / 图片 / 压缩包 / 文本 | 脚本:`scripts/linux/set-default-apps.sh --check`(执行加 `--apply --yes`) | 判据:`xdg-mime query default <mime>` 与清单逐项一致(desktop 缺失记需人工,先补 `05-17`) | 卡:`05-15`
+- `[ ]` L4-16 虚拟桌面工作流:工作区数量 / 关动态工作区 / 前两个工作区直达键 | 脚本:`scripts/linux/set-workflow.sh --check`(执行加 `--apply --yes`) | 判据:逐行 `schema key = 期望值`,且 `Super+1`/`Super+2` 直达 | 卡:`05-16`
+- `[ ]` L4-17 应用清单与替代映射:按 `templates/apps.tsv` 断言必需项在位(VFIO 为被否项) | 脚本:`scripts/linux/check-apps.sh --check`(只读,`--apply` 同) | 判据:必需项全在位,可选项缺失只记一行,Windows 独占都有归属 | 卡:`05-17`
+- `[ ]` L4-18 配置快照与复原:五份快照落 `baseline/config/`,重装后回灌 | 脚本:`scripts/linux/export-config.sh --check`(落快照加 `--apply --yes`);`scripts/linux/import-config.sh --apply --yes`(复原) | 判据:`export-config.sh --check` 报无漂移;`import` 末尾自检一致 | 卡:`05-18`
 
 ## 6. 完成判据
 
-- **唯一完成判据**是 [08-verification.md](../docs/08-verification.md) 的 A-F 六组全部勾选;不以"装完了"为准。每台设备的填写版落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`),随 `baseline/` 不入库。两侧总控([verify-all.sh](../scripts/linux/verify-all.sh)、[verify-all.ps1](../scripts/windows/verify-all.ps1))只做只读判定;落汇总时必须用 `--out-dir` / `-OutDir` 指到与"填写版"不同的目录,避免互相覆盖(见 [08-verification.md](../docs/08-verification.md) 的"记录载体")。
+- **唯一完成判据**是 [08-verification.md](../docs/08-verification.md) 的 A-G 七组全部勾选;不以"装完了"为准。每台设备的填写版落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`),随 `baseline/` 不入库。两侧总控([verify-all.sh](../scripts/linux/verify-all.sh)、[verify-all.ps1](../scripts/windows/verify-all.ps1))只做只读判定;落汇总时必须用 `--out-dir` / `-OutDir` 指到与"填写版"不同的目录,避免互相覆盖(见 [08-verification.md](../docs/08-verification.md) 的"记录载体")。
 - **没有产物的阶段视为未完成**,不得进入下一阶段:本清单每一节开头的"本阶段产物"行就是该节的完成门槛。
 - **L2 是硬闸门**:报告末行结论为"禁止进入 L3"时,不得继续 L3 及以后的动作。
 - **共存增量 4 步**(只轨道 D 走):115GiB 预留(§2 分盘-4)、引导不变量核查(§3 全程 + A 组)、`ntfs3` 共享盘(§5 L4-1)、退役与救援(L5)。

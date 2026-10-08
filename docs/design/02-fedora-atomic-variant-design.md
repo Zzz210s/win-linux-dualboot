@@ -23,7 +23,8 @@
 | D3 | 回滚 = **部署级**(`rpm-ostree rollback` + GRUB 菜单选旧部署) | **不用 snapper、不用 grub-btrfs、不用 btrfs 快照** |
 | D4 | 双系统需 **独立 ESP + 独立 `/boot`** | 不让 Anaconda 使用 Windows 的 ESP |
 | D5 | **三轨道**:W(只 Windows)/ L(只 Silverblue)/ D(双系统) | 满足"任一系统可单独安装" |
-| D6 | 保留全部既有机制**不砍**:MOK 注册、`ntfs3` 读写共享盘、**每卡一脚本**、双模式 CLI 与退出码、C1–C9 自检、A–F 验收、KMS 脚本激活 | "简化"来自按轨道拆分与文档合并,不来自砍机制 |
+| D6 | 保留全部既有机制**不砍**:MOK 注册、`ntfs3` 读写共享盘、**每卡一脚本**、双模式 CLI 与退出码、C1–C9 自检、A–G 验收、KMS 脚本激活 | "简化"来自按轨道拆分与文档合并,不来自砍机制 |
+| D7 | 体验层:换桌面环境? | **不换**:保持 Silverblue / GNOME(依赖的是 GNOME 的虚拟桌面工作流),只在现有 DE 上固化交互 shell、默认应用与工作区;**交互层走 Homebrew 通道**(ublue 自带),不用 `rpm-ostree install` 分层(分层会拖慢每次更新) | 换 DE(KDE/Aurora、niri)会作废整套 GNOME 相关验证面与卡号 |
 
 **本设计与先前方案的关键差别**(一句话):传统版的"一键回滚"是**文件系统快照级**(snapper/grub-btrfs),原子版的"一键回滚"是**系统部署级**(ostree deployment);后者更强,但要求独立 `/boot`、且包管理与驱动路径整体改写。
 
@@ -185,5 +186,6 @@
 | 日期 | 变更 |
 |---|---|
 | 2026-09-19 | 初版:取代传统版变体设计。基础系统改 Fedora 44 Silverblue(原子)、NVIDIA 改 ublue rebase + MOK、回滚改部署级(去 snapper/grub-btrfs/快照)、双系统改独立 ESP + 独立 `/boot`、引入三轨道结构、给出脚本与文档影响面、增补验收与 6 条风险、标注证据等级与须复核项 |
+| 2026-10-06 | 体验层(批次 E):新增卡 `05-14`…`05-18` 与六个步骤脚本(`set-interactive.sh` / `set-default-apps.sh` / `set-workflow.sh` / `check-apps.sh` / `export-config.sh` / `import-config.sh`)、薄接口 `dbk-brew.sh`(Homebrew 通道)与三份真源模板 `templates/{mimeapps,workflow,apps}.tsv`;决策表补 **D7 体验层不换 DE + 走 Homebrew**;验收新增 **G 组(G1-G3)**、组选择符 `08-A-F` → `08-A-G`、条目数 45 → 48 |
 | 2026-10-03 | 四项待核实收口:第 5 节的"需实测项"改为**设备侧必测项**(验收 A9,给可执行步骤与共用 ESP 分支);第 6 节的 `#284` 缓解路径写实(装前核对 → **失败转救援、不重排分区表**)并把"在已有 Windows ESP 的盘上装成功"定为参考设备必测项(A10);第 9 节验收增补与第 10 节事实等级同步(#284 标"截至 2026-09 仍开")。**不变量与分区数值未动** |
 | 2026-10-06 | 机制与口径同步(批次 M1 文档侧):① 事实表补 ublue stream 集合(`stable-daily` 已移除)、NVIDIA `-nvidia-open` 分叉与 Aurora 43 起停建 proprietary、升级口径已是 `bootc switch`(镜像模式,`rpm-ostree rebase` 仍可用);② 决策表新增"Windows 独占程序改走 VFIO / 显卡直通"被否项(单张 NVIDIA 卡 + 双系统已有原生 Windows + 一份 LTSC 授权不能两处同时用;替代 = 非 3D 独占跑轻量 VM 或重启回 Windows);③ 第 9 节 F 组增补 **F10 启动失败自动回滚演练**(greenboot)。引导器状态与更新后复读断言、部署清理、btrfs 巡检、NTFS 脏卷探测与 `/etc` 漂移可见化的落点见 `03-step-automation-design.md` 与各卡 |
