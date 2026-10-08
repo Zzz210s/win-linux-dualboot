@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-# 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。按 docs/08-verification.md 的 A-F 六组逐项判定:
+# 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。按 docs/08-verification.md 的 A-G 七组逐项判定:
 #   能自动的复用 scripts\windows\verify-baseline.ps1 的逐项结论、bcdedit 固件表与 baseline 产物核对;不能自动的
 #   记「需人工」并给手动核对步骤。**绝不执行任何 -Apply**:本脚本自己的 -Apply 只表示"把汇总落盘",子脚本一律只被
 #   以只读方式调用(夹具断言从不传 -Apply)。汇总只在 -Apply 时落盘 <BaselineDir>\auto\08-verification.md(每台设备副本,
@@ -11,7 +11,7 @@
 #   为夹具注入点。本文件必须保存为 UTF-8 with BOM。夹具级验证,真机未跑。
 #   -Step 语义(执行器专用,真源 docs/design/03 第 5 节):取**验收条目关联的卡号**(NN-K),不是第 2 节的
 #   「脚本头卡号集合成员判断」——本执行器不绑卡,没有「# 对应卡:」头。合法值 = 本脚本条目表里出现过的卡号
-#   (非法时打印可用集合并非零退出 64);`08-A-F` = 六组全判(缺省)。给了 -Step 时**只判定关联到该卡号的条目**,
+#   (非法时打印可用集合并非零退出 64);`08-A-G` = 七组全判(缺省)。给了 -Step 时**只判定关联到该卡号的条目**,
 #   其余条目记「跳过」、不计入退出码(退出码语义不变:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项)。
 [CmdletBinding()]
 param(
@@ -25,9 +25,9 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $sourceDir '..\..'))
 . (Join-Path $sourceDir 'dbk-cli.ps1')
 . (Join-Path $sourceDir 'dbk-win-probe.ps1')
 Parse-DbkArgs -Check:$Check -Apply:$Apply -Json:$Json -Yes:$Yes -Step $Step -Log $Log -Extra $Extra
-# -Step:缺省 '08-A-F' = 六组全判;其它值在条目表建好后按「关联卡号」过滤(非法值 -> 64,见下面的过滤段)。
-if (-not $script:DbkStep) { $script:DbkStep = '08-A-F' }
-$script:StepSel = ''; if ($script:DbkStep -ne '08-A-F') { $script:StepSel = $script:DbkStep }
+# -Step:缺省 '08-A-G' = 七组全判;其它值在条目表建好后按「关联卡号」过滤(非法值 -> 64,见下面的过滤段)。
+if (-not $script:DbkStep) { $script:DbkStep = '08-A-G' }
+$script:StepSel = ''; if ($script:DbkStep -ne '08-A-G') { $script:StepSel = $script:DbkStep }
 if ($script:DbkMode -eq 'apply') { Set-DbkLogDefault -Name 'verify-all' }
 if (-not $BaselineScript) { $BaselineScript = Join-Path $repoRoot 'scripts\windows\verify-baseline.ps1' }
 if (-not $GitRoot) { $GitRoot = $repoRoot }
@@ -153,12 +153,15 @@ Add-Manual F7 F '在 Fedora 侧 systemd-oomd 为 active 且 zramctl 有 /dev/zra
 Add-Manual F8 F '在 Fedora 侧 smartd 为 active 且 smartctl -H 报 PASSED' '05-8'
 Add-Manual F9 F '在 Fedora 侧 fstab 非 root 条目都带 nofail,/boot/efi 不带' '05-1'
 Add-Manual F10 F '在 Fedora 侧故意让 greenboot 健康检查失败(60-dbk-health.sh 改为 exit 1)后重启两次,应自动退回上一部署、桌面可用、BootOrder 首位仍是 Windows;复原后 setup-greenboot.sh --check 复检为绿(参考设备必做)' '05-9'
+Add-Manual G1 G '在 Fedora 侧 sudo bash scripts/linux/set-default-apps.sh --check 报 0(逐项 mime -> desktop 与 templates/mimeapps.tsv 一致;报 2 = 应用未装,先做 05-17)' '05-15'
+Add-Manual G2 G '在 Fedora 侧 bash scripts/linux/check-apps.sh --check 报 0(必需项全在位;可选缺失只记一行)' '05-17'
+Add-Manual G3 G '在 Fedora 侧 bash scripts/linux/export-config.sh --check 报 0(五份快照与现状一致;报 2 = 有漂移,复核后 --apply --yes 刷新)' '05-18'
 
 # ===== -Step 过滤与计数(执行器 -Step 语义:见脚本头与设计 03 第 5 节)=====
 $known = @($script:Items | ForEach-Object { $_.Card } | Sort-Object -Unique)
 if ($script:StepSel -and ($known -notcontains $script:StepSel)) {
   Show-DbkUsage
-  Write-DbkNote ('用法错误: -Step ' + $script:StepSel + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + ($known -join '、') + ';08-A-F = 六组全判(缺省)')
+  Write-DbkNote ('用法错误: -Step ' + $script:StepSel + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + ($known -join '、') + ';08-A-G = 七组全判(缺省)')
   exit $script:DBK_USAGE
 }
 foreach ($i in $script:Items) {
