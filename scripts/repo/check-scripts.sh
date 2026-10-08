@@ -21,7 +21,7 @@ SC="$(command -v shellcheck || true)"
 #   flatpak 只在命令形态报(“GUI 应用优先 flatpak”这类指引文字不该拦)。
 #   只给 apt 分支加词首守卫,否则英文单词里的 apt(SCSIAdapter / adaptation)会永久误报,
 #   使 Task 10 的“S-1 清零”不可达(WMI 类名与 PS 属性名不能改名)。
-S1_PAT='(^|[^A-Za-z0-9_])apt(-get)?|aptitude|dpkg|dnf|\byum\b|\bzypper\b|\bpacman\b|\bapk\b|\bsnapd?\b|rpm-ostreed?|flatpak[[:space:]]+(install|uninstall|update|remote-add|remote-delete)'
+S1_PAT='(^|[^A-Za-z0-9_])apt(-get)?|aptitude|dpkg|dnf|\byum\b|\bzypper\b|\bpacman\b|\bapk\b|\bsnapd?\b|rpm-ostreed?|flatpak[[:space:]]+(install|uninstall|update|remote-add|remote-delete)|brew[[:space:]]+(install|upgrade|uninstall|bundle)'
 
 # 环境缺失的检查项必须显式披露为 SKIP;SKIP 不影响退出码(退出码只由 fail 决定)。
 # templates/ 与 /tests/ 不在检查范围内(见文件头注释):这里显式声明,避免把"未报错"误读成"通过"。
@@ -83,9 +83,9 @@ while IFS= read -r f; do
   esac
   # S-1:除豁免文件外,步骤脚本不得直呼包管理器(发行版差异必须收敛在接口层)。
   #   范围:scripts/linux/*.sh 与 scripts/windows/*.ps1(两侧对称);scripts/repo/** 的仓库自检不在扫描范围内(只做模式匹配,不装包)。
-  #   豁免两组:四个发行版薄接口(Linux 侧收敛点)+ 四个 Windows 契约库(Windows 侧对应物)。
+  #   豁免:Linux 侧五个发行版包通道薄接口(dbk-pkg/dbk-update/dbk-rollback/dbk-driver/dbk-brew)+ 四个 Windows 契约库。
   case "$f" in
-    "$ROOT"/scripts/linux/dbk-pkg.sh|"$ROOT"/scripts/linux/dbk-update.sh|"$ROOT"/scripts/linux/dbk-rollback.sh|"$ROOT"/scripts/linux/dbk-driver.sh) ;;
+    "$ROOT"/scripts/linux/dbk-pkg.sh|"$ROOT"/scripts/linux/dbk-update.sh|"$ROOT"/scripts/linux/dbk-rollback.sh|"$ROOT"/scripts/linux/dbk-driver.sh|"$ROOT"/scripts/linux/dbk-brew.sh) ;;
     "$ROOT"/scripts/windows/dbk.ps1|"$ROOT"/scripts/windows/dbk-cli.ps1|"$ROOT"/scripts/windows/dbk-obs.ps1|"$ROOT"/scripts/windows/dbk-win-probe.ps1) ;;
     "$ROOT"/scripts/linux/*.sh|"$ROOT"/scripts/windows/*.ps1)
       if hits="$(grep -nE "$S1_PAT" "$f" 2>/dev/null)"; then
