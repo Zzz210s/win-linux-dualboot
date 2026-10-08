@@ -27,65 +27,26 @@ if [ -r "$BREW_LIB" ]; then
   # shellcheck source=/dev/null disable=SC1090
   . "$BREW_LIB"
 fi
+# 快照表/比对口径/采集分派/manifest 校验拆到单职责库 dbk-config-snapshot.sh(原文件逼近 200 行上限;口径不变)。
+# shellcheck source=scripts/linux/dbk-config-snapshot.sh disable=SC1091
+. "$HERE/dbk-config-snapshot.sh"
 dbk_enable_errtrap
 dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "export-config"
 
 CFG="${DBK_CONFIG_DIR:-$ROOT/baseline/config}"
-FILES=(dconf.txt etc-config-diff.txt flatpak-apps.txt brew-bundle.txt layered-pkgs.txt)
-DC=(); OS=(); FP=()
-read -r -a DC <<<"${DBK_DCONF:-dconf}"
-read -r -a OS <<<"${DBK_OSTREE:-ostree}"
-read -r -a FP <<<"${DBK_FLATPAK:-flatpak}"
+mapfile -t FILES < <(snap_files)
 
 MANUAL=(); DIFFS=(); FAILS=(); TMP=""
 cleanup() { if [ -n "$TMP" ]; then rm -rf "$TMP"; fi; return 0; }
 trap cleanup EXIT
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/dbk-export.XXXXXX")"
 
-# 比对口径:去掉空行与纯注释行("纯注释行"从行首到行尾只有空白与 # 开头的注释)。grep 无匹配返回 1,这里吞掉。
-norm() { grep -vE '^[[:space:]]*(#.*)?$' "$1" 2>/dev/null || true; }
+# 比对口径(去空行与纯注释行)与五份快照的清单表/采集分派都在 dbk-config-snapshot.sh(snap_norm / snap_files / snap_gen)。
+norm() { snap_norm "${1:-}"; }
+gen_file() { snap_gen "$1" "$2" 1; }
 
-# gen_cmd <标签> <输出文件> <命令...>:命令缺失或执行失败 → 2 需人工(取不到数据,不 fail-open);输出写文件。
-gen_cmd() {
-  local label="$1" out="$2"; shift 2
-  if ! { [ -x "${1:-}" ] || command -v "${1:-}" >/dev/null 2>&1; }; then
-    MANUAL+=("$label:未找到命令 ${1:-}(需人工)")
-    printf '# 取不到数据:命令缺失(%s)\n' "${1:-}" >"$out"; return 2
-  fi
-  if "$@" >"$out" 2>"$out.err"; then rm -f "$out.err"; return 0; fi
-  MANUAL+=("$label:命令失败($*)")
-  rm -f "$out.err"; printf '# 取不到数据:命令失败(%s)\n' "$1" >"$out"; return 2
-}
-
-# brew 清单:经 dbk-brew.sh 的 brew_bundle_dump <目标文件> 落盘;任何非 0(含 2 需人工 / 9 跳过)按需人工,不算 FAIL。
-gen_brew() {
-  local st=0
-  if command -v brew_bundle_dump >/dev/null 2>&1; then brew_bundle_dump "$1" >/dev/null 2>&1 || st=$?; else st=2; fi
-  [ "$st" -eq 0 ] && return 0
-  MANUAL+=("brew 清单:dbk-brew.sh 未就位或 brew 不可用(rc=$st,需人工;库 $BREW_LIB)")
-  printf '# 取不到数据:brew 接口不可用(rc=%s)\n' "$st" >"$1"; return 2
-}
-
-# 分层包清单:经 dbk-pkg.sh 的只读接口;读不到分层状态 → 2 需人工。
-gen_layered() {
-  if command -v pkg_layered_list >/dev/null 2>&1 && pkg_layered_list >"$1" 2>/dev/null; then return 0; fi
-  MANUAL+=("分层包清单:读不到分层状态(需人工)")
-  printf '# 取不到数据:分层状态读不到\n' >"$1"; return 2
-}
-
-# gen_file <文件名> <输出路径>:按文件名分派到对应的采集器。
-gen_file() {
-  case "$1" in
-    dconf.txt) gen_cmd "dconf 清单" "$2" "${DC[@]}" dump / ;;
-    etc-config-diff.txt) gen_cmd "/etc 漂移" "$2" "${OS[@]}" admin config-diff ;;
-    flatpak-apps.txt) gen_cmd "Flatpak 清单" "$2" "${FP[@]}" list --app --columns=application,origin ;;
-    brew-bundle.txt) gen_brew "$2" ;;
-    layered-pkgs.txt) gen_layered "$2" ;;
-    *) return 1 ;;
-  esac
-}
 
 # cmp_file <文件名> <check|apply>:生成现场快照并与 $CFG 下同名文件比对;差异按模式进 DIFFS 或 FAILS。
 cmp_file() {

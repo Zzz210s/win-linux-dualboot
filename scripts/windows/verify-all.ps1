@@ -1,77 +1,87 @@
 ﻿#Requires -Version 5.1
-# 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。按 docs/08-verification.md 的 A-G 七组逐项判定:
-#   能自动的复用 scripts\windows\verify-baseline.ps1 的逐项结论、bcdedit 固件表与 baseline 产物核对;不能自动的
-#   记「需人工」并给手动核对步骤。**绝不执行任何 -Apply**:本脚本自己的 -Apply 只表示"把汇总落盘",子脚本一律只被
-#   以只读方式调用(夹具断言从不传 -Apply)。汇总只在 -Apply 时落盘 <BaselineDir>\auto\08-verification.md(每台设备副本,
-#   含「已知例外」表与结论行);-Check 零写。同一台设备两侧都跑时用 -BaselineDir 分指两个目录,再人工合并为填写版。
+# 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。条目表真源 = scripts\verification-items.tsv(A-G 七组 48 条):
+#   本脚本只读它,按「侧」与「编号」分派判定 —— 侧 = L(在 Fedora 侧判)的条目在本侧记「需人工」并注明在 Fedora 侧跑;
+#   判定脚本 = - 的条目按标签记「需人工」(标签即人工核对步骤);其余走本侧内置探测(按编号分派:复用
+#   scripts\windows\verify-baseline.ps1 的 ①/②/③ 结论、bcdedit 固件表、baseline 产物与 git 核对)。增删条目只改那张表。
+#   **绝不执行任何 -Apply**:本脚本自己的 -Apply 只表示"把汇总落盘",子脚本一律只被以只读方式调用(夹具断言从不传 -Apply)。
+#   汇总只在 -Apply 时落盘 <OutDir>\08-verification.md(每台设备副本,含「已知例外」表与结论行);-Check 零写。
 #   退出码:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 -ConfirmManual 表示人工项已逐条核对,
 #   不再计入退出码)/ 64 用法错误。用法(仓库根、管理员会话):
 #     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-all.ps1 -Check
-#   -BaselineDir(缺省 baseline)/-OutDir(缺省 <BaselineDir>\auto;汇总写在它下面;缺省落点避开手填的 <BaselineDir>\08-verification.md)
-#   为夹具注入点。本文件必须保存为 UTF-8 with BOM。夹具级验证,真机未跑。
-#   -Step 语义(执行器专用,真源 docs/design/03 第 5 节):取**验收条目关联的卡号**(NN-K),不是第 2 节的
-#   「脚本头卡号集合成员判断」——本执行器不绑卡,没有「# 对应卡:」头。合法值 = 本脚本条目表里出现过的卡号
-#   (非法时打印可用集合并非零退出 64);`08-A-G` = 七组全判(缺省)。给了 -Step 时**只判定关联到该卡号的条目**,
-#   其余条目记「跳过」、不计入退出码(退出码语义不变:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项)。
+#   注入点:-BaselineDir(缺省 baseline)/-OutDir(缺省 <BaselineDir>\auto;缺省落点避开手填的 <BaselineDir>\08-verification.md);
+#   -ItemsTsv 或环境变量 DBK_ITEMS_TSV(换一张条目表,夹具用)。本文件必须保存为 UTF-8 with BOM。
+#   -Step 语义(执行器专用,真源 docs/design/03 第 5 节,与 Linux 侧 verify-all.sh 同口径):`08-A-G` = 七组全判(缺省);
+#   `08-A`…`08-G` = 只判该组(过滤条目表的**组**列);其它值 = 验收条目关联的卡号(NN-K,过滤**卡**列)。非法时打印可用集合
+#   并非零退出 64;给了 -Step 时未命中的条目记「跳过」、不计入退出码(退出码语义不变:0/1/2/64)。夹具级验证,真机未跑。
 [CmdletBinding()]
 param(
   [switch]$Check, [switch]$Apply, [switch]$Json, [switch]$Yes, [switch]$ConfirmManual,
   [string]$Step = '', [string]$Log = '', [string[]]$Extra = @(),
-  [string]$BaselineDir = 'baseline', [string]$BaselineScript = '', [string]$FirmwareText = '', [string]$GitRoot = '', [string]$OutDir = ''
+  [string]$BaselineDir = 'baseline', [string]$BaselineScript = '', [string]$FirmwareText = '', [string]$GitRoot = '', [string]$OutDir = '',
+  [string]$ItemsTsv = ''
 )
 $ErrorActionPreference = 'Stop'
 $sourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $sourceDir '..\..'))
 . (Join-Path $sourceDir 'dbk-cli.ps1')
 . (Join-Path $sourceDir 'dbk-win-probe.ps1')
+. (Join-Path $sourceDir 'dbk-items.ps1')
 Parse-DbkArgs -Check:$Check -Apply:$Apply -Json:$Json -Yes:$Yes -Step $Step -Log $Log -Extra $Extra
-# -Step:缺省 '08-A-G' = 七组全判;其它值在条目表建好后按「关联卡号」过滤(非法值 -> 64,见下面的过滤段)。
 if (-not $script:DbkStep) { $script:DbkStep = '08-A-G' }
-$script:StepSel = ''; if ($script:DbkStep -ne '08-A-G') { $script:StepSel = $script:DbkStep }
 if ($script:DbkMode -eq 'apply') { Set-DbkLogDefault -Name 'verify-all' }
 if (-not $BaselineScript) { $BaselineScript = Join-Path $repoRoot 'scripts\windows\verify-baseline.ps1' }
 if (-not $GitRoot) { $GitRoot = $repoRoot }
 $base = [System.IO.Path]::GetFullPath($BaselineDir)
 if (-not $OutDir) { $OutDir = Join-Path $base 'auto' }
 $summary = Join-Path ([System.IO.Path]::GetFullPath($OutDir)) '08-verification.md'
+# 条目表(唯一真源):参数 > 环境变量 > 仓库相对路径;读不到就 64 零写,绝不回退到硬编码条目。
+$itemsPath = $ItemsTsv
+if (-not $itemsPath) { $itemsPath = [string]$env:DBK_ITEMS_TSV }
+if (-not $itemsPath) { $itemsPath = Join-Path $repoRoot 'scripts\verification-items.tsv' }
+$table = Read-DbkVerificationItems -Path $itemsPath
+if (-not $table.Ok) { Show-DbkUsage; Write-DbkNote ('用法错误: ' + $table.Error + '(条目表随仓库分发,不要手工生成)'); exit $script:DBK_USAGE }
+$sel = Get-DbkStepSelection -Items $table.Items -Step $script:DbkStep
+if ($sel.Mode -eq 'invalid') {
+  Show-DbkUsage
+  Write-DbkNote ('用法错误: -Step ' + $script:DbkStep + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + $sel.Known + ';08-A-G = 七组全判(缺省)')
+  exit $script:DBK_USAGE
+}
 $script:Items = New-Object System.Collections.ArrayList
 $script:nPass = 0; $script:nFail = 0; $script:nManual = 0; $script:nSkip = 0
 function Get-DbkTag { param([string]$State); switch ($State) {
     'pass' { return 'PASS' } 'fail' { return 'FAIL' } 'skip' { return '跳过' }
     default { if ($ConfirmManual) { return '需人工(已确认)' } return '需人工' } } }
 function Add-VerifyItem {
-  # 只登记;打印与计数在「-Step 过滤与计数」段(否则 -Step 过滤后的结论会与已打印的行不一致)。
+  # 只登记;打印与计数在下面的打印段(否则 -Step 过滤后的结论会与已打印的行不一致)。
   param([string]$Id, [string]$Group, [string]$State, [string]$Reason, [string]$Card)
   [void]$script:Items.Add([pscustomobject]@{ Id = $Id; Group = $Group; State = $State; Reason = $Reason; Card = $Card })
 }
-function Add-Manual { param([string]$Id, [string]$Group, [string]$Reason, [string]$Card) Add-VerifyItem $Id $Group 'manual' $Reason $Card }
 function Get-VerifyState { param([string]$Id) foreach ($i in $script:Items) { if ($i.Id -eq $Id) { return $i.State } } return '' }
 
 # 复用 07-7 的只读巡检:以子进程方式跑,只传 -BaselineDir(绝不传 -Apply),逐行取 ①/②/③ 的结论。
+$script:BaseOut = ''
 function Invoke-BaselineCheck {
-  $script:BaseOut = ''
   if (-not (Test-Path -LiteralPath $BaselineScript)) { return }
   $exe = Get-Command powershell.exe -ErrorAction SilentlyContinue
   if (-not $exe) { return }
-  # 不合并 stderr:子脚本按 O2 把失败写 stderr,而 `2>&1` 会把原生 stderr 变成 NativeCommandError,在 Stop 下终止执行器(①/②/③ 行在 stdout,不合并也能解析)
+  # 不合并 stderr:子脚本按 O2 把失败写 stderr,`2>&1` 会把原生 stderr 变成 NativeCommandError,在 Stop 下终止执行器。
   $script:BaseOut = (& $exe.Source '-NoProfile' '-ExecutionPolicy' 'Bypass' '-File' $BaselineScript '-BaselineDir' $BaselineDir | Out-String)
 }
 function Get-BaselineVerdict {
   param([string]$Mark)
-  foreach ($l in ($script:BaseOut -split "`r?`n")) {
-    if ($l -match ([regex]::Escape($Mark) + '\s*->\s*(通过|不通过|需人工介入)')) { return $Matches[1] }
-  }
+  foreach ($l in ($script:BaseOut -split "`r?`n")) { if ($l -match ([regex]::Escape($Mark) + '\s*->\s*(通过|不通过|需人工介入)')) { return $Matches[1] } }
   return ''
 }
-function Add-BaselineItem {
-  param([string]$Id, [string]$Card, [string]$Lab, [string]$Mark)
+function Get-DbkBaselineItem {
+  # 返回 @{State;Reason};A1/A3/A4 共用一次巡检结果。
+  param([string]$Mark, [string]$Lab)
   $hint = ';手动核对:在 Windows 侧跑 verify-baseline.ps1 -BaselineDir ' + $BaselineDir
-  if (-not (Test-Path -LiteralPath $BaselineScript)) { Add-Manual $Id 'A' ($Lab + ':找不到 ' + $BaselineScript + $hint) $Card; return }
+  if (-not (Test-Path -LiteralPath $BaselineScript)) { return @{ State = 'manual'; Reason = ($Lab + ':找不到 ' + $BaselineScript + $hint) } }
   $v = Get-BaselineVerdict $Mark
-  if (-not $v) { Add-Manual $Id 'A' ($Lab + ':基线巡检输出里取不到该行(需管理员会话?)' + $hint) $Card }
-  elseif ($v -eq '通过') { Add-VerifyItem $Id 'A' 'pass' ($Lab + ':基线巡检判为通过') $Card }
-  elseif ($v -eq '需人工介入') { Add-Manual $Id 'A' ($Lab + ':基线巡检判为需人工介入(读不到现场状态或基线产物缺失),需人工核对' + $hint) $Card }
-  else { Add-VerifyItem $Id 'A' 'fail' ($Lab + ':基线巡检判为不通过,与 L2 基线不一致;处置见 07-6') $Card }
+  if (-not $v) { return @{ State = 'manual'; Reason = ($Lab + ':基线巡检输出里取不到该行(需管理员会话?)' + $hint) } }
+  if ($v -eq '通过') { return @{ State = 'pass'; Reason = ($Lab + ':基线巡检判为通过') } }
+  if ($v -eq '需人工介入') { return @{ State = 'manual'; Reason = ($Lab + ':基线巡检判为需人工介入(读不到现场状态或基线产物缺失),需人工核对' + $hint) } }
+  return @{ State = 'fail'; Reason = ($Lab + ':基线巡检判为不通过,与 L2 基线不一致;处置见 07-6') }
 }
 # 固件枚举文本 → @{Order;Desc;Path}(BootOrder 的 GUID 序列含跨行续行);解析实现见 dbk-win-probe.ps1。
 function Get-FwOrder {
@@ -80,92 +90,64 @@ function Get-FwOrder {
   else { try { $t = (& bcdedit /enum firmware 2>&1 | Out-String) } catch { $t = '' } }
   return (Get-DbkFwInfo -Text $t)
 }
-
-Invoke-BaselineCheck
-$fw = Get-FwOrder
-$fo = @($fw.Order)
-# ===== A 引导安全组 =====
-Add-BaselineItem A1 '07-7' '① BootOrder 首位仍是 Windows Boot Manager' '① BootOrder 首位'
-Add-Manual A2 A '连续重启 3 次(不按键、不选菜单),每次都自动进 Windows' '03-8'
-Add-BaselineItem A3 '07-7' '② \EFI\Microsoft\ 与 L2 基线逐文件一致' '② ESP\EFI\Microsoft\ 比对'
-Add-BaselineItem A4 '07-7' '③ {bootmgr} 的 path 与基线一致' '③ {bootmgr} 的 path'
-if ($fo.Count -eq 0) { Add-Manual A5 A '读不到 bcdedit /enum firmware(非管理员或非 UEFI);手动核对:BootOrder 末位是否为 Linux(Fedora)条目' '04-3' }
-elseif ([string]$fw.Desc[$fo[$fo.Count - 1]] -match 'ubuntu|fedora') { Add-VerifyItem A5 A 'pass' ('BootOrder 末位是 Linux 引导条目(' + [string]$fw.Desc[$fo[$fo.Count - 1]] + ')') '04-3' }
-else { Add-VerifyItem A5 A 'fail' ('BootOrder 末位不是 Linux 引导条目(实际:' + [string]$fw.Desc[$fo[$fo.Count - 1]] + ');处置见 04-3') '04-3' }
-Add-Manual A6 A '复核全部执行记录:没有任何一次 bcdedit /set {fwbootmgr} displayorder 或 efibootmgr -o 调整永久顺序' '07-7'
-if ((Get-VerifyState 'A1') -eq 'pass' -and (Get-VerifyState 'A3') -eq 'pass') { Add-VerifyItem A7 A 'pass' '两个 ESP 互不干扰:Windows ESP 逐文件与基线一致且 BootOrder 首位仍是 Windows' '07-7' }
-elseif ((Get-VerifyState 'A1') -eq 'fail' -or (Get-VerifyState 'A3') -eq 'fail') { Add-VerifyItem A7 A 'fail' '两个 ESP 不再互不干扰:Windows ESP 或 BootOrder 首位已被改动;处置见 07-6' '07-6' }
-else { Add-Manual A7 A '无法从 Windows 侧自动判定;手动核对:两块 ESP 分别可挂载且内容完整、BootOrder 首位仍是 Windows' '07-7' }
-Add-Manual A8 A '可撤除性演练:另存 \EFI\fedora\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测' '07-8'
-Add-Manual A9 A '同盘两块 ESP 都被固件识别(设备侧必测):efibootmgr -v 里 Windows Boot Manager 与 fedora 两条都在,且 BootOrder 首位仍是 Windows;再分别重启两次(固件菜单键选 fedora 进 Silverblue、不按键自动进 Windows),两次都无 grub rescue;只认一个 ESP 时记偏离项并按设计第 10 节评估共用 ESP 分支' '04-3'
-Add-Manual A10 A 'Anaconda 在已有 Windows ESP 的盘上装成功(参考设备必测;上游 #284 截至 2026-09 仍开):装前 check-partition-plan.sh --track D --check 报 PASS 且 Windows ESP 未被挂载,装中只挂载/格式化 Fedora 三块,写引导到 \EFI\fedora\,装完 verify-l3.sh --check 报 PASS;失败时按 07-1 判层后进 07-rescue.md 手工修(不重装、不动分区表),最坏退回轨道 W(03-windows.md)' '04-2'
-# ===== B 系统功能组(Fedora 侧判定;此处只记需人工) =====
-Add-Manual B1 B '在 Fedora 侧看 echo $XDG_SESSION_TYPE 应为 wayland,且登录界面无 X11 会话选项' '05-12'
-Add-Manual B2 B '在 Fedora 侧跑 graphics.sh --check:nvidia 模块签名者非空且已注册 ublue 密钥(或明确记录 nouveau 兜底的偏差)' '05-3'
-Add-Manual B3 B '在 Fedora 侧 mokutil --sb-state 应为 SecureBoot enabled,且未做过自签密钥导入' '07-7'
-Add-Manual B4 B '在 Fedora 侧 findmnt /mnt/shared:ntfs3 + rw + nofail;写测试后无残留' '05-1'
-Add-Manual B5 B '在 Fedora 侧显卡来源为 ublue 预签名的 NVIDIA 变体:modinfo -F signer nvidia 的签名者来自镜像内预签名模块,记录里没有任何自签或第三方驱动源' '05-3'
-Add-Manual B6 B '在 Fedora 侧 mokutil --list-enrolled 应含 ublue 预签名镜像的密钥(05-3 的一次性 MOK 注册已完成)' '05-3'
-Add-Manual B7 B '跨系统双向可见性:Windows 写 D:\Shared\dbk-verify-win.txt -> Fedora 读到;反向再测一次' '05-1'
-Add-Manual B8 B '在 Fedora 侧六项 XDG 目录都指向 /mnt/shared 下(桌面/文档/下载/图片/视频/音乐)' '05-2'
-Add-Manual B9 B '在 Fedora 侧 timedatectl 的 RTC in local TZ 应为 no;切到 Windows 复核时间一致' '05-4'
-Add-Manual B10 B '切换系统后蓝牙无需重新配对(三趟往返都能直连)' '05-5'
-Add-Manual B11 B '在 Fedora 侧 fwupdmgr get-devices 应至少列出一项设备(UEFI 固件/NVMe)' '05-12'
-
-# ===== C 双系统切换组 / D 可撤除性组(必须实机切换或真做) =====
-Add-Manual C1 C '从 Windows 用 set-bootnext.ps1 或固件菜单键一次性进 Linux' '05-11'
-Add-Manual C2 C '一次性入口用掉后再重启应自动回 Windows,且 BootOrder 与基线逐字一致' '05-11'
-Add-Manual C3 C '切换 3 轮后 A1/A3/A4(必要时 A5)复检仍成立' '07-7'
-Add-Manual D1 D '按 L5 五步顺序完整推演(参考设备真做一次);参考设备不做即该设备 D 组不成立' '07-9'
-Add-Manual D2 D '结束后固件条目与实际状态一致、BootOrder 首位仍是 Windows Boot Manager' '07-12'
-Add-Manual D3 D '逐项核对:六个已知文件夹与游戏库都在 D:,C: 不含用户数据(重定向动作见 03-3)' '03-3'
-Add-Manual D4 D '原地重装两法各推演一次(参考设备至少真做一法:只格 C:,或只格 root)' '07-4'
-Add-Manual D5 D '重装后 A 组四条不变量复检通过(A3 按预期差异口径判读)' '07-4'
-Add-Manual D6 D '非重装逃生路径:从 02-esp-backup 还原 \EFI\Microsoft\ 并 bcdboot 重建后可正常启动' '07-6'
-$missing = @()   # ===== E 记录组(产物齐备与未入库) =====
-foreach ($f in @('00-firmware.md', '01-partitions.txt', '01-activation.md', '02-preflight-report.md', '02-firmware-entries.txt', '02-partitions.txt', '02-esp-backup\manifest.sha256', '03-efi-layout.txt', '04-first-boot.md', '04-robustness.md', '08-verification.md')) {
-  if (-not (Test-Path -LiteralPath (Join-Path $base $f))) { $missing += $f }
+function Get-DbkA5Verdict {
+  $fo = @($script:Fw.Order)
+  if ($fo.Count -eq 0) { return @{ State = 'manual'; Reason = '读不到 bcdedit /enum firmware(非管理员或非 UEFI);手动核对:BootOrder 末位是否为 Linux(Fedora)条目' } }
+  $last = [string]$script:Fw.Desc[$fo[$fo.Count - 1]]
+  if ($last -match 'ubuntu|fedora') { return @{ State = 'pass'; Reason = ('BootOrder 末位是 Linux 引导条目(' + $last + ')') } }
+  return @{ State = 'fail'; Reason = ('BootOrder 末位不是 Linux 引导条目(实际:' + $last + ');处置见 04-3') }
 }
-if ($missing.Count -gt 0) { Add-VerifyItem E1 E 'fail' ('baseline 产物缺失:' + ($missing -join ' ') + '(见 baseline/README.md 命名规范)') '03-9' }
-else { Add-VerifyItem E1 E 'pass' ('baseline 十一件产物齐全(' + $base + ')') '03-9' }
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Add-Manual E2 E '未找到 git;手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md' '03-9' }
-else {
+function Get-DbkA7Verdict {
+  $s1 = Get-VerifyState 'A1'; $s3 = Get-VerifyState 'A3'
+  if ($s1 -eq 'pass' -and $s3 -eq 'pass') { return @{ State = 'pass'; Card = '07-7'; Reason = '两个 ESP 互不干扰:Windows ESP 逐文件与基线一致且 BootOrder 首位仍是 Windows' } }
+  if ($s1 -eq 'fail' -or $s3 -eq 'fail') { return @{ State = 'fail'; Card = '07-6'; Reason = '两个 ESP 不再互不干扰:Windows ESP 或 BootOrder 首位已被改动;处置见 07-6' } }
+  return @{ State = 'manual'; Card = '07-7'; Reason = '无法从 Windows 侧自动判定;手动核对:两块 ESP 分别可挂载且内容完整、BootOrder 首位仍是 Windows' }
+}
+function Get-DbkArtifactVerdict {
+  $missing = @()
+  foreach ($f in @('00-firmware.md', '01-partitions.txt', '01-activation.md', '02-preflight-report.md', '02-firmware-entries.txt', '02-partitions.txt', '02-esp-backup\manifest.sha256', '03-efi-layout.txt', '04-first-boot.md', '04-robustness.md', '08-verification.md')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $base $f))) { $missing += $f }
+  }
+  if ($missing.Count -gt 0) { return @{ State = 'fail'; Reason = ('baseline 产物缺失:' + ($missing -join ' ') + '(见 baseline/README.md 命名规范)') } }
+  return @{ State = 'pass'; Reason = ('baseline 十一件产物齐全(' + $base + ')') }
+}
+function Get-DbkGitVerdict {
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return @{ State = 'manual'; Reason = '未找到 git;手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md' } }
   # 同理不合并 git 的 stderr(它把 CRLF 等警告写 stderr,合并后同样终止执行器,还可能把警告文字误当 baseline/ 命中)
   $gs = (& git -C $GitRoot status --porcelain | Out-String); $grc1 = $LASTEXITCODE
   $tracked = @(& git -C $GitRoot ls-files baseline/ | Where-Object { $_ -and $_.Trim() -ne 'baseline/README.md' }); $grc2 = $LASTEXITCODE
-  if ($grc1 -ne 0 -or $grc2 -ne 0) { Add-Manual E2 E ('git 读不到工作区(' + $GitRoot + ');手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md') '03-9' }
-  elseif ($gs -match 'baseline/') { Add-VerifyItem E2 E 'fail' ('baseline/ 内容混进了工作区:' + (($gs -split "`r?`n" | Where-Object { $_ -match 'baseline/' }) -join ' ')) '03-9' }
-  elseif ($tracked.Count -gt 0) { Add-VerifyItem E2 E 'fail' 'baseline/ 已被 git 追踪(只允许 baseline/README.md)' '03-9' }
-  else { Add-VerifyItem E2 E 'pass' 'baseline/ 未入库(仅 README.md 被追踪)' '03-9' }
+  if ($grc1 -ne 0 -or $grc2 -ne 0) { return @{ State = 'manual'; Reason = ('git 读不到工作区(' + $GitRoot + ');手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md') } }
+  if ($gs -match 'baseline/') { return @{ State = 'fail'; Reason = ('baseline/ 内容混进了工作区:' + (($gs -split "`r?`n" | Where-Object { $_ -match 'baseline/' }) -join ' ')) } }
+  if ($tracked.Count -gt 0) { return @{ State = 'fail'; Reason = 'baseline/ 已被 git 追踪(只允许 baseline/README.md)' } }
+  return @{ State = 'pass'; Reason = 'baseline/ 未入库(仅 README.md 被追踪)' }
 }
-Add-Manual E3 E '本次与设备参数表的偏差已回写 baseline/ 或 00-overview.md 的偏离项处置表' '07-7'
-Add-Manual E4 E '所有未勾选项都整理成已知例外(条目/原因/影响面/是否阻塞/后续动作)' '08'
-Add-Manual E5 E '至少一台设备 A-F 全绿(或例外都不阻塞),方可称参考实现' '08'
-
-# ===== F 健壮性组(Fedora 侧判定;此处只记需人工) =====
-Add-Manual F1 F '部署回滚演练(参考设备真做一次):按 05-9 rollback-deploy.sh --check -> --pin <当前部署> -> 更新一次 -> --check 看到回滚候选 -> --apply --yes 回到上一部署 -> 重启复测 -> --unpin;并按 07-4/07-5 推演原地重装,确认 D: 数据哈希不变' '05-9'
-Add-Manual F2 F '在 Fedora 侧 rollback-deploy.sh --check 能读出部署列表与回滚候选;--pin/--unpin 能固定与解除当前部署' '05-9'
-Add-Manual F3 F '在 Fedora 侧变更前备份与留档可用:baseline/ 与 /etc 关键文件有 .dbk.bak,且改系统前已 pin 当前部署(留档写进日志)' '05-13'
-Add-Manual F4 F '在 Fedora 侧 /var/log/journal 存在且 journalctl --list-boots 至少两条' '05-7'
-Add-Manual F5 F '在 Fedora 侧 set-updates.sh --check:配置 AutomaticUpdatePolicy=check(只检查/下载)且自动更新定时器已启用' '05-7'
-Add-Manual F6 F '在 Fedora 侧 systemctl is-active sshd 应为 active,并从另一台机器 ssh 登录成功' '05-8'
-Add-Manual F7 F '在 Fedora 侧 systemd-oomd 为 active 且 zramctl 有 /dev/zram0' '05-6'
-Add-Manual F8 F '在 Fedora 侧 smartd 为 active 且 smartctl -H 报 PASSED' '05-8'
-Add-Manual F9 F '在 Fedora 侧 fstab 非 root 条目都带 nofail,/boot/efi 不带' '05-1'
-Add-Manual F10 F '在 Fedora 侧故意让 greenboot 健康检查失败(60-dbk-health.sh 改为 exit 1)后重启两次,应自动退回上一部署、桌面可用、BootOrder 首位仍是 Windows;复原后 setup-greenboot.sh --check 复检为绿(参考设备必做)' '05-9'
-Add-Manual G1 G '在 Fedora 侧 sudo bash scripts/linux/set-default-apps.sh --check 报 0(逐项 mime -> desktop 与 templates/mimeapps.tsv 一致;报 2 = 应用未装,先做 05-17)' '05-15'
-Add-Manual G2 G '在 Fedora 侧 bash scripts/linux/check-apps.sh --check 报 0(必需项全在位;可选缺失只记一行)' '05-17'
-Add-Manual G3 G '在 Fedora 侧 bash scripts/linux/export-config.sh --check 报 0(五份快照与现状一致;报 2 = 有漂移,复核后 --apply --yes 刷新)' '05-18'
-
-# ===== -Step 过滤与计数(执行器 -Step 语义:见脚本头与设计 03 第 5 节)=====
-$known = @($script:Items | ForEach-Object { $_.Card } | Sort-Object -Unique)
-if ($script:StepSel -and ($known -notcontains $script:StepSel)) {
-  Show-DbkUsage
-  Write-DbkNote ('用法错误: -Step ' + $script:StepSel + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + ($known -join '、') + ';08-A-G = 七组全判(缺省)')
-  exit $script:DBK_USAGE
+# Windows 侧判定分派(契约见文件头):侧 = L 与判定脚本 = - 一律需人工;其余按编号走内置探测。
+function Get-DbkWindowsVerdict {
+  param($Item)
+  if ($Item.Side -eq 'L') { return @{ State = 'manual'; Reason = ('在 Fedora 侧跑:' + $Item.Label) } }
+  if ($Item.Script -eq '-') { return @{ State = 'manual'; Reason = $Item.Label } }
+  switch ([string]$Item.Id) {
+    'A1' { return (Get-DbkBaselineItem '① BootOrder 首位' '① BootOrder 首位仍是 Windows Boot Manager') }
+    'A3' { return (Get-DbkBaselineItem '② ESP\EFI\Microsoft\ 比对' '② \EFI\Microsoft\ 与 L2 基线逐文件一致') }
+    'A4' { return (Get-DbkBaselineItem '③ {bootmgr} 的 path' '③ {bootmgr} 的 path 与基线一致') }
+    'A5' { return (Get-DbkA5Verdict) }
+    'A7' { return (Get-DbkA7Verdict) }
+    'E1' { return (Get-DbkArtifactVerdict) }
+    'E2' { return (Get-DbkGitVerdict) }
+  }
+  if ($Item.Script -match '(?i)^scripts/windows/.+\.ps1$') { return @{ State = 'manual'; Reason = ($Item.Label + '(本侧尚未接入该判定脚本的只读调用:' + $Item.Script + ';按标签人工核对)') } }
+  return @{ State = 'manual'; Reason = ($Item.Label + '(判定脚本 ' + $Item.Script + ' 在 Windows 侧不可执行,需人工)') }
+}
+Invoke-BaselineCheck
+$script:Fw = Get-FwOrder
+# ===== 读条目表逐条判定(顺序即表内顺序);未命中选择符的条目记「跳过」、不判定也不计数 =====
+foreach ($it in @($table.Items)) {
+  if (-not (Test-DbkItemSelected -Item $it -Selection $sel)) { Add-VerifyItem $it.Id $it.Group 'skip' ((Get-DbkSkipPrefix $script:DbkStep $sel) + $it.Label) $it.Card; continue }
+  $v = Get-DbkWindowsVerdict -Item $it
+  $card = $it.Card; if ($v.ContainsKey('Card')) { $card = $v.Card }
+  Add-VerifyItem $it.Id $it.Group $v.State $v.Reason $card
 }
 foreach ($i in $script:Items) {
-  if ($script:StepSel -and $i.Card -ne $script:StepSel) { $i.State = 'skip'; $i.Reason = ('未选中(-Step ' + $script:StepSel + ' 只判卡 ' + $script:StepSel + '):' + $i.Reason) }
   if ($i.State -eq 'pass') { $script:nPass++ } elseif ($i.State -eq 'fail') { $script:nFail++ } elseif ($i.State -eq 'manual') { $script:nManual++ } else { $script:nSkip++ }
   if (-not $script:DbkJson) { Write-Host ('[' + (Get-DbkTag $i.State) + '] ' + $i.Id + ' ' + $i.Reason) }
 }

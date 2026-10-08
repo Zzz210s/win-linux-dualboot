@@ -14,6 +14,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$HERE/dbk-cli.sh"
+# fstab 结构判据与 NTFS 脏卷探测拆到单职责库 dbk-fstab.sh(判定口径不变)。
+# shellcheck source=scripts/linux/dbk-fstab.sh disable=SC1091
+. "$HERE/dbk-fstab.sh"
 
 FSTAB="${DBK_FSTAB:-/etc/fstab}"; FSTAB_BAK="$FSTAB.dbk.bak"
 SHARED_MNT="${DBK_SHARED_MNT:-/mnt/shared}"; WRITE_TEST="$SHARED_MNT/.dbk-write-test"
@@ -40,18 +43,6 @@ dbk_assert_step
 dbk_log_default "mount-shared"
 dbk_enable_errtrap
 
-fstab_cur() { awk -v m="$SHARED_MNT" '!/^[[:space:]]*#/ && $2==m' "$FSTAB" 2>/dev/null || true; }
-mnt_target() { findmnt -rn -o TARGET "$SHARED_MNT" 2>/dev/null | head -n 1 || true; }
-mnt_src() { findmnt -rn -o SOURCE,FSTYPE,OPTIONS -T "$SHARED_MNT" 2>/dev/null | head -n 1 || true; }
-ntfs_probe() {   # NTFS 脏卷探测(零依赖):不带 force 的 rw 挂载成功 = 干净(立刻卸载);失败且输出含 dirty = 脏卷;其余 = 判不了
-  local tm out
-  tm="$(mktemp -d)"; out="$(mount -t ntfs3 -o rw "$DEV" "$tm" 2>&1)" && { umount "$tm" 2>/dev/null || dbk_add_check "警告: 探测用的临时挂载点 $tm 未能卸载(探测结论仍为卷干净),重启前请人工 umount 后复核"; rmdir "$tm" 2>/dev/null || true; return 0; }
-  rmdir "$tm" 2>/dev/null || true
-  case "$out" in *[Dd][Ii][Rr][Tt][Yy]*) return 1 ;; esac
-  case "$out" in *"permission denied"*|*"must be superuser"*|*"only root"*|*"Operation not permitted"*) return 3 ;; esac
-  return 2
-}
-
 resolve_dev() {   # 只读:UUID -> 设备与文件系统类型
   DEV=""; FSTYPE=""
   [ -n "$UUID" ] || return 0
@@ -61,37 +52,11 @@ resolve_dev() {   # 只读:UUID -> 设备与文件系统类型
   return 0
 }
 
-want_line() {     # 打印目标 fstab 行;模板不合格或没有 UUID 时返回非零
-  local opts="$NTFS_OPTS_DEFAULT" line topts need
-  if [ -r "$FSTAB_TPL" ]; then
-    line="$(grep -F ntfs3 "$FSTAB_TPL" | grep -v '^[[:space:]]*#' | head -n 1 || true)"
-    [ -n "$line" ] || return 1
-    topts="$(printf '%s\n' "$line" | awk '{print $4}')"
-    for need in windows_names uid= gid= umask= nofail; do
-      case "$topts" in *"$need"*) ;; *) return 1 ;; esac
-    done
-    opts="$topts"
-  fi
-  [ -n "$UUID" ] || return 1
-  printf 'UUID=%s  %s  ntfs3  %s  0 0' "$UUID" "$SHARED_MNT" "$opts"
-}
-
 ISSUES=(); MANUAL=(); EXTRA_MANUAL=()   # EXTRA_MANUAL:--apply 路径产生的"需人工"项(judge 会重置 MANUAL,不清空它)
-
-# fstab 行结构判据:UUID + 挂载点 + fstype 相等,且选项里含必含集合(顺序无关,不看整行字符串)。
-fstab_match() {
-  local f1 f2 f3 opts need
-  read -r f1 f2 f3 opts _ <<<"$1"
-  [ "$f1" = "UUID=$UUID" ] && [ "$f2" = "$SHARED_MNT" ] && [ "$f3" = ntfs3 ] || return 1
-  for need in windows_names nofail uid= gid= umask=; do
-    case ",$opts," in *",$need"*) ;; *) return 1 ;; esac
-  done
-  return 0
-}
 
 judge() {         # 只读判定:判据 -> checks/ISSUES/MANUAL
   ISSUES=(); MANUAL=()
-  want="$(want_line || true)"
+  want="$(fstab_want "$FSTAB_TPL" "$SHARED_MNT" "$UUID" "$NTFS_OPTS_DEFAULT" || true)"
   if [ -z "$want" ]; then
     if [ -z "$UUID" ]; then MANUAL+=("未给 --uuid(或 DBK_SHARED_UUID),无法核对 fstab 行的 UUID 字段")
     else ISSUES+=("模板 ${FSTAB_TPL} 的 ntfs3 行缺失或选项不全(windows_names/uid=/gid=/umask=/nofail)"); fi
@@ -104,19 +69,19 @@ judge() {         # 只读判定:判据 -> checks/ISSUES/MANUAL
     else
       dbk_add_check "共享分区可解析:$DEV($FSTYPE)"
     fi
-    cur="$(fstab_cur)"
-    if [ -n "$cur" ] && fstab_match "$cur"; then dbk_add_check "fstab 已含 $SHARED_MNT 的合规条目(UUID/挂载点/fstype/必含选项,顺序无关)"
+    cur="$(fstab_lines "$FSTAB" "$SHARED_MNT")"
+    if [ -n "$cur" ] && fstab_match "$cur" "$SHARED_MNT" "$UUID" windows_names nofail uid= gid= umask=; then dbk_add_check "fstab 已含 $SHARED_MNT 的合规条目(UUID/挂载点/fstype/必含选项,顺序无关)"
     elif [ -n "$cur" ]; then MANUAL+=("fstab 已有 $SHARED_MNT 的条目但与模板不一致(需人工核对 UUID/挂载点/fstype/必含选项;本脚本不覆盖既有条目): $cur")
     else ISSUES+=("fstab 缺少 $SHARED_MNT 的 ntfs3 行(--apply 会补上)"); fi
   fi
-  if [ "$(mnt_target)" = "$SHARED_MNT" ]; then
-    src="$(mnt_src)"
+  if [ "$(mnt_target "$SHARED_MNT")" = "$SHARED_MNT" ]; then
+    src="$(mnt_src "$SHARED_MNT")"
     dbk_add_check "$SHARED_MNT 已挂载: $src"
     case "$src" in *"rw"*) dbk_add_check "挂载选项含 rw(可写)" ;; *) ISSUES+=("$SHARED_MNT 挂载选项不含 rw(当前只读)") ;; esac
     fopt="$(awk -v m="$SHARED_MNT" '$2==m && $4 ~ /(^|,)force(,|$)/ {print $4}' "${DBK_PROC_MOUNTS:-/proc/mounts}" 2>/dev/null || true)"
     [ -z "$fopt" ] || MANUAL+=("$SHARED_MNT 的挂载选项含 force(绕过脏卷探测):先卸载,回 Windows 跑 chkdsk /f 后再挂")
   else
-    prc=3; if [ -n "$DEV" ] && [ "$FSTYPE" = ntfs ]; then prc=0; ntfs_probe || prc=$?; fi
+    prc=3; if [ -n "$DEV" ] && [ "$FSTYPE" = ntfs ]; then prc=0; ntfs_probe "$DEV" || prc=$?; fi
     case "$prc" in
       0) dbk_add_check "NTFS 读写探测通过(卷干净):不带 force 的 rw 挂载成功并已立刻卸载"; ISSUES+=("$SHARED_MNT 未挂载(或挂的是本机目录,不是共享分区)") ;;
       1) MANUAL+=("共享盘疑似脏卷(dirty):$SHARED_MNT 未挂载;回 Windows 跑 chkdsk /f,不要用 force 强挂") ;;
@@ -157,10 +122,10 @@ apply_run() {     # 唯一的写路径(库层已保证 --apply 必带 --yes)
   resolve_dev
   [ -n "$DEV" ] || { dbk_add_check "blkid 找不到 UUID=$UUID 对应的分区"; dbk_exit FAIL "blkid 找不到 UUID=$UUID:确认盘已接入,UUID 抄自 blkid -s UUID -o value <设备>"; }
   [ "$FSTYPE" = ntfs ] || { dbk_add_check "共享分区 $DEV 不是 ntfs(实为 '$FSTYPE')"; dbk_exit FAIL "共享分区 $DEV 文件系统为 '$FSTYPE',应为 ntfs;停手,不要挂载非 D: 分区"; }
-  want="$(want_line || true)"
+  want="$(fstab_want "$FSTAB_TPL" "$SHARED_MNT" "$UUID" "$NTFS_OPTS_DEFAULT" || true)"
   if [ -z "$want" ]; then dbk_add_check "模板 ${FSTAB_TPL} 的 ntfs3 行缺失或选项不全"; dbk_exit FAIL "模板校验失败(--template 指定的片段不合格),没有可写入的 fstab 行"; fi
-  cur="$(fstab_cur)"
-  if [ -n "$cur" ] && fstab_match "$cur"; then dbk_add_action "fstab 已含合规目标行,跳过写入"
+  cur="$(fstab_lines "$FSTAB" "$SHARED_MNT")"
+  if [ -n "$cur" ] && fstab_match "$cur" "$SHARED_MNT" "$UUID" windows_names nofail uid= gid= umask=; then dbk_add_action "fstab 已含合规目标行,跳过写入"
   elif [ -n "$cur" ]; then dbk_add_check "fstab 已有 $SHARED_MNT 的条目但与模板不一致: $cur"; dbk_exit 需人工 "fstab 已有 $SHARED_MNT 的条目但与模板不一致(需人工核对 UUID/挂载点/fstype/必含选项):本脚本不覆盖既有条目,请手工处理后重跑"
   else
     if [ ! -e "$FSTAB_BAK" ]; then cp -a "$FSTAB" "$FSTAB_BAK"; dbk_add_action "备份 $FSTAB -> $FSTAB_BAK(仅首次,重跑不覆盖)"; fi
@@ -168,7 +133,7 @@ apply_run() {     # 唯一的写路径(库层已保证 --apply 必带 --yes)
     dbk_add_action "追加 fstab 行: $want"; dbk_mark_changed
   fi
   mkdir -p "$SHARED_MNT" || dbk_add_check "警告: 无法创建挂载点 $SHARED_MNT"
-  if [ "$(mnt_target)" != "$SHARED_MNT" ]; then
+  if [ "$(mnt_target "$SHARED_MNT")" != "$SHARED_MNT" ]; then
     systemctl daemon-reload || dbk_add_check "警告: systemctl daemon-reload 失败"
     mount -a || dbk_obs "警告: mount -a 返回非零(带 nofail 的条目失败不致命),继续做挂载校验"
   fi

@@ -22,16 +22,18 @@ if [ -r "$BREW_LIB" ]; then
   # shellcheck source=/dev/null disable=SC1090
   . "$BREW_LIB"
 fi
+# 快照表/比对口径/采集分派/manifest 校验拆到单职责库 dbk-config-snapshot.sh(原文件逼近 200 行上限;口径不变)。
+# shellcheck source=scripts/linux/dbk-config-snapshot.sh disable=SC1091
+. "$HERE/dbk-config-snapshot.sh"
 dbk_enable_errtrap
 dbk_parse_args "$@"
 dbk_assert_step
 dbk_log_default "import-config"
 
 CFG="${DBK_CONFIG_DIR:-$ROOT/baseline/config}"
-FILES=(dconf.txt etc-config-diff.txt flatpak-apps.txt brew-bundle.txt layered-pkgs.txt)
-DC=(); OS=(); FP=()
+mapfile -t FILES < <(snap_files)
+DC=(); FP=()   # 回灌用的命令(dconf 回灌 / flatpak 补装);快照采集的命令在 dbk-config-snapshot.sh 里自读 DBK_*
 read -r -a DC <<<"${DBK_DCONF:-dconf}"
-read -r -a OS <<<"${DBK_OSTREE:-ostree}"
 read -r -a FP <<<"${DBK_FLATPAK:-flatpak}"
 
 MANUAL=(); FAILS=(); TMP=""
@@ -40,32 +42,17 @@ trap cleanup EXIT
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/dbk-import.XXXXXX")"
 
 have() { [ -x "${1:-}" ] || command -v "${1:-}" >/dev/null 2>&1; }
-norm() { grep -vE '^[[:space:]]*(#.*)?$' "$1" 2>/dev/null || true; }
-lines() { norm "$1"; }   # 语义别名:读清单时用 lines,比对时用 norm
-
-# gen_cmd <标签> <输出文件> <命令...>:命令缺失或失败 → 写占位文件并记需人工(自检据此跳过该文件的比对)。
-gen_cmd() {
-  local label="$1" out="$2"; shift 2
-  if ! have "${1:-}"; then MANUAL+=("$label:未找到命令 ${1:-}(需人工)"); return 2; fi
-  if "$@" >"$out" 2>"$out.err"; then rm -f "$out.err"; return 0; fi
-  MANUAL+=("$label:命令失败($*)"); rm -f "$out.err"; return 2
-}
-gen_brew() {
-  local st=0
-  if command -v brew_bundle_dump >/dev/null 2>&1; then brew_bundle_dump "$1" >/dev/null 2>&1 || st=$?; else st=2; fi
-  [ "$st" -eq 0 ] && return 0
-  MANUAL+=("brew 清单:dbk-brew.sh 未就位或 brew 不可用(rc=$st,需人工;库 $BREW_LIB)"); return 2
-}
-# gen_file <文件名> <输出路径>:现状采集(供 pre-import 备份与末尾自检)。
+norm() { snap_norm "${1:-}"; }
+lines() { snap_norm "${1:-}"; }   # 语义别名:读清单时用 lines,比对时用 norm
+# gen_file <文件名> <输出路径>:现状采集(供 pre-import 备份与末尾自检);分层包清单在 import 侧只读、不采集。
+#   五份快照的清单表、命令来源与采集口径见 dbk-config-snapshot.sh 的 snap_files / snap_gen。
 gen_file() {
   case "$1" in
-    dconf.txt) gen_cmd "dconf 清单" "$2" "${DC[@]}" dump / ;;
-    etc-config-diff.txt) gen_cmd "/etc 漂移" "$2" "${OS[@]}" admin config-diff ;;
-    flatpak-apps.txt) gen_cmd "Flatpak 清单" "$2" "${FP[@]}" list --app --columns=application,origin ;;
-    brew-bundle.txt) gen_brew "$2" ;;
-    *) return 1 ;;
+    layered-pkgs.txt) return 1 ;;
+    *) snap_gen "$1" "$2" 0 ;;
   esac
 }
+
 
 check_present() {
   local n miss=0
@@ -73,24 +60,6 @@ check_present() {
     if [ ! -r "$CFG/$n" ]; then MANUAL+=("快照缺失:$CFG/$n"); miss=1; fi
   done
   [ "$miss" -eq 1 ] && return 1
-  return 0
-}
-
-# 回灌前必须过 manifest 校验:export-config.sh 写的 manifest.txt 是五份快照的 sha256 台账。不校验就会把被改坏/截断的
-# 快照原样回灌(2026-10-06 审查指出)。取不到 sha256sum 或台账缺行 → 记需人工,不 fail-open。
-verify_manifest() {
-  local n want got bad=0
-  if ! have sha256sum; then MANUAL+=("未找到 sha256sum:无法校验快照完整性(需人工)"); return 1; fi
-  [ -r "$CFG/manifest.txt" ] || { MANUAL+=("缺 $CFG/manifest.txt:先跑 export-config.sh --apply --yes 重新生成"); return 1; }
-  for n in "${FILES[@]}"; do
-    want="$(awk -v f="$n" '$2 == f { print $1; exit }' "$CFG/manifest.txt" 2>/dev/null || true)"
-    got="$(sha256sum "$CFG/$n" 2>/dev/null | cut -d' ' -f1 || true)"
-    if [ -z "$want" ] || [ "$want" != "$got" ]; then
-      dbk_add_check "校验失败: $n 与 manifest.txt 的 sha256 不符或缺台账行"
-      MANUAL+=("$n 快照与 manifest 不符;**不执行回灌**,核后重跑 export-config.sh --apply --yes"); bad=1
-    fi
-  done
-  [ "$bad" -eq 1 ] && return 1
   return 0
 }
 
@@ -176,7 +145,8 @@ if [ "$DBK_MODE" = apply ]; then
     for m in ${MANUAL[@]+"${MANUAL[@]}"}; do dbk_add_check "需人工: $m"; done
     dbk_exit 需人工 "--apply 前五份快照必须齐全;缺件见 checks(先跑 export-config.sh --apply --yes)"
   fi
-  if ! verify_manifest; then
+  if ! snap_verify_manifest "$CFG"; then
+    MANUAL+=(${SNAP_MANUAL[@]+"${SNAP_MANUAL[@]}"})
     for m in ${MANUAL[@]+"${MANUAL[@]}"}; do dbk_add_check "需人工: $m"; done
     dbk_exit 需人工 "--apply 前快照未通过 manifest 校验;**未回灌任何配置**,逐条见 checks"
   fi

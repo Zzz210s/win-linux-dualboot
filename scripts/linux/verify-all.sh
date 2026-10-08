@@ -5,15 +5,23 @@
 #   都不调。汇总只在 --apply 时落盘 <out-dir>/08-verification.md(每台设备副本,含「已知例外」表与结论行);
 #   --check 零写。退出码:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 --confirm-manual
 #   表示人工项已按清单逐条核对完成,不再计入退出码)/ 64 用法错误。
+# 条目表真源:**scripts/verification-items.tsv**(48 条;列 = 编号/组/卡/侧/判定脚本/参数/标签)。本执行器只读它并按行分派:
+#   侧 = W 的条目在本侧记「需人工」;判定脚本 = 仓库相对路径 → 只读调用该步骤脚本;= builtin → 调 dbk-verify-probes.sh 的
+#   probe_<编号>;= - → 直接记「需人工」(原因取标签列)。增删条目只改那张表(与 docs/08-verification.md 同步)。
 # 用法: verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual] [--json] [--log <路径>]
-# 夹具注入(真机不需要):DBK_EFIBOOTMGR/DBK_FINDMNT/DBK_MOKUTIL/DBK_TIMEDATECTL/DBK_FWUPDMGR/DBK_SYSTEMCTL/DBK_ZRAMCTL/
-#   DBK_SMARTCTL/DBK_JOURNALCTL/DBK_XDG_USER_DIR、DBK_SESSION_TYPE、DBK_STEP_ROOT/DBK_GIT_ROOT/DBK_BASELINE_DIR/
-#   DBK_FSTAB/DBK_JOURNAL_DIR/DBK_SHARED_MNT/DBK_DISK;白名单依据=设计 03 第 6 节「验收七组」。待核实(以官方文档为准):
-#   mokutil/timedatectl/fwupdmgr/smartctl 输出文本未在真机验证,取不到时按「需人工」而非 FAIL。
+# 夹具注入(真机不需要):DBK_ITEMS_TSV(换一张条目表)/DBK_EFIBOOTMGR/DBK_FINDMNT/DBK_MOKUTIL/DBK_TIMEDATECTL/DBK_FWUPDMGR/
+#   DBK_SYSTEMCTL/DBK_ZRAMCTL/DBK_SMARTCTL/DBK_JOURNALCTL/DBK_XDG_USER_DIR、DBK_SESSION_TYPE、DBK_STEP_ROOT/DBK_GIT_ROOT/
+#   DBK_BASELINE_DIR/DBK_FSTAB/DBK_JOURNAL_DIR/DBK_SHARED_MNT/DBK_DISK;白名单依据=设计 03 第 6 节「验收七组」。
+# 跨文件注入:STEP_ROOT / GIT_ROOT / BASEDIR / FSTAB / JRNL / SHARED / DISK / HOOK_RC 由 source 进来的
+#   dbk-verify-probes.sh 的 probe_* 消费(bash 动态作用域),本文件里"看起来未使用"是预期的;
+#   豁免 SC2034 以免掩盖别处真正的未用变量。
+# shellcheck disable=SC2034
 set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$SRC/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$SRC/dbk-cli.sh"
+# shellcheck source=scripts/linux/dbk-verify-probes.sh disable=SC1091
+. "$SRC/dbk-verify-probes.sh"
 # 缺省落点 = <baseline>/auto/(与 Windows 侧同口径):baseline/08-verification.md 是**人填写版**,缺省写那里会把它盖掉。
 OUTDIR="$ROOT/baseline/auto"; CONFIRM=0; ARGS=()
 while [ "$#" -gt 0 ]; do
@@ -25,7 +33,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
-# --step(执行器专用,与 Windows 侧 verify-all.ps1 同口径,真源 docs/design/03 第 5 节):取值 = 验收条目关联的卡号(NN-K);非法值在条目表建好后校验(→ 64 且不落产物),合法值只判该卡号条目、其余记跳过不计入退出码(本执行器不绑卡、无「# 对应卡:」头)。
+# --step(执行器专用,与 Windows 侧 verify-all.ps1 同口径,真源 docs/design/03 第 5 节):`08-A-G` = 七组全判(缺省);
+#   `08-A`…`08-G` = 只判该组(过滤条目表的**组**列);其它值 = 验收条目关联的卡号(NN-K,过滤**卡**列)。非法值 → 64 且不落产物。
+#   未选中的条目记「跳过」、不计入退出码(本执行器不绑卡、无「# 对应卡:」头)。
 STEP_SEL="${DBK_STEP:-}"; case "$STEP_SEL" in 08-A-G) STEP_SEL="" ;; esac; DBK_STEP="${STEP_SEL:-08-A-G}"
 if [ "$DBK_MODE" = apply ]; then dbk_log_default "verify-all"; fi
 STEP_ROOT="${DBK_STEP_ROOT:-$ROOT}"; GIT_ROOT="${DBK_GIT_ROOT:-$ROOT}"; BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"
@@ -65,117 +75,43 @@ chk_step() {   # <编号> <卡> <标签> <步骤脚本相对路径> [只读参�
   case "$STEP_RC" in 0) item "$id" pass "$lab:$msg" "$card" ;; 2) item "$id" manual "$lab(脚本判为需人工):$msg" "$card" ;;
     9) item "$id" skip "$lab(脚本跳过):$msg" "$card" ;; *) item "$id" fail "$lab(脚本退出码 $STEP_RC):$msg" "$card" ;; esac
 }
-G=A   # ===== A 引导安全组 =====
-run_hook "${DBK_EFIBOOTMGR:-efibootmgr}" -v
-if [ -z "$HOOK_OUT" ]; then
-  item A1 manual "读不到 efibootmgr -v(需要 root);手动核对:sudo efibootmgr -v 的 BootOrder 首位" "07-7"
-  item A5 manual "读不到 efibootmgr -v;手动核对:Linux(Fedora)引导条目是否在 BootOrder 末位" "04-3"
-else
-  BO="$(printf '%s\n' "$HOOK_OUT" | sed -n 's/^BootOrder:[[:space:]]*//p' | head -n1)"
-  H1="$(printf '%s\n' "$HOOK_OUT" | grep -E "^Boot${BO%%,*}\*?" | head -n1 || true)"; H2="$(printf '%s\n' "$HOOK_OUT" | grep -E "^Boot${BO##*,}\*?" | head -n1 || true)"
-  case "$H1" in *Windows*Boot*Manager*|*Windows*启动管理器*) item A1 pass "BootOrder 首位仍是 Windows Boot Manager($H1)" "07-7" ;;
-    *) item A1 fail "BootOrder 首位不是 Windows Boot Manager(实际 ${H1:-空});处置见 07-9" "07-9" ;; esac
-  case "$H2" in *fedora*|*Fedora*|*ubuntu*|*Ubuntu*) item A5 pass "BootOrder 末位是 Linux 引导条目($H2)" "04-3" ;;
-    *) item A5 fail "BootOrder 末位不是 Linux 引导条目(实际 ${H2:-空});处置见 04-3" "04-3" ;; esac
-fi
-item A2 manual "连续重启 3 次(不按键、不选菜单),每次都自动进 Windows" "03-8"
-item A3 manual "Windows 侧跑 verify-baseline.ps1 -BaselineDir baseline 看 ② 行是否为「通过」(\\EFI\\Microsoft\\ 逐文件比对)" "07-7"
-chk_step A7 "07-7" "两个 ESP 互不干扰(两块 ESP 内容完整 + BootOrder 首位;逐文件比对见 A3)" scripts/linux/verify-l3.sh --check
-item A4 manual "Windows 管理员会话 bcdedit /enum {bootmgr} 的 path 与基线逐字一致" "07-7"
-item A6 manual "复核全部执行记录:没有任何一次 efibootmgr -o / displayorder 调整永久顺序" "07-7"
-item A8 manual "可撤除性演练:另存 \\EFI\\fedora\\ 后删除该子树,连续重启 3 次应自动进 Windows,再还原复测" "07-8"
-item A9 manual "同盘两块 ESP 都被固件识别(设备侧必测):efibootmgr -v 里 Windows Boot Manager 与 fedora 两条都在,且 BootOrder 首位仍是 Windows;再分别重启两次(固件菜单键选 fedora 进 Silverblue、不按键自动进 Windows),两次都无 grub rescue;只认一个 ESP 时记偏离项并按设计第 10 节评估共用 ESP 分支" "04-3"
-item A10 manual "Anaconda 在已有 Windows ESP 的盘上装成功(参考设备必测;上游 #284 截至 2026-09 仍开):装前 check-partition-plan.sh --track D --check 报 PASS 且 Windows ESP 未被挂载,装中只挂载/格式化 Fedora 三块,写引导到 \\EFI\\fedora\\,装完 verify-l3.sh --check 报 PASS;失败时按 07-1 判层后进 07-rescue.md 手工修(不重装、不动分区表),最坏退回轨道 W(03-windows.md)" "04-2"
-G=B   # ===== B 系统功能组 =====
-ST="${DBK_SESSION_TYPE:-${XDG_SESSION_TYPE:-}}"
-if [ -z "$ST" ]; then item B1 manual "XDG_SESSION_TYPE 取不到;手动核对:echo \$XDG_SESSION_TYPE 应为 wayland" "05-12"
-elif [ "$ST" = wayland ]; then item B1 pass "会话类型 wayland" "05-12"
-else item B1 fail "会话类型 $ST(要求 wayland)" "05-12"; fi
-chk_step B2 "05-3" "GPU 驱动与 nvidia 模块签名" scripts/linux/check-signature.sh --check
-chk_cmd_all B3 "07-7" "Secure Boot 保持开启" "${DBK_MOKUTIL:-mokutil}" 'SecureBoot enabled' --sb-state
-chk_cmd_all B4 "05-1" "共享盘以 ntfs3 读写挂载且带 nofail" "${DBK_FINDMNT:-findmnt}" 'ntfs3;rw;nofail' -no SOURCE,FSTYPE,OPTIONS "$SHARED"
-chk_step B5 "05-3" "显卡来源为 ublue 且 nvidia 模块签名有效" scripts/linux/graphics.sh --check
-chk_cmd_all B6 "05-3" "Secure Boot 密钥已注册(ublue 一次性 MOK 注册)" "${DBK_MOKUTIL:-mokutil}" 'ublue' --list-enrolled
-item B7 manual "跨系统双向可见性:Windows 写 D:\\Shared\\dbk-verify-win.txt -> Linux 读到;反向再测一次" "05-1"
-XU="${DBK_XDG_USER_DIR:-xdg-user-dir}"; B8BAD=""
-if ! avail "$XU"; then item B8 manual "未找到 xdg-user-dir;手动核对:六项 XDG 目录都指向 $SHARED 下" "05-2"
-else
-  for k in DESKTOP DOCUMENTS DOWNLOAD PICTURES VIDEOS MUSIC; do run_hook "$XU" "$k"
-    case "$(printf '%s' "$HOOK_OUT" | tail -n1)" in "$SHARED"/*) ;; *) B8BAD="$B8BAD $k=$(printf '%s' "$HOOK_OUT" | tail -n1)" ;; esac; done
-  if [ -n "$B8BAD" ]; then item B8 fail "家目录重定向未生效:$B8BAD;见 05-2" "05-2"; else item B8 pass "六项 XDG 目录都指向 $SHARED 下" "05-2"; fi; fi
-# B9 判据前强制 LC_ALL=C:timedatectl 会按 locale 输出本地化文本(中文 locale 下 RTC 行不是英文),
-#   否则真机上英文正则永远不命中 → 假 FAIL;同时保留中文口径正则作为回放件/异体输出的傍路。
-LC_ALL=C chk_cmd_all B9 "05-4" "RTC 走 UTC" "${DBK_TIMEDATECTL:-timedatectl}" 'RTC in local TZ: no|RTC 在本地时区: *否'
-item B10 manual "切换系统后蓝牙无需重新配对(三趟往返都能直连)" "05-5"
-chk_cmd_all B11 "05-12" "fwupd 能识别设备" "${DBK_FWUPDMGR:-fwupdmgr}" 'Device|设备|UEFI|NVMe|SSD|Firmware' get-devices
-G=C   # ===== C 双系统切换组(需实机切换) =====
-item C1 manual "从 Windows 用 set-bootnext.ps1 或固件菜单键一次性进 Linux" "05-11"
-item C2 manual "一次性入口用掉后再重启应自动回 Windows,且 BootOrder 与基线逐字一致" "05-11"
-item C3 manual "切换 3 轮后 A1/A3/A4(必要时 A5)复检仍成立" "07-7"
-G=D   # ===== D 可撤除性组(需实机演练/真做) =====
-item D1 manual "按 L5 五步顺序完整推演(参考设备真做一次);参考设备不做即该设备 D 组不成立" "07-9"
-item D2 manual "结束后固件条目与实际状态一致、BootOrder 首位仍是 Windows Boot Manager" "07-12"
-item D3 manual "Windows 侧逐项核对:六个已知文件夹与游戏库都在 D:,C: 不含用户数据" "03-3"
-item D4 manual "原地重装两法各推演一次(参考设备至少真做一法:只格 C:,或只格 root)" "07-4"
-item D5 manual "重装后 A 组四条不变量复检通过(A3 按预期差异口径判读)" "07-4"
-item D6 manual "非重装逃生路径:从 02-esp-backup 还原 \\EFI\\Microsoft\\ 并 bcdboot 重建后可正常启动" "07-6"
-G=E   # ===== E 记录组 =====
-MISS=""; for f in 00-firmware.md 01-partitions.txt 01-activation.md 02-preflight-report.md 02-firmware-entries.txt 02-partitions.txt 02-esp-backup/manifest.sha256 03-efi-layout.txt 04-first-boot.md 04-robustness.md 08-verification.md; do
-  [ -e "$BASEDIR/$f" ] || MISS="$MISS $f"; done
-if [ -n "$MISS" ]; then item E1 fail "baseline 产物缺失:$MISS(见 baseline/README.md 命名规范)" "03-9"
-else item E1 pass "baseline 十一件产物齐全($BASEDIR)" "03-9"; fi
-if ! command -v git >/dev/null 2>&1; then item E2 manual "未找到 git;手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md" "03-9"
-else
-  run_hook git -C "$GIT_ROOT" status --porcelain; GS="$HOOK_OUT"; GRC="$HOOK_RC"
-  run_hook git -C "$GIT_ROOT" ls-files baseline/; LT="$(printf '%s\n' "$HOOK_OUT" | grep -v '^[[:space:]]*$' | grep -cv '^baseline/README.md$' || true)"; LRC="$HOOK_RC"
-  if [ "$GRC" -ne 0 ] || [ "$LRC" -ne 0 ]; then item E2 manual "git 读不到工作区($GIT_ROOT);手动核对:git status 不含 baseline/ 条目、git ls-files baseline/ 只列 README.md" "03-9"
-  elif printf '%s' "$GS" | grep -q 'baseline/'; then item E2 fail "baseline/ 内容混进了工作区:$(printf '%s' "$GS" | grep 'baseline/' | head -n3 | tr '\n' ' ' || true)" "03-9"
-  elif [ "$LT" -gt 0 ]; then item E2 fail "baseline/ 已被 git 追踪(只允许 baseline/README.md)" "03-9"
-  else item E2 pass "baseline/ 未入库(仅 README.md 被追踪)" "03-9"; fi
-fi
-item E3 manual "本次与设备参数表的偏差已回写 baseline/ 或 00-overview.md 的偏离项处置表" "07-7"
-item E4 manual "所有未勾选项都整理成已知例外(条目/原因/影响面/是否阻塞/后续动作)" "08"
-item E5 manual "至少一台设备 A-G 全绿(或例外都不阻塞),方可称参考实现" "08"
-G=F   # ===== F 健壮性组 =====
-item F1 manual "部署回滚演练(真做一次):rollback-deploy.sh --check -> --pin <当前部署> -> 更新一次 -> --check 看到可回滚候选 -> --apply --yes 回到上一部署 -> 重启复测 -> --unpin;并确认 D: 数据不受影响" "05-9"
-item F3 manual "变更前备份与留档可用:baseline/ 与 /etc 关键文件有 .dbk.bak,且改系统前已 pin 当前部署" "05-13"
-chk_step F2 "05-9" "部署级回滚可用(部署列表可读 + 有回滚候选 + 无待重启)" scripts/linux/rollback-deploy.sh --check
-run_hook "${DBK_JOURNALCTL:-journalctl}" --list-boots
-NB="$(printf '%s\n' "$HOOK_OUT" | grep -cE '^[[:space:]]*-?[0-9]+[[:space:]]' || true)"
-if [ ! -d "$JRNL" ]; then item F4 fail "journald 未持久化($JRNL 不存在);见 05-7" "05-7"
-elif [ "${NB:-0}" -ge 2 ]; then item F4 pass "journalctl --list-boots 列出 $NB 次启动(可回看上一次启动)" "05-7"
-else item F4 manual "journalctl --list-boots 只 ${NB:-0} 条;重启一次后复核(--check 时可能只有本次启动)" "05-7"; fi
-chk_step F5 "05-7" "更新策略只检查/下载,不自动应用与不自动重启" scripts/linux/set-updates.sh --check
-run_hook "${DBK_SYSTEMCTL:-systemctl}" is-active sshd
-case "$HOOK_OUT" in active) item F6 pass "sshd 为 active(无需桌面会话即可 SSH)" "05-8" ;;
-  "") item F6 manual "读不到 systemctl;手动核对:systemctl is-active sshd + 从另一台机器 ssh 登录" "05-8" ;;
-  *) item F6 fail "sshd 不是 active(实际:$HOOK_OUT);见 05-8" "05-8" ;; esac
-run_hook "${DBK_SYSTEMCTL:-systemctl}" is-active systemd-oomd; OOMD="$HOOK_OUT"; run_hook "${DBK_ZRAMCTL:-zramctl}"; ZR="$HOOK_OUT"
-if [ -z "$OOMD" ] || [ -z "$ZR" ]; then item F7 manual "读不到 systemctl/zramctl;手动核对:systemd-oomd 为 active 且 zramctl 有 /dev/zram0" "05-6"
-elif [ "$OOMD" != active ]; then item F7 fail "systemd-oomd 不是 active(实际:${OOMD:-空});见 05-6" "05-6"
-elif printf '%s' "$ZR" | grep -q zram; then item F7 pass "systemd-oomd active 且 zram 生效" "05-6"
-else item F7 fail "zramctl 未见 /dev/zram0;见 05-6" "05-6"; fi
-run_hook "${DBK_SYSTEMCTL:-systemctl}" is-active smartd; SMD="$HOOK_OUT"; run_hook "${DBK_SMARTCTL:-smartctl}" -H "$DISK"
-if [ -z "$SMD" ]; then item F8 manual "读不到 systemctl;手动核对:systemctl is-active smartd + smartctl -H $DISK 应报 PASSED" "05-8"
-elif [ "$SMD" != active ]; then item F8 fail "smartd 不是 active(实际:${SMD:-空});见 05-8" "05-8"
-elif printf '%s' "$HOOK_OUT" | grep -q PASSED; then item F8 pass "smartd active 且 smartctl -H $DISK 报 PASSED" "05-8"
-else item F8 fail "smartctl -H $DISK 未报 PASSED:$(printf '%s' "$HOOK_OUT" | grep -iE 'health|result' | head -n1 || true);按硬件问题处理" "05-8"; fi
-BADF="$(awk '!/^[[:space:]]*#/ && NF>=4 { if ($2=="/") next; if ($2=="/boot/efi") { if ($4 ~ /nofail/) print "ESP 行不应带 nofail" } else if ($4 !~ /nofail/) print "缺 nofail: " $2 }' "$FSTAB" 2>/dev/null || true)"
-if [ ! -r "$FSTAB" ]; then item F9 manual "读不到 $FSTAB;手动核对:非 root 条目都带 nofail,/boot/efi 不带" "05-1"
-elif [ -n "$BADF" ]; then item F9 fail "fstab 挂载选项不合判据:$(printf '%s' "$BADF" | tr '\n' ' ')" "05-1"
-else item F9 pass "fstab 非 root 条目均带 nofail,/boot/efi 未加 nofail" "05-1"; fi
-item F10 manual "启动失败自动回滚演练(参考设备必做):setup-greenboot.sh 就位后故意让健康检查失败(临时把 /etc/greenboot/check/required.d/60-dbk-health.sh 改成 exit 1),重启两次应自动退回上一部署、桌面可用、BootOrder 首位仍是 Windows Boot Manager;随后复原并重跑 setup-greenboot.sh --check 复检为绿" "05-9"
-G=G   # ===== G 体验组(批 E:三条都由脚本判定) =====
-chk_step G1 "05-15" "默认应用绑定与 templates/mimeapps.tsv 一致(应用未装记需人工)" scripts/linux/set-default-apps.sh --check
-chk_step G2 "05-17" "应用清单里的必需项都在位(可选缺失只记一行)" scripts/linux/check-apps.sh --check
-chk_step G3 "05-18" "配置快照与现状无漂移(漂移记需人工)" scripts/linux/export-config.sh --check
+# ===== 读条目表(唯一真源;制表符分隔、LF、# 开头为注释)=====
+ITEMS_TSV="${DBK_ITEMS_TSV:-$ROOT/scripts/verification-items.tsv}"
+[ -r "$ITEMS_TSV" ] || { dbk_usage; dbk_note "用法错误: 读不到验收条目表 $ITEMS_TSV(它随仓库分发,不要手工生成)"; exit "$DBK_USAGE"; }
+ITEMS=()
+while IFS=$'\t' read -r id grp card side scr args label; do
+  case "$id" in ''|'#'*) continue ;; esac
+  ITEMS+=("$id|$grp|$card|$side|$scr|$args|${label//|/／}")
+done <"$ITEMS_TSV"
+[ "${#ITEMS[@]}" -gt 0 ] || { dbk_usage; dbk_note "用法错误: 验收条目表 $ITEMS_TSV 里没有条目行"; exit "$DBK_USAGE"; }
+# ===== 逐条判定(按侧与判定脚本列分派;探测实现见 dbk-verify-probes.sh)—— A 引导安全 / B 系统功能 / C 切换 / D 可撤除 / E 记录 / F 健壮 / G 体验
+for row in "${ITEMS[@]}"; do
+  IFS='|' read -r id grp card side scr args label <<<"$row"
+  G="$grp"
+  if [ "$side" = W ]; then item "$id" manual "$label" "$card"; continue; fi
+  case "$scr" in
+    -) item "$id" manual "$label" "$card" ;;
+    builtin) if declare -F "probe_$id" >/dev/null 2>&1; then "probe_$id" "$label" "$card"
+             else item "$id" manual "$label(本侧没有 $id 的内置探测,需人工)" "$card"; fi ;;
+    *) ARGS_A=(); [ "$args" = "-" ] || read -r -a ARGS_A <<<"$args"
+       chk_step "$id" "$card" "$label" "$scr" ${ARGS_A[@]+"${ARGS_A[@]}"} ;;
+  esac
+done
 # ===== --step 过滤与计数(执行器语义:见脚本头;非法值 64,不落任何产物)=====
 KNOWN="$(printf '%s\n' "${R[@]}" | cut -d'|' -f5 | sort -u | tr '\n' ' ')"
-if [ -n "$STEP_SEL" ] && ! printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL "; then
-  dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-G = 七组全判(缺省)"; exit "$DBK_USAGE"
+GRP_LIST="$(printf '%s\n' "${R[@]}" | cut -d'|' -f2 | sort -u | tr '\n' ' ')"
+SEL_GROUP=""
+if [ -n "$STEP_SEL" ]; then
+  case "$STEP_SEL" in
+    08-[A-G]) SEL_GROUP="${STEP_SEL#08-}"
+      printf ' %s ' "$GRP_LIST" | grep -q " $SEL_GROUP " || { dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器的组集合里;可用组:08-A 08-B 08-C 08-D 08-E 08-F 08-G;08-A-G = 七组全判(缺省)"; exit "$DBK_USAGE"; } ;;
+    *) printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL " || { dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-G = 七组全判(缺省)"; exit "$DBK_USAGE"; } ;;
+  esac
 fi
 for idx in "${!R[@]}"; do IFS='|' read -r i g s m c <<<"${R[$idx]}"
-  if [ -n "$STEP_SEL" ] && [ "$c" != "$STEP_SEL" ]; then s=skip; m="未选中(--step $STEP_SEL 只判卡 $STEP_SEL):$m"; fi
+  if [ -n "$SEL_GROUP" ]; then
+    if [ "$g" != "$SEL_GROUP" ]; then s=skip; m="未选中(--step $STEP_SEL 只判组 $SEL_GROUP):$m"; fi
+  elif [ -n "$STEP_SEL" ] && [ "$c" != "$STEP_SEL" ]; then s=skip; m="未选中(--step $STEP_SEL 只判卡 $STEP_SEL):$m"; fi
   R[$idx]="$i|$g|$s|$m|$c"; case "$s" in fail) n_fail=$((n_fail + 1)) ;; manual) n_manual=$((n_manual + 1)) ;; pass) n_pass=$((n_pass + 1)) ;; *) n_skip=$((n_skip + 1)) ;; esac
   if [ "${DBK_JSON:-0}" -ne 1 ]; then printf '[%s] %s %s\n' "$(tag_of "$s")" "$i" "$m"; fi
 done
