@@ -8,6 +8,7 @@
 #   dbk-cli.sh 只是替调用方 source 它;不引 dbk-cli 时也可直接 source dbk-log.sh 的 log),然后使用:
 #   pkg_installed <包>      该包已装(基础镜像或分层,**含已提交未重启的**)→ 0;未装 → 1
 #   pkg_update              原子版 no-op:返回 0,打印"原子版无 apt update 等价动作"(rpm-ostree 自动同步元数据)
+#   pkg_layered_list        只读:分层包清单,一行一个(去重升序);0 = 已输出(可能为空) / 2 = 读不到状态(需人工)
 #   pkg_install <包...>     0 = 分层安装已提交(重启后生效);9 = 按 SKIP_PKG 跳过;1 = 失败(原因已落日志)
 #   pkg_ensure <包...>      0 = 已装或已提交 / 1 = 失败 / 2 = 需人工(--now);已装则跳过,否则逐个 pkg_install
 #   pkg_needs_reboot        0 = 存在未生效的 staged 分层改动(步骤脚本据此提示重启);1 = 无;2 = 读不到状态(需人工)
@@ -71,6 +72,17 @@ pkg_installed() {
   esac
   command rpm -q "$want" >/dev/null 2>&1 && return 0
   return 1
+}
+
+# 只读:列举分层包(status --json 各 deployments[].packages 的并集,一行一个,去重升序)。
+# 与 pkg_installed 同口径(含已提交未重启的);读不到状态 → 2(需人工),不 fail-open 成空清单。
+pkg_layered_list() {
+  local out
+  command -v "${PKG_CMD%% *}" >/dev/null 2>&1 || { _pkg_note "错误: 无 $PKG_CMD,无法读分层包清单(需人工)"; return 2; }
+  out="$(command "$PKG_CMD" status --json 2>/dev/null)" || out=""
+  if [ -z "$out" ]; then _pkg_note "错误: $PKG_CMD status --json 读不到,无法取分层包清单(需人工)"; return 2; fi
+  printf '%s\n' "$out" | _pkg_names | tr -d '"' | LC_ALL=C sort -u
+  return 0
 }
 
 # 原子版 no-op:rpm-ostree 无 apt-get update 的等价动作(元数据随 status/install 自动同步)。

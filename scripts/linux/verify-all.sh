@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 验收总控(Fedora 44 Silverblue / 原子版侧;执行器:不进卡映射表、不登记 steps.tsv):按 docs/08-verification.md 的 A-F 六组
+# 验收总控(Fedora 44 Silverblue / 原子版侧;执行器:不进卡映射表、不登记 steps.tsv):按 docs/08-verification.md 的 A-G 七组
 #   逐项判定——能自动的调既有步骤脚本的 --check/--list 或读系统状态,不能自动的记「需人工」并给手动核对步骤。
 #   **绝不执行任何 --apply**:只允许 --check 与只读子命令,收到 --apply/--rollback/--pin/--unpin → 64 且一个子脚本
 #   都不调。汇总只在 --apply 时落盘 <out-dir>/08-verification.md(每台设备副本,含「已知例外」表与结论行);
@@ -8,14 +8,13 @@
 # 用法: verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual] [--json] [--log <路径>]
 # 夹具注入(真机不需要):DBK_EFIBOOTMGR/DBK_FINDMNT/DBK_MOKUTIL/DBK_TIMEDATECTL/DBK_FWUPDMGR/DBK_SYSTEMCTL/DBK_ZRAMCTL/
 #   DBK_SMARTCTL/DBK_JOURNALCTL/DBK_XDG_USER_DIR、DBK_SESSION_TYPE、DBK_STEP_ROOT/DBK_GIT_ROOT/DBK_BASELINE_DIR/
-#   DBK_FSTAB/DBK_JOURNAL_DIR/DBK_SHARED_MNT/DBK_DISK;白名单依据=设计 03 第 6 节「验收六组」。待核实(以官方文档为准):
+#   DBK_FSTAB/DBK_JOURNAL_DIR/DBK_SHARED_MNT/DBK_DISK;白名单依据=设计 03 第 6 节「验收七组」。待核实(以官方文档为准):
 #   mokutil/timedatectl/fwupdmgr/smartctl 输出文本未在真机验证,取不到时按「需人工」而非 FAIL。
 set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; ROOT="$(cd "$SRC/../.." && pwd)"
 # shellcheck source=scripts/linux/dbk-cli.sh disable=SC1091
 . "$SRC/dbk-cli.sh"
-# 缺省落点 = <baseline>/auto/(与 Windows 侧 verify-all.ps1 同口径):baseline/08-verification.md 是**人填写版**,
-# 缺省写那里会把它盖掉(真源 docs/08-verification.md 的「注意同名覆盖」)。
+# 缺省落点 = <baseline>/auto/(与 Windows 侧同口径):baseline/08-verification.md 是**人填写版**,缺省写那里会把它盖掉。
 OUTDIR="$ROOT/baseline/auto"; CONFIRM=0; ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -27,7 +26,7 @@ while [ "$#" -gt 0 ]; do
 done
 dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
 # --step(执行器专用,与 Windows 侧 verify-all.ps1 同口径,真源 docs/design/03 第 5 节):取值 = 验收条目关联的卡号(NN-K);非法值在条目表建好后校验(→ 64 且不落产物),合法值只判该卡号条目、其余记跳过不计入退出码(本执行器不绑卡、无「# 对应卡:」头)。
-STEP_SEL="${DBK_STEP:-}"; case "$STEP_SEL" in 08-A-F) STEP_SEL="" ;; esac; DBK_STEP="${STEP_SEL:-08-A-F}"
+STEP_SEL="${DBK_STEP:-}"; case "$STEP_SEL" in 08-A-G) STEP_SEL="" ;; esac; DBK_STEP="${STEP_SEL:-08-A-G}"
 if [ "$DBK_MODE" = apply ]; then dbk_log_default "verify-all"; fi
 STEP_ROOT="${DBK_STEP_ROOT:-$ROOT}"; GIT_ROOT="${DBK_GIT_ROOT:-$ROOT}"; BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"
 FSTAB="${DBK_FSTAB:-/etc/fstab}"; JRNL="${DBK_JOURNAL_DIR:-/var/log/journal}"
@@ -136,7 +135,7 @@ else
 fi
 item E3 manual "本次与设备参数表的偏差已回写 baseline/ 或 00-overview.md 的偏离项处置表" "07-7"
 item E4 manual "所有未勾选项都整理成已知例外(条目/原因/影响面/是否阻塞/后续动作)" "08"
-item E5 manual "至少一台设备 A-F 全绿(或例外都不阻塞),方可称参考实现" "08"
+item E5 manual "至少一台设备 A-G 全绿(或例外都不阻塞),方可称参考实现" "08"
 G=F   # ===== F 健壮性组 =====
 item F1 manual "部署回滚演练(真做一次):rollback-deploy.sh --check -> --pin <当前部署> -> 更新一次 -> --check 看到可回滚候选 -> --apply --yes 回到上一部署 -> 重启复测 -> --unpin;并确认 D: 数据不受影响" "05-9"
 item F3 manual "变更前备份与留档可用:baseline/ 与 /etc 关键文件有 .dbk.bak,且改系统前已 pin 当前部署" "05-13"
@@ -166,10 +165,14 @@ if [ ! -r "$FSTAB" ]; then item F9 manual "读不到 $FSTAB;手动核对:非 roo
 elif [ -n "$BADF" ]; then item F9 fail "fstab 挂载选项不合判据:$(printf '%s' "$BADF" | tr '\n' ' ')" "05-1"
 else item F9 pass "fstab 非 root 条目均带 nofail,/boot/efi 未加 nofail" "05-1"; fi
 item F10 manual "启动失败自动回滚演练(参考设备必做):setup-greenboot.sh 就位后故意让健康检查失败(临时把 /etc/greenboot/check/required.d/60-dbk-health.sh 改成 exit 1),重启两次应自动退回上一部署、桌面可用、BootOrder 首位仍是 Windows Boot Manager;随后复原并重跑 setup-greenboot.sh --check 复检为绿" "05-9"
+G=G   # ===== G 体验组(批 E:三条都由脚本判定) =====
+chk_step G1 "05-15" "默认应用绑定与 templates/mimeapps.tsv 一致(应用未装记需人工)" scripts/linux/set-default-apps.sh --check
+chk_step G2 "05-17" "应用清单里的必需项都在位(可选缺失只记一行)" scripts/linux/check-apps.sh --check
+chk_step G3 "05-18" "配置快照与现状无漂移(漂移记需人工)" scripts/linux/export-config.sh --check
 # ===== --step 过滤与计数(执行器语义:见脚本头;非法值 64,不落任何产物)=====
 KNOWN="$(printf '%s\n' "${R[@]}" | cut -d'|' -f5 | sort -u | tr '\n' ' ')"
 if [ -n "$STEP_SEL" ] && ! printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL "; then
-  dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-F = 六组全判(缺省)"; exit "$DBK_USAGE"
+  dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-G = 七组全判(缺省)"; exit "$DBK_USAGE"
 fi
 for idx in "${!R[@]}"; do IFS='|' read -r i g s m c <<<"${R[$idx]}"
   if [ -n "$STEP_SEL" ] && [ "$c" != "$STEP_SEL" ]; then s=skip; m="未选中(--step $STEP_SEL 只判卡 $STEP_SEL):$m"; fi

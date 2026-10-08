@@ -21,6 +21,12 @@
 05-12	scripts/linux/collect-l4.sh	0	落 L4 产物:baseline/04-first-boot.md 与 04-robustness.md(发行版/驱动来源与 MOK/部署列表与 pin/待更新)
 05-13	scripts/linux/first-boot.sh	1	L4 汇总执行(可选):按顺序跑各模块并聚合结果
 05-13	scripts/linux/hardening.sh	1	L4 汇总执行(可选):R1-R9 九项(被 first-boot.sh 编排,也可单跑)
+05-14	scripts/linux/set-interactive.sh	1	交互 shell 用 fish(经 brew 通道;脚本解释器仍是 bash;写 /etc/shells + chsh,需 --yes)
+05-15	scripts/linux/set-default-apps.sh	1	默认应用绑定:按 templates/mimeapps.tsv 逐项 xdg-mime default(需 --yes)
+05-16	scripts/linux/set-workflow.sh	1	虚拟桌面工作流:按 templates/workflow.tsv 用 gsettings 固定工作区与快捷键(需 --yes)
+05-17	scripts/linux/check-apps.sh	0	应用清单与替代映射:按 templates/apps.tsv 断言必需项在位(只读;VFIO 为被否项)
+05-18	scripts/linux/export-config.sh	1	配置快照:五份文本快照落 baseline/config/(需 --yes)
+05-18	scripts/linux/import-config.sh	1	配置复原:重装后按快照回灌(先留 pre-import 备份;分层包不自动装;需 --yes)
 07-1	scripts/linux/triage.sh	0	判层:只读采集分区/挂载/固件条目/两块 ESP 内容/部署列表与错误日志,给判层结论与建议卡号
 07-2	scripts/linux/gen-grub-rescue-commands.sh	0	从 GRUB 提示符回去:生成两套可复制命令(不执行、不改启动顺序)
 07-5	scripts/linux/check-partition-plan.sh	0	只重装 Silverblue:装前核对 Fedora 三块分区与 Windows 侧不被触碰(安装人工,ESP 绝不格式化)

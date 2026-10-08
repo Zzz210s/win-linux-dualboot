@@ -1,0 +1,11 @@
+# templates/workflow.tsv -> scripts/linux/set-workflow.sh 的输入(唯一真源)
+# 用法:改这里的值就等于改"虚拟桌面工作流"的期望状态,然后重跑
+#       sudo bash scripts/linux/set-workflow.sh --check / --apply --yes;不要手改 dconf/gsettings。
+# 三列:schema <TAB> key <TAB> 期望值(值照 `gsettings get` 的输出写法逐字写,含引号与空格)。
+# 改行/删行规则(见卡 05-16):`gsettings get` 报 No such schema / No such key 时,从本文件去掉该行,不要硬塞。
+# 作用:① 固定工作区数量为 4;② 关掉动态工作区(为 true 时数量由窗口数决定,与 ① 冲突必须一起钉);
+#       ③ 前两个工作区直达快捷键 Super+1 / Super+2(不换合成器,niri / KDE 为非目标)。
+org.gnome.desktop.wm.preferences	num-workspaces	4
+org.gnome.mutter	dynamic-workspaces	false
+org.gnome.desktop.wm.keybindings	switch-to-workspace-1	['<Super>1']
+org.gnome.desktop.wm.keybindings	switch-to-workspace-2	['<Super>2']

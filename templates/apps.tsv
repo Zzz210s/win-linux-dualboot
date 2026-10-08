@@ -1,0 +1,17 @@
+# 应用清单(唯一真源):templates/apps.tsv
+# 列:名称 <TAB> 通道(flatpak|brew|native|web|win) <TAB> id 或命令 <TAB> 必需(1|0) <TAB> 备注
+# 消费方:scripts/linux/check-apps.sh(卡 05-17;验收 G2 = 该脚本 --check)。改这里等于改「必需应用」真源。
+# 通道语义:flatpak/brew/native 可机器判定;web = 浏览器打开、win = 重启回 Windows 使用,两者只登记不判定。
+# VFIO 已被否(单卡 + 已有原生 Windows + 一份 LTSC 授权):需要 Windows 独占工具时重启回 Windows,不做显卡直通。
+loupe	flatpak	org.gnome.Loupe	1	图片查看器(PNG/JPEG);备选 org.kde.gwenview
+papers	flatpak	org.gnome.Papers	1	PDF 阅读器;备选 okular
+fileroller	flatpak	org.gnome.FileRoller	1	压缩包管理;备选 ark
+nautilus	native	nautilus	1	文件管理器(桌面顶梁柱);Silverblue 基础镜像自带
+bash	native	bash	1	基准项:一个「怎么都该在」的解释器;它缺说明环境本身坏了
+gnome-text-editor	native	gnome-text-editor	1	纯文本编辑;备选 kate
+fish	brew	fish	0	交互 shell(见卡 05-14;brew 通道);不装也能用 bash,可选
+outlook-web	web	https://outlook.office.com	0	网页版 Outlook:浏览器打开,不装 Wine、不建虚拟机
+teams-web	web	https://teams.microsoft.com	0	网页版 Teams:浏览器打开
+office-win	win	Microsoft Office(Windows 独占)	0	Windows 独占:重启回 Windows 使用(VFIO 已被否:单卡 + 已有原生 Windows + 一份 LTSC 授权)
+autohotkey-win	win	AutoHotkey(Windows 独占)	0	Windows 独占:重启回 Windows 使用(VFIO 已被否)
+wechat-win	win	微信 Windows 版(Windows 独占)	0	Windows 独占:重启回 Windows 使用;Linux 侧无等价需求(VFIO 已被否)

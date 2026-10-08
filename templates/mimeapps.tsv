@@ -1,0 +1,11 @@
+# 默认应用绑定清单(唯一真源):templates/mimeapps.tsv
+# 列:mime <TAB> 期望 desktop id <TAB> 说明
+# 消费方:scripts/linux/set-default-apps.sh(卡 05-15;验收 G1 = 该脚本 --check)。改这里等于改绑定真源,
+#   不要在脚本里写死 mime 与 desktop id。
+# 说明列的「备选」= 期望应用未装时的人工替代(先按卡 05-17 的应用清单装);desktop id 以实际 desktop 文件名为准。
+inode/directory	org.gnome.Nautilus.desktop	文件管理器:桌面顶梁柱,双击目录都落到它;备选 org.kde.dolphin.desktop
+application/pdf	org.gnome.Papers.desktop	PDF 阅读;备选 okular.desktop
+image/png	org.gnome.Loupe.desktop	图片查看(PNG);备选 org.kde.gwenview.desktop
+image/jpeg	org.gnome.Loupe.desktop	图片查看(JPEG);备选 org.kde.gwenview.desktop
+application/zip	org.gnome.FileRoller.desktop	压缩包管理;备选 ark.desktop
+text/plain	org.gnome.TextEditor.desktop	纯文本编辑;备选 kate.desktop
