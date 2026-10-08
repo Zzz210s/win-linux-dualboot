@@ -87,3 +87,20 @@ for d in linux windows; do
       || printf '%s:1 C9d 步骤脚本未登记进索引: %s\n' "$idx" "$p"
   done
 done
+
+# ==== C9e:验收条目表与勾选卡的编号集合必须一致 ==============================
+# 条目唯一真源是 scripts/verification-items.tsv(两侧总控都读它),docs/08-verification.md 是人读视图。
+# 这里只比**编号集合**(不是行序):少一条、多一条、改名都算不一致 —— 防止"总控判得动、文档没写"或反之。
+# 夹具:`scripts/repo/tests/check-docs/case-c9e-items.sh`(删/加一条都要报)。
+ITEMS="$ROOT/scripts/verification-items.tsv"
+CARD08="$ROOT/docs/08-verification.md"
+if [ -f "$ITEMS" ]; then
+  tsv_ids="$(awk -F'\t' '!/^#/ && NF >= 2 && $1 != "" { print $1 }' "$ITEMS" | sort -u)"
+  card_ids="$(grep -oE '^- \[ \] [A-G][0-9]+ ' "$CARD08" 2>/dev/null | awk '{ print $4 }' | sort -u)"
+  missing="$(printf '%s\n' "$tsv_ids" | grep -vxF -e '' | while IFS= read -r i; do
+    printf '%s\n' "$card_ids" | grep -qxF "$i" || printf '%s\n' "$i"; done)"
+  extra="$(printf '%s\n' "$card_ids" | while IFS= read -r i; do
+    printf '%s\n' "$tsv_ids" | grep -qxF "$i" || printf '%s\n' "$i"; done)"
+  if [ -n "$missing" ]; then printf 'scripts/verification-items.tsv:1 C9e 条目表有、勾选卡里没有: %s\n' "$(printf '%s' "$missing" | tr '\n' ' ')"; fi
+  if [ -n "$extra" ]; then printf '%s:1 C9e 勾选卡有、条目表里没有: %s\n' "docs/08-verification.md" "$(printf '%s' "$extra" | tr '\n' ' ')"; fi
+fi

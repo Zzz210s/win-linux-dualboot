@@ -190,5 +190,24 @@ out="$(bash "$FIX/run-fixtures.sh" --syntax-only "$SYNBD" 2>&1)"; rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q '语法错误'; then verdict 0 "D5 夹具语法自检:坏脚本退非 0 并报错"
 else verdict 1 "D5 坏脚本未被拦下(rc=$rc)" "$out"; fi
 
+# ==== C9e:验收条目表 ↔ 勾选卡编号集合一致(批 G 新增) ==========================
+# C9e 由 check-docs-repo.sh 提供、只在仓库模式(--repo)下跑;这里在临时仓库里造不一致样本,
+# 断言两个方向都报:① 条目表多一条 ② 勾选卡多一条。真实仓库样本由「真实样本」段间接覆盖(C9e 静默即一致)。
+mk_c9e() {   # mk_c9e <目录> <tsv 额外编号行(可空)> <卡里额外的一行(可空)>
+  local d="$1" tsvline="$2" extra="$3"
+  rm -rf "$d"; mkdir -p "$d/scripts/repo" "$d/docs"
+  cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$d/scripts/repo/"
+  { printf '# 条目唯一真源(夹具)\nA1\tA\t02-1\tW\t-\t\t示例\n'; [ -n "$tsvline" ] && printf '%s\n' "$tsvline"; } > "$d/scripts/verification-items.tsv"
+  { printf '# 验收(夹具)\n\n- [ ] A1 示例 -> 看到:示例\n'; [ -n "$extra" ] && printf '%s\n' "$extra"; } > "$d/docs/08-verification.md"
+}
+D13="$W/repo-c9e-extra"; mk_c9e "$D13" "$(printf 'B2\tA\t02-3\tW\t-\t\t多出来的一条')" ""
+out="$(cd "$D13" && bash scripts/repo/check-docs.sh --repo docs/08-verification.md 2>&1)"
+if printf '%s\n' "$out" | grep -q 'C9e 条目表有、勾选卡里没有: B2'; then verdict 0 "C9e 条目表多一条 -> 报出来"
+else verdict 1 "C9e 条目表多一条未报" "$out"; fi
+D14="$W/repo-c9e-missing"; mk_c9e "$D14" "" "- [ ] C3 只在卡里有 -> 看到:示例"
+out="$(cd "$D14" && bash scripts/repo/check-docs.sh --repo docs/08-verification.md 2>&1)"
+if printf '%s\n' "$out" | grep -q 'C9e 勾选卡有、条目表里没有: C3'; then verdict 0 "C9e 勾选卡多一条 -> 报出来"
+else verdict 1 "C9e 勾选卡多一条未报" "$out"; fi
+
 printf '\nPASS=%s FAIL=%s\n' "$pass" "$bad"
 [ "$bad" -eq 0 ] || exit 1
