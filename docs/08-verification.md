@@ -6,6 +6,8 @@
 
 **记录载体**:每台设备把本文件复制一份、就地填写勾选与证据(命令输出、脚本退出码、产物路径),落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`);`baseline/` 全部内容不入库(仅 [baseline/README.md](../baseline/README.md) 例外),命名规范见该文件。
 
+**条目的唯一真源 = `scripts/verification-items.tsv`**(制表符分隔、LF;列 = 编号 / 组 / 卡 / 侧(L\|W\|B) / 判定脚本(`-` 表示需人工) / 判定参数 / 标签)。两侧总控都只读它,不再各写一份;本文件的勾选卡是它的**人读视图**,`check-docs` 会逐条比对两边(编号集合不一致即 FAIL)。表读不到时必须报错退 64、**禁止回退到硬编码条目**(用 `DBK_ITEMS_TSV` / `-ItemsTsv` 指向另一张表即可整体替换,夹具用它验这一点)。
+
 **判定侧与脚本(两侧各跑一遍)**:总控是**执行器**——只做只读判定与汇总,绝不执行任何 `--apply`:
 
 - Fedora 侧:`scripts/linux/verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual]`
