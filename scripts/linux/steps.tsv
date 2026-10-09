@@ -34,3 +34,7 @@
 07-7	scripts/linux/check-bootloader.sh	1	周期巡检(Linux 侧):引导器状态与 BLS 条目(与 05-7/05-10 同一脚本)
 07-7	scripts/linux/check-integrity.sh	0	周期巡检(Linux 侧):root btrfs device stats 错误计数与 scrub 结论
 07-7	scripts/linux/check-signature.sh	0	周期巡检(Linux 侧):nvidia 模块签名者与 Secure Boot 状态(未签名/未开启 → 需人工,指向 05-3)
+05-19	scripts/linux/install-apps.sh	1	安装层:按 templates/apps.tsv 经 Flatpak/Homebrew 薄接口装必需项(幂等;native 只提示不自动分层;需 --yes)
+05-20	scripts/linux/check-bluetooth.sh	1	蓝牙与音频链路:BlueZ 服务/适配器/已配对设备 + PipeWire/WirePlumber 与编解码器(--apply 只启动服务与适配器上电;需 --yes)
+05-22	scripts/linux/backup-home.sh	1	备份与同步:restic 备份家目录文档 + /etc 漂移 + Flatpak/brew 清单并执行保留策略(凭据只从环境变量/600 文件读;需 --yes)
+07-7	scripts/linux/check-security.sh	0	周期巡检(Linux 侧):firewalld / fwupd / lynis 只读结论(只报告,不打分、不改配置)

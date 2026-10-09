@@ -96,7 +96,7 @@ ITEMS="$ROOT/scripts/verification-items.tsv"
 CARD08="$ROOT/docs/08-verification.md"
 if [ -f "$ITEMS" ]; then
   tsv_ids="$(awk -F'\t' '!/^#/ && NF >= 2 && $1 != "" { print $1 }' "$ITEMS" | sort -u)"
-  card_ids="$(grep -oE '^- \[ \] [A-G][0-9]+ ' "$CARD08" 2>/dev/null | awk '{ print $4 }' | sort -u)"
+  card_ids="$(grep -oE '^- \[ \] [A-H][0-9]+ ' "$CARD08" 2>/dev/null | awk '{ print $4 }' | sort -u)"
   missing="$(printf '%s\n' "$tsv_ids" | grep -vxF -e '' | while IFS= read -r i; do
     printf '%s\n' "$card_ids" | grep -qxF "$i" || printf '%s\n' "$i"; done)"
   extra="$(printf '%s\n' "$card_ids" | while IFS= read -r i; do

@@ -269,4 +269,56 @@ Fedora 44 Silverblue(原子版,GNOME 50)的三条硬事实贯穿全文:系统**�
 坑:**回滚不回退 `/etc`、也不回退 `~/.config`** —— "当前配置"要靠这套快照留档,不能指望 `rpm-ostree rollback`;`import` 前必须留 `pre-import-*` 备份(脚本自动做),否则会把现状盖掉;分层包是唯一"不可快照"的项,只能按打印的命令人工执行。
 出错时:`dconf load` 报错 -> 看 `dconf.txt` 是否被编辑器改坏(必须原样文本);`brew bundle` 失败 -> 逐条 `brew install`,与清单对齐后重跑 `--check`。
 
-L4 的整机验收见 [08-verification.md](08-verification.md) 的 A-G 七组(B 组与 F 组覆盖本阶段的共享盘与健壮性判据,G 组覆盖本页的体验层);逐项回退动作见 [checklists/rollback.md](../checklists/rollback.md)。
+### 05-19 系统与硬件管理软件(通道优先级:Flatpak / Homebrew / 分层要记账)
+
+做:按 `templates/apps.tsv`(唯一真源)把系统与硬件管理软件补齐 —— GUI 走 Flatpak(Mission Center / Flatseal / Extension Manager / Warehouse / Bazaar),CLI 走 Homebrew(btop / nvtop / smartmontools),镜像自带项(gnome-disks / baobab)只核对。
+  1. 先空跑:`sudo bash scripts/linux/install-apps.sh --check`
+     看到:逐行「在位 / 缺 / 需人工 / 跳过」;必需项缺(Flatpak/Homebrew 通道)= FAIL,`native` 必需项缺 = 需人工(附分层安装命令),通道工具取不到 = 需人工
+  2. 装必需项:`sudo bash scripts/linux/install-apps.sh --apply --yes`
+     看到:只装 Flatpak/Homebrew 通道的必需项,经两个薄接口执行且幂等(已装不重复调);末尾复读为 PASS
+  3. 复核:`bash scripts/linux/check-apps.sh --check`
+     看到:清单必需项全在位;`gparted` / `lshw` / `dolphin` 这类可选项缺失只记一行
+脚本:sudo bash scripts/linux/install-apps.sh --check / --apply --yes [--channel flatpak|brew];核对用 bash scripts/linux/check-apps.sh --check
+坑:分层会拖慢每次更新,所以 `native` 缺失**只提示不自动装**(提示命令出自薄接口 `dbk-pkg.sh`,包管理器字面量只允许出现在薄接口里);Bazaar 在 ublue 镜像上可能已自带,清单记为「在位」不算错;Flathub 远端不在脚本里代加。
+出错时:flatpak 报远端缺失 -> 手工 `flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo`;brew 取不到 -> 先确认 ublue 的 Homebrew 前缀(`/home/linuxbrew/.linuxbrew/bin/brew`),不要为此分层装包。
+
+### 05-20 蓝牙与音频链路(核对层 / 可用层 / 音频层)
+
+做:三层体检蓝牙 —— ①核对层:BlueZ 服务 active、适配器在位且上电、已配对设备清单、`bluetoothctl` 在位;②可用层:GNOME 设置面板 + `bluetoothctl` 脚本化(**不装 BlueMan**,托盘类要扩展且收益低);③音频层:PipeWire/WirePlumber 在位、aptX/LDAC 编解码器插件是否可用。
+  1. 先空跑:`sudo bash scripts/linux/check-bluetooth.sh --check`
+     看到:三层逐项结论;服务未起 / 适配器未上电 / 已配对设备为空 / `bluetoothctl` 缺失 = FAIL;PipeWire 缺或缺编解码器 = 需人工(附「分层装 codec 包」与「接受 AAC/SBC」两条路)
+  2. 起服务与上电:`sudo bash scripts/linux/check-bluetooth.sh --apply --yes`
+     看到:只做两件幂等写入(`bluetooth.service` 不在 active 就 start、适配器 `powered: no` 就 power on),**不装任何东西**;复读转 PASS
+  3. 与 Windows 侧对照(见 `05-5`):同一副耳机在两边分别配对,或先在一边删掉旧配对
+     看到:`bluetoothctl devices Paired` 里设备齐全、连一次耳机能出声
+脚本:sudo bash scripts/linux/check-bluetooth.sh --check / --apply --yes
+坑:蓝牙配对密钥在两边各存一套,双系统常见「连过一次就再也连不上」—— 先删旧配对再重配;`powered: no` 可能来自 `rfkill` 软关,脚本只碰服务与适配器电源两项、不动 `rfkill` 策略;aptX/LDAC 属可选项,缺了音质降级但功能不坏,所以记需人工而不判 FAIL。
+出错时:服务起不来看 `journalctl -u bluetooth`;适配器不出现看 `dmesg | grep -i firmware`(缺固件按 `05-3` 的固件来源核对)。
+
+### 05-21 现代 CLI 与终端(命令行替代品集合)
+
+做:交互 shell 是 fish(`05-14` 已装),这里补齐现代 CLI:fzf(模糊查找)、zoxide(按频率跳目录)、eza(ls 替代)、bat(cat 替代)、ripgrep(递归搜索)、fd(find 替代)、starship(提示符)。全部走 **Homebrew**,不用分层。
+  1. 空跑核对:`bash scripts/linux/check-apps.sh --check`
+     看到:CLI 段逐个「在位 / 缺」;必需缺失 = FAIL,可选缺失只记一行
+  2. 装:`sudo bash scripts/linux/install-apps.sh --apply --yes --channel brew`
+     看到:只碰 Homebrew 通道,Flatpak 项一个不动;幂等
+  3. 抽验:`rg --version && fd --version && eza --version && bat --version && starship --version`
+     看到:各自打印版本;`fish -c 'zoxide --version'` 有输出
+脚本:bash scripts/linux/check-apps.sh --check;sudo bash scripts/linux/install-apps.sh --apply --yes --channel brew
+坑:这些工具**只加不替** —— `ls` / `cat` / `find` 仍是基础镜像的版本,别名与提示符配置交给 starship 与 fish 自己(本卡不写 shell 配置文件);`ripgrep` 的公式名是 `ripgrep` 而命令是 `rg`,清单里填命令名(通道判定按命令找)。
+出错时:`brew install` 报公式不存在 -> `brew search <名字>` 后回填 `templates/apps.tsv`(清单是唯一真源,别手改脚本)。
+
+### 05-22 备份与同步(restic + rclone;凭据不进仓库)
+
+做:用 restic 备份「家目录文档 + `/etc` 漂移快照 + Flatpak/brew 清单」;本机快照落 `baseline/`(`03-9` 已覆盖),远端经 rclone 推服务器 62.234.211.51;外置盘只留接口。
+  1. 先空跑:`sudo bash scripts/linux/backup-home.sh --check`
+     看到:五项结论 —— restic 在位、rclone 在位、仓库地址已配置、密码来源可读、最近快照在期内;缺 restic / 缺仓库 / 缺密码 = FAIL,rclone 缺 = 需人工(本机快照不需要它)
+  2. 一次性配置(凭据放本机 600 文件或 systemd 环境):`export RESTIC_REPOSITORY=... RESTIC_PASSWORD_FILE=...`
+     看到:`--check` 转 PASS(脚本从不写凭据、不把密码打进日志、不新建凭据文件)
+  3. 跑一次:`sudo bash scripts/linux/backup-home.sh --apply --yes`
+     看到:先生成清单与 `/etc` 漂移快照 -> `restic backup` -> 按保留策略 `restic forget --keep-last N --prune`;复读为 PASS
+脚本:sudo bash scripts/linux/backup-home.sh --check / --apply --yes
+坑:**回滚不回退 `/etc` 与 `~/.config`**(设计 06 第 4 节),所以「回到当前配置」要靠 G3 的配置快照与这张卡的数据备份两件一起;**凭据一律不入库**(`baseline/` 本就 gitignore);`--apply` 会真写仓库,先确认 `RESTIC_REPOSITORY` 指向哪里再跑。
+出错时:restic 报仓库不存在 -> 先 `restic init`(仍需 `RESTIC_PASSWORD_FILE`);快照超期但远端不可达 -> 先查网络与 rclone remote,别删本地快照。
+
+L4 的整机验收见 [08-verification.md](08-verification.md) 的 A-H 八组(B 组与 F 组覆盖本阶段的共享盘与健壮性判据,G 组覆盖配置层,H 组覆盖本页的系统软件与蓝牙/备份链路);逐项回退动作见 [checklists/rollback.md](../checklists/rollback.md)。

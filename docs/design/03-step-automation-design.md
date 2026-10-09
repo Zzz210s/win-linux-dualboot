@@ -115,11 +115,11 @@ errtrap 的退出码与误用防护(与 O3 同级,修复轮 2 补齐):
 
 | 规则 | 内容 |
 |---|---|
-| C9e | 验收条目的**唯一真源**是 `scripts/verification-items.tsv`(两侧总控都读它,`docs/08-verification.md` 是人读视图);C9e 逐条比对两边编号集合(条目表有、卡里没有 = 报;卡里有、条目表没有 = 也报),行序与文案不限。条目表读不到时两侧总控必须退 64 且**禁止回退硬编码条目**(夹具用 `-ItemsTsv`/`DBK_ITEMS_TSV` 换表验证) |
+| C9e | 验收条目的**唯一真源**是 `scripts/verification-items.tsv`(批 H 起 51 条)(两侧总控都读它,`docs/08-verification.md` 是人读视图);C9e 逐条比对两边编号集合(条目表有、卡里没有 = 报;卡里有、条目表没有 = 也报),行序与文案不限。条目表读不到时两侧总控必须退 64 且**禁止回退硬编码条目**(夹具用 `-ItemsTsv`/`DBK_ITEMS_TSV` 换表验证) |
 | C9a | 卡内出现的 `scripts/**/*.{sh,ps1}` 路径**必须存在**(正斜杠与反斜杠写法都认,如 `scripts\windows\x.ps1`) |
 | C9b | 每个 `scripts/repo/*.sh`、`scripts/linux/*.sh` 与 `scripts/windows/*.ps1` **必须**含 `# 对应卡:` 行(或 `# Card:`),且该卡号在对应文档中真实存在;正则允许行首 UTF-8 BOM(`.ps1` 必须带 BOM),并支持逗号列表写法(一脚本服务多张卡,列表里至少一个卡号真实存在)(白名单:库文件与仓库自检脚本) |
 | C9c | **反向覆盖**:每个步骤脚本必须被至少一张卡引用(`grep` 卡内路径,正斜杠与反斜杠写法都认) |
-| C9d | 白名单(库/接口文件:不要求 `# 对应卡:`、不要求被卡引用)= **28 项 = 既有 15 项 + 本次追加 4 项 + 批 E 追加 1 项 + 批 G 追加 8 项**,**只追加、不删既有**:既有 15 项 = `scripts/linux/dbk-log.sh`、`scripts/linux/dbk-cli.sh`、`scripts/linux/dbk-obs.sh`(契约库:CLI 解析、日志与可观测性报告/JSON/errtrap)、`scripts/linux/dbk-pkg.sh`、`scripts/linux/dbk.sh`、`scripts/linux/verify-all.sh`、`scripts/repo/check-docs.sh`、`scripts/repo/check-docs-lib.sh`、`scripts/repo/check-docs-repo.sh`、`scripts/repo/check-scripts.sh`、`scripts/windows/dbk.ps1`、`scripts/windows/dbk-cli.ps1`、`scripts/windows/dbk-obs.ps1`、`scripts/windows/dbk-win-probe.ps1`、`scripts/windows/verify-all.ps1`;本次追加 4 项 = `scripts/linux/dbk-update.sh`、`scripts/linux/dbk-rollback.sh`、`scripts/linux/dbk-driver.sh`(回切引入的三个薄接口)、`scripts/linux/dbk-head.sh`(v0.2.1 复审:脚本头契约从 `dbk-cli.sh` 拆出,原文件已到 199/200 行)、`scripts/linux/dbk-brew.sh`(批 E 追加:Homebrew 薄接口,交互层与应用清单走 brew 通道);批 G 追加 8 项 = 拆顶格文件时新出的单一职责库 `scripts/linux/dbk-verify-probes.sh`(验收内置探测)、`scripts/linux/dbk-obs-render.sh`(汇总渲染)、`scripts/linux/dbk-fstab.sh`(fstab 判据与 NTFS 脏卷探测)、`scripts/linux/dbk-deploy.sh`(部署读接口)、`scripts/linux/dbk-driver-ver.sh`(显卡/MOK 只读判据)、`scripts/linux/dbk-config-snapshot.sh`(五份快照与 manifest 校验)与 `scripts/windows/dbk-items.ps1`(验收条目表读取)、`scripts/windows/dbk-partition.ps1`(分区表判据)(与 `dbk-pkg.sh` 并称五个包通道薄接口:`dbk-pkg` 包助手、`dbk-update` 更新策略、`dbk-rollback` 部署列表/pin/回滚、`dbk-driver` ublue rebase 与 MOK 判据、`dbk-brew` Homebrew 通道——**这五个接口是唯一允许出现包管理器/驱动命令的地方**,见 `06-atomic-restore-design.md` 第 3 节;本白名单**只追加、不删既有**,且与仓库自检库 `check-docs-lib.sh` 的 `WL` 两处必须逐行一致(夹具 F7 会逐行比对,少列或改名都会红);`check-scripts.sh` 的 S-1 规则同源;C9d 另校验 `scripts/{linux,windows}/steps.tsv` 与步骤脚本一一对应(索引行指向的脚本必须存在且是本侧步骤脚本,本侧步骤脚本必须登记进索引,缺索引时报「缺少步骤索引」;破坏性列必须 ∈ {0,1};索引步骤号必须落在脚本头卡号集合里(支持列表头),脚本还没有卡头时由 C9b 报、不重复报;同一 (步骤号, 脚本路径) 对不得重复——一张卡可以对应多个脚本,同一步骤号允许多行,只有「同一步骤号 + 同一脚本」才算索引笔误) |
+| C9d | 白名单(库/接口文件:不要求 `# 对应卡:`、不要求被卡引用)= **29 项 = 既有 15 项 + 本次追加 4 项 + 批 E 追加 1 项 + 批 G 追加 8 项 + 批 H 追加 1 项**,**只追加、不删既有**:既有 15 项 = `scripts/linux/dbk-log.sh`、`scripts/linux/dbk-cli.sh`、`scripts/linux/dbk-obs.sh`(契约库:CLI 解析、日志与可观测性报告/JSON/errtrap)、`scripts/linux/dbk-pkg.sh`、`scripts/linux/dbk.sh`、`scripts/linux/verify-all.sh`、`scripts/repo/check-docs.sh`、`scripts/repo/check-docs-lib.sh`、`scripts/repo/check-docs-repo.sh`、`scripts/repo/check-scripts.sh`、`scripts/windows/dbk.ps1`、`scripts/windows/dbk-cli.ps1`、`scripts/windows/dbk-obs.ps1`、`scripts/windows/dbk-win-probe.ps1`、`scripts/windows/verify-all.ps1`;本次追加 4 项 = `scripts/linux/dbk-update.sh`、`scripts/linux/dbk-rollback.sh`、`scripts/linux/dbk-driver.sh`(回切引入的三个薄接口)、`scripts/linux/dbk-head.sh`(v0.2.1 复审:脚本头契约从 `dbk-cli.sh` 拆出,原文件已到 199/200 行)、`scripts/linux/dbk-brew.sh`(批 E 追加:Homebrew 薄接口,交互层与应用清单走 brew 通道);批 G 追加 8 项 = 拆顶格文件时新出的单一职责库 `scripts/linux/dbk-verify-probes.sh`(验收内置探测)、`scripts/linux/dbk-obs-render.sh`(汇总渲染)、`scripts/linux/dbk-fstab.sh`(fstab 判据与 NTFS 脏卷探测)、`scripts/linux/dbk-deploy.sh`(部署读接口)、`scripts/linux/dbk-driver-ver.sh`(显卡/MOK 只读判据)、`scripts/linux/dbk-config-snapshot.sh`(五份快照与 manifest 校验)与 `scripts/windows/dbk-items.ps1`(验收条目表读取)、`scripts/windows/dbk-partition.ps1`(分区表判据);批 H 追加 1 项 = `scripts/linux/dbk-flatpak.sh`(Flatpak 薄接口:应用清单的 flatpak 通道由它统一执行)(与 `dbk-pkg.sh` 并称**六个包通道薄接口**:`dbk-pkg` 包助手、`dbk-update` 更新策略、`dbk-rollback` 部署列表/pin/回滚、`dbk-driver` ublue rebase 与 MOK 判据、`dbk-brew` Homebrew 通道、`dbk-flatpak` Flatpak 通道——**这六个接口是唯一允许出现包管理器/驱动命令的地方**,见 `06-atomic-restore-design.md` 第 3 节;本白名单**只追加、不删既有**,且与仓库自检库 `check-docs-lib.sh` 的 `WL` 两处必须逐行一致(夹具 F7 会逐行比对,少列或改名都会红);`check-scripts.sh` 的 S-1 规则同源;C9d 另校验 `scripts/{linux,windows}/steps.tsv` 与步骤脚本一一对应(索引行指向的脚本必须存在且是本侧步骤脚本,本侧步骤脚本必须登记进索引,缺索引时报「缺少步骤索引」;破坏性列必须 ∈ {0,1};索引步骤号必须落在脚本头卡号集合里(支持列表头),脚本还没有卡头时由 C9b 报、不重复报;同一 (步骤号, 脚本路径) 对不得重复——一张卡可以对应多个脚本,同一步骤号允许多行,只有「同一步骤号 + 同一脚本」才算索引笔误) |
 
 **脚本层规则 S-1 与 S-2(2026-09-25 追加,实现在 `scripts/repo/check-scripts.sh`,不新增自检文件)**
 
@@ -140,13 +140,13 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 |---|---|---|
 | `scripts/windows/dbk.ps1 <step> [-Apply] [-Yes] [-Json]` | Windows 侧步骤分发(读步骤索引 → 调对应脚本 → 汇总输出) | 只做分发与汇总,**不含任何业务逻辑**;拒绝未知步骤名 |
 | `scripts/linux/dbk.sh <step> [--apply] [--yes] [--json]` | Silverblue 侧同上 | 同上 |
-| `windows/verify-all.ps1` / `linux/verify-all.sh` | 按 `08-verification.md` 的 A–G 逐项自动判定,汇总**缺省**写 `<baseline>/auto/08-verification.md`(人填写版 `baseline/08-verification.md` 只手工维护) | **执行器**:只做判定与汇总,按`-out-dir`/`--out-dir` 落盘;**不得自动执行任何 `--apply`**(对所有子脚本只允许 `--check` 与只读子命令);不进卡映射表、不登记 steps.tsv(与库文件同列,见第 6 节 C9d 白名单) |
+| `windows/verify-all.ps1` / `linux/verify-all.sh` | 按 `08-verification.md` 的 A–H 逐项自动判定,汇总**缺省**写 `<baseline>/auto/08-verification.md`(人填写版 `baseline/08-verification.md` 只手工维护) | **执行器**:只做判定与汇总,按`-out-dir`/`--out-dir` 落盘;**不得自动执行任何 `--apply`**(对所有子脚本只允许 `--check` 与只读子命令);不进卡映射表、不登记 steps.tsv(与库文件同列,见第 6 节 C9d 白名单) |
 
 **执行器(`verify-all.sh` / `verify-all.ps1`)的 `-Step` 语义(2026-09-24 补,与实现逐字一致)**:执行器**不绑卡**(不进卡映射表、不登记 `steps.tsv`、没有 `# 对应卡:` 头),所以第 2 节的“脚本头卡号集合成员判断”对它们**不适用**——不能靠沉默豁免,故在此写明:
 
 - `--step`/`-Step` 取**验收条目所关联的卡号**(`NN-K`;`08` 是 08-verification.md 自身的记录项)。可用集合 = 执行器自带条目表里出现过的卡号(去重排序),**非法取值时打印可用集合并以 64 退出**(不再静默忽略)。
 - 给了合法 `-Step` 时**只判定关联到该卡号的条目**,其余条目记「跳过」、不计入退出码;退出码语义不变:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 `--confirm-manual`/`-ConfirmManual` 后人工项不再计入退出码)。
-- 不给 `-Step` 时判定全部条目;显式写 `08-A-G` 与缺省等价(七组全判),它是唯一不以卡号取值的合法写法。
+- 不给 `-Step` 时判定全部条目;显式写 `08-A-G`(或 `08-A-H`)与缺省等价(八组全判),它是唯一不以卡号取值的合法写法。
 - 两侧现状:**两侧都已实现** —— `scripts/windows/verify-all.ps1` 与 `scripts/linux/verify-all.sh` 均支持步骤/组过滤:非法取值 → 64,合法取值只判该卡/该组(2026-09-28 修复了 Linux 侧"静默覆盖 `--step`"的缺陷)。
 
 步骤索引文件:`scripts/windows/steps.tsv`、`scripts/linux/steps.tsv`(列:步骤号、脚本路径、是否破坏性、说明、**固定参数(第 5 列,可选)**)。**第 5 列「固定参数」(2026-10-04 新增)**:该列放本行步骤脚本必需的专有参数(如 `-Track W`、`-Device USB`、`-OutDir D:\dbk-l5-backup`),总控读取后按 token 切分并原样追加到子脚本参数串**末尾**;若该列里出现 `-Check`/`-Apply`/`-Yes`/`-Json`/`-Log` 任一(总控管理的五个开关,**无论本次是否渲染**,都会与总控转发冲突),按**用法错误退 64 且零调用**(一个子脚本都不调)。总控读它分发,C9d 也校验它的一致性:脚本路径必须存在且属本侧、本侧步骤脚本必须登记进索引、破坏性列 ∈ {0,1}、索引步骤号必须落在脚本头卡号集合里、同一 (步骤号, 脚本路径) 对不得重复(同一步骤号可以有多行 = 一张卡对应多个脚本;一脚本服务多张卡时按步骤号各占一行,同一脚本路径也允许出现多行)。**索引行不是装饰**:它既是总控的分发表,也是“这一步会不会改系统”的第二道记录。
@@ -200,6 +200,10 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 05-16 | 虚拟桌面工作流 | `linux/set-workflow.sh`(按 `templates/workflow.tsv` 用 `gsettings` 固定工作区与快捷键) |
 | 05-17 | 应用清单与替代映射 | `linux/check-apps.sh`(按 `templates/apps.tsv` 断言必需项在位;只读) |
 | 05-18 | 配置快照与复原 | `linux/export-config.sh` + `linux/import-config.sh`(五份快照落 `baseline/config/`;重装后按快照回灌) |
+| 05-19 | 系统与硬件管理软件 | `linux/install-apps.sh`(按 `templates/apps.tsv` 经 Flatpak/Homebrew 薄接口装必需项;`native` 只提示不自动分层) |
+| 05-20 | 蓝牙与音频链路 | `linux/check-bluetooth.sh`(三层体检:BlueZ 服务/适配器/配对设备 + `bluetoothctl` + PipeWire 与编解码器) |
+| 05-21 | 现代 CLI 与终端 | `linux/check-apps.sh` + `linux/install-apps.sh --channel brew`(命令行替代品集合;交互 shell 见 `05-14`) |
+| 05-22 | 备份与同步 | `linux/backup-home.sh`(restic 备份家目录文档 + `/etc` 漂移 + 清单;凭据只从环境变量/600 文件读) |
 | 07-1 | 判层 | `linux/triage.sh`(只读采集:分区/挂载/`efibootmgr`/两块 ESP 内容/包管理与错误日志) |
 | 07-2 | 从 grub 提示符回去 | `linux/gen-grub-rescue-commands.sh`(生成两套可复制命令;grub 内的输入本身人工) |
 | 07-3 | Windows 侧修引导 | `windows/repair-windows-boot.ps1` |
@@ -213,7 +217,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | 07-11 | 删 Fedora 分区 | `windows/delete-linux-partition.ps1`(破坏性:`--yes` + 前置断言 + 只按分区号/GUID 精确删除 + 后置复读) |
 | 07-12 | 清 NVRAM 与可选扩容 | `windows/cleanup-nvram.ps1` + `windows/extend-data-partition.ps1` |
 | 07-13 | 只停用不删 | `windows/disable-linux-entry.ps1` |
-| 08-A…G | 验收七组 | `windows/verify-all.ps1` / `linux/verify-all.sh` + 两个 `collect-*` 复用 |
+| 08-A…H | 验收八组 | `windows/verify-all.ps1` / `linux/verify-all.sh` + 两个 `collect-*` 复用 |
 
 **一张卡多个脚本**:02-4、05-7、05-13、05-18、07-7、07-12 六处——同一卡号在 `steps.tsv` 里占多行,总控按索引行顺序逐行执行并聚合退出码(规则见第 5 节)。
 
@@ -224,14 +228,14 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 | `linux/dbk-pkg.sh` / `linux/dbk-update.sh` / `linux/dbk-rollback.sh` / `linux/dbk-driver.sh` / `linux/dbk-brew.sh` | **五个包通道薄接口**(唯一允许出现包管理器/驱动命令的地方,见 `06-atomic-restore-design.md` 第 3 节):`dbk-pkg.sh` 文件名不变、内部改 `rpm-ostree status --json` 与分层安装 `rpm-ostree install`(保留 `DBK_SKIP_*` 与退出码语义);`dbk-update.sh` 管更新策略(`rpm-ostreed-automatic`);`dbk-rollback.sh` 管部署列表/pin/回滚;`dbk-driver.sh` 管 ublue rebase 与 MOK 注册判据;`dbk-brew.sh` 管 Homebrew 通道(brew 可用性、公式安装、`brew bundle` 导出/回灌)。五个都属接口文件(C9d 白名单),被 05-3/05-5/05-6/05-7/05-8/05-9/05-10 与 05-14/05-17/05-18 等卡间接使用 |
 | `linux/dbk-obs.sh` / `windows/dbk-obs.ps1` | **可观测性库**(报告与 JSON、日志落盘、失败三处可见与 errtrap,见第 2.1 节)。属库文件(C9d 白名单),分别被同侧的 `dbk-cli.sh` / `dbk-cli.ps1` source |
 | `windows/dbk-win-probe.ps1` | **轨道 W 的只读探测库**:分区布局读数、`templates/partitions.txt` 目标值解析、最大连续未分配间隙、系统版本/内部版本;被 `verify-windows-baseline.ps1`、`collect-l1.ps1` 与 07-9…07-13 五张退役卡 dot-source。属库文件(C9d 白名单),不登记进 `steps.tsv`、不被卡引用 |
-| `linux/verify-all.sh` / `windows/verify-all.ps1` | **验收总控执行器**:按 `08-verification.md` 的 A-G 逐项只读判定,汇总**缺省**落 `<baseline>/auto/08-verification.md`(人填写版 `baseline/08-verification.md` 只手工维护)。**不绑定卡**——验收六组不是一张动作卡,故与库文件同列(C9d 白名单)、**不登记 `steps.tsv`**;对子脚本一律只传 `--check`/`--list` |
+| `linux/verify-all.sh` / `windows/verify-all.ps1` | **验收总控执行器**:按 `08-verification.md` 的 A-H 逐项只读判定,汇总**缺省**落 `<baseline>/auto/08-verification.md`(人填写版 `baseline/08-verification.md` 只手工维护)。**不绑定卡**——验收六组不是一张动作卡,故与库文件同列(C9d 白名单)、**不登记 `steps.tsv`**;对子脚本一律只传 `--check`/`--list` |
 | `linux/hardening.sh` | 逐项改为原子版语义(R1 变更前备份、R2 部署级回滚、R3 旧内核保留、R4 救援介质、R5 journald、R6 OOM/zram、R7 SSH、R8 保守更新策略(`rpm-ostreed-automatic`)、R9 SMART);`--check/--apply` 结构与"失败不中断"口径不变 |
 | `linux/graphics.sh` | 改回原子版路径:**`rpm-ostree rebase` 到 ublue `bluefin-nvidia` + 一次性 MOK 注册** + `modinfo -F signer nvidia` 判据(薄脚本,调 `dbk-driver.sh`;与卡 05-3 绑定) |
 | `linux/first-boot.sh` | 逐模块调用改为 `storage -> hardening -> mount-shared -> graphics`;摘要与退出码语义不变 |
 | **已删除**(Kubuntu 专属,本次回切后不再存在) | `linux/rollback-pkg.sh`(包级回退)、`linux/step-snap-free.sh`(snap 规避);原子版上由部署级回滚与"无 snap 机制"取代。`linux/dbk-ostree.sh`、`linux/graphics-mok.sh` 两个名字在更早的 Kubuntu 切换中已删除,本次由 `dbk-pkg.sh` / `dbk-driver.sh` 承担其职责 |
 | 四个 PowerShell 脚本(`preflight` / `backup-esp` / `verify-baseline` / `set-bootnext`) | **不受基础系统切换影响**,只需按上表补 `--check/--json`/`-Only`/`-Device` 契约;四个都已在 2026-09-24 补齐(`backup-esp` 更早带 `-Check`;`set-bootnext` 见第 9 节 K5 行,`preflight` 与 `verify-baseline` 见第 9 节 K6 行):`-Check` 缺省且零写、`-Apply` 才落盘(`preflight` 的 `-Apply` 写体检报告,`verify-baseline` 无写动作故 `-Apply` 与 `-Check` 同义)、`-Json`/`-Log`/`-Yes`/`-Step` 与库层一致。唯一保留差异:`preflight` 的 `-Json` 仍是它自己的查询 schema(`script`/`only`/`rows[]`/`red`/`yellow`/`verdict`),不套用第 2 节的契约 JSON,所以 `dbk.ps1 <preflight 步骤号> -Json` 只能得到总控合成的失败记录(含原因文本,不静默) |
 
-**合计**:动作卡 **52 张**(01 四 + 02 四 + 03 九 + 04 四 + 05 十八 + 07 十三),对应**步骤脚本 54 个**——其中 `check-partition-plan.sh` 服务 02-3/04-2/07-5 三张卡,`verify-windows-baseline.ps1` 服务 03-1/07-4,`backup-esp.ps1` 服务 03-8/07-10,`verify-baseline.ps1`+`check-health.sh`+`check-signature.sh`+`check-bootloader.sh`+`check-integrity.sh` 共服务 07-7,`export-config.sh`+`import-config.sh` 共服务 05-18;另有**库与接口 24 个**(两侧 `dbk-cli`、两侧 `dbk-obs`、`dbk-log.sh`、`dbk-head.sh`、`dbk-pkg.sh`、`dbk-update.sh`、`dbk-rollback.sh`、`dbk-driver.sh`、`dbk-brew.sh`、`dbk-win-probe.ps1`、`dbk.sh`、`dbk.ps1`、`verify-all.sh`、`verify-all.ps1`)、**仓库自检 4 个**(`check-docs.sh`、`check-docs-lib.sh`、`check-docs-repo.sh`、`check-scripts.sh`)与**步骤索引 2 个**(`linux/steps.tsv`、`windows/steps.tsv`)。**口径**(本行与第 8 节代价表同口径,已按仓库实际重算)= 卡:各手册 `### NN-K` 标题总数 = **52 张**(`docs/10-faq.md` 的 `### 10-K` 是问答条目,不计入);步骤脚本:`scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = **54**;库与接口 = 不带 `# 对应卡:` 的库文件数 = **24**。
+**合计**:动作卡 **56 张**(01 四 + 02 四 + 03 九 + 04 四 + 05 二十二 + 07 十三),对应**步骤脚本 58 个**——其中 `check-partition-plan.sh` 服务 02-3/04-2/07-5 三张卡,`verify-windows-baseline.ps1` 服务 03-1/07-4,`backup-esp.ps1` 服务 03-8/07-10,`verify-baseline.ps1`+`check-health.sh`+`check-signature.sh`+`check-bootloader.sh`+`check-integrity.sh` 共服务 07-7,`export-config.sh`+`import-config.sh` 共服务 05-18;另有**库与接口 25 个**(两侧 `dbk-cli`、两侧 `dbk-obs`、`dbk-log.sh`、`dbk-head.sh`、`dbk-pkg.sh`、`dbk-update.sh`、`dbk-rollback.sh`、`dbk-driver.sh`、`dbk-brew.sh`、`dbk-win-probe.ps1`、`dbk.sh`、`dbk.ps1`、`verify-all.sh`、`verify-all.ps1`)、**仓库自检 4 个**(`check-docs.sh`、`check-docs-lib.sh`、`check-docs-repo.sh`、`check-scripts.sh`)与**步骤索引 2 个**(`linux/steps.tsv`、`windows/steps.tsv`)。**口径**(本行与第 8 节代价表同口径,已按仓库实际重算)= 卡:各手册 `### NN-K` 标题总数 = **56 张**(`docs/10-faq.md` 的 `### 10-K` 是问答条目,不计入);步骤脚本:`scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = **58**;库与接口 = 不带 `# 对应卡:` 的库文件数 = **25**。
 
 ## 7. 夹具测试要求(每个脚本的最低验证)
 
@@ -246,7 +250,7 @@ C9 的价值:文档与脚本从此不会脱钩——改脚本名而忘改文档�
 
 | 项 | 代价 |
 |---|---|
-| 规模 | 动作卡 **52 张** + **54 个步骤脚本** + **24 个库与总控入口**(与第 6 节合计同口径,已按仓库实际重算:卡 = 各手册 `### NN-K` 标题总数 = 52 张;步骤脚本 = `scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = 54;库与总控 = 不带 `# 对应卡:` 的库文件数 = 24);仓库脚本类文件总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **84 个**(54 步骤脚本 + 24 库与总控 + 4 仓库自检 + 2 步骤索引);实施任务从 21 个增到约 29 个 |
+| 规模 | 动作卡 **56 张** + **58 个步骤脚本** + **25 个库与总控入口**(与第 6 节合计同口径,已按仓库实际重算:卡 = 各手册 `### NN-K` 标题总数 = 56 张;步骤脚本 = `scripts/{linux,windows}/steps.tsv` 的脚本条目去重数 = 58;库与总控 = 不带 `# 对应卡:` 的库文件数 = 25);仓库脚本类文件总数(不含 `.gitkeep` 与测试夹具)从 **16 个**增到 **89 个**(58 步骤脚本 + 25 库与总控 + 4 仓库自检 + 2 步骤索引);实施任务从 21 个增到约 29 个 |
 | 审查 | 每个脚本都要过"实现 + 审查 + 修复轮",工作量约翻倍 |
 | **验证等级** | 这些脚本**全部无法在真机上验证**(无 Fedora 装机环境 / 无第二台 Windows)→ 只有夹具级验证。文档与**脚本头**都必须标注"夹具级验证,真机未跑";`08-verification.md` 的参考设备首次真跑即是对全套脚本的首次真机验证 |
 | 收益 | 每步可自动判定(减少"照着文档敲错"),危险步骤有前置断言与复读(比人手工点更安全),卡与脚本双向绑定(C9)防脱钩 |

@@ -1,17 +1,68 @@
 # 应用清单(唯一真源):templates/apps.tsv
 # 列:名称 <TAB> 通道(flatpak|brew|native|web|win) <TAB> id 或命令 <TAB> 必需(1|0) <TAB> 备注
-# 消费方:scripts/linux/check-apps.sh(卡 05-17;验收 G2 = 该脚本 --check)。改这里等于改「必需应用」真源。
+# 消费方:scripts/linux/check-apps.sh(卡 05-17;验收 G2 = 该脚本 --check)、scripts/linux/install-apps.sh(卡 05-19;装通道项)。
 # 通道语义:flatpak/brew/native 可机器判定;web = 浏览器打开、win = 重启回 Windows 使用,两者只登记不判定。
-# VFIO 已被否(单卡 + 已有原生 Windows + 一份 LTSC 授权):需要 Windows 独占工具时重启回 Windows,不做显卡直通。
-loupe	flatpak	org.gnome.Loupe	1	图片查看器(PNG/JPEG);备选 org.kde.gwenview
+# 通道优先级(2026-10-06 定):GUI 应用走 Flatpak(Flathub)-> CLI 工具走 Homebrew -> 只有需要内核模块/驱动的
+#   系统级组件才允许 rpm-ostree 分层,且必须逐项记账(install-apps.sh 对 native 缺失项只打印命令并记需人工,绝不自动分层)。
+# 「必需 = 1」= 该行缺失即 H1/G2 不通过;「必需 = 0」= 可选,缺失只记一行。install-apps.sh 缺省只装必需项。
+# VFIO 已否决(单卡 + 已有原生 Windows + 一份 LTSC 授权不能两处同时用):需要 Windows 专属软件时走 win 通道重启回 Windows。
+
+# ---- 基础视图与编辑(05-15 / 05-17) ----
+loupe	flatpak	org.gnome.Loupe	1	图像查看器(PNG/JPEG);备选 org.kde.gwenview
 papers	flatpak	org.gnome.Papers	1	PDF 阅读器;备选 okular
-fileroller	flatpak	org.gnome.FileRoller	1	压缩包管理;备选 ark
-nautilus	native	nautilus	1	文件管理器(桌面顶梁柱);Silverblue 基础镜像自带
-bash	native	bash	1	基准项:一个「怎么都该在」的解释器;它缺说明环境本身坏了
+fileroller	flatpak	org.gnome.FileRoller	1	压缩包管理器;备选 ark
+nautilus	native	nautilus	1	文件管理器(保持默认;Dolphin 仅作备选,见下)
 gnome-text-editor	native	gnome-text-editor	1	纯文本编辑;备选 kate
-fish	brew	fish	0	交互 shell(见卡 05-14;brew 通道);不装也能用 bash,可选
+bash	native	bash	1	基准项:一个「怎么都该在」的脚本解释器
+
+# ---- 系统与硬件管理(05-19) ----
+mission-center	flatpak	io.missioncenter.MissionCenter	1	GUI 系统监视:CPU/内存/磁盘/网络/GPU
+btop	brew	btop	1	TUI 资源监视(命令行)
+nvtop	brew	nvtop	1	NVIDIA GPU 监视(与 05-3 的驱动轨配套)
+smartmontools	brew	smartctl	1	磁盘 SMART 只读体检(命令名 smartctl,公式名 smartmontools)
+gnome-disks	native	gnome-disks	1	分区/磁盘/挂载管理(Silverblue 自带)
+baobab	native	baobab	1	磁盘占用分析(自带)
+gparted	flatpak	org.gnome.GParted	0	可选:分区图形工具(与 07-11 的 diskpart 场景互补)
+lshw	brew	lshw	0	可选:硬件清单
+
+# ---- Flatpak 生态管理(05-19) ----
+flatseal	flatpak	com.github.tchx84.Flatseal	1	Flatpak 权限可视化调整
+extension-manager	flatpak	com.mattjakeman.ExtensionManager	1	GNOME Shell 扩展管理
+warehouse	flatpak	io.github.flattool.Warehouse	1	Flatpak 生命周期:清理运行时不用的、pin/降级
+bazaar	flatpak	io.github.kolunmi.Bazaar	1	应用商店(ublue 镜像若已自带则视为满足)
+
+# ---- 终端与交互层(05-21;交互 shell 见 05-14) ----
+fish	brew	fish	0	交互 shell(按 05-14 装;脚本解释器仍是 bash,不可替)
+dolphin	flatpak	org.kde.dolphin	0	可选:双栏/批量重命名备选文件管理器(默认仍是 Nautilus)
+fzf	brew	fzf	1	模糊查找(Ctrl-R / Ctrl-T)
+zoxide	brew	zoxide	1	按频率跳目录(z / zi)
+eza	brew	eza	1	ls 替代(彩色、树状、git 状态)
+bat	brew	bat	1	cat 替代(语法高亮、分页)
+ripgrep	brew	ripgrep	1	rg:递归搜索
+fd	brew	fd	1	find 替代
+starship	brew	starship	1	跨 shell 提示符
+
+# ---- 蓝牙与音频(05-20;BlueZ 与 PipeWire 由基础镜像提供,这里只登记判定用命令) ----
+bluetoothctl	native	bluetoothctl	1	BlueZ CLI(蓝牙核对与脚本化操作的核心)
+pipewire	native	pipewire	1	音频服务(基础镜像自带;05-20 检查其与编解码器状态)
+wireplumber	native	wireplumber	1	PipeWire 会话管理
+pavucontrol	flatpak	org.pulseaudio.pavucontrol	0	可选:音量/设备图形控制
+blueman	flatpak	com.github.blueman	0	可选:托盘蓝牙管理器(需要 GNOME 扩展,默认不装)
+
+# ---- 备份与同步(05-22) ----
+restic	brew	restic	1	去重加密备份(家目录文档 + /etc 漂移 + 清单)
+rclone	brew	rclone	1	远端传输(云/服务器;凭据不进仓库)
+
+# ---- 安全与固件(07-7 巡检) ----
+fwupd	native	fwupdmgr	1	固件更新(命令 fwupdmgr;GNOME Software 也用它)
+firewalld	native	firewall-cmd	1	防火墙(命令 firewall-cmd)
+lynis	brew	lynis	0	可选:安全体检(只报告,不打分、不改配置)
+
+# ---- 网页替代(登记不判定) ----
 outlook-web	web	https://outlook.office.com	0	网页版 Outlook:浏览器打开,不装 Wine、不建虚拟机
 teams-web	web	https://teams.microsoft.com	0	网页版 Teams:浏览器打开
-office-win	win	Microsoft Office(Windows 独占)	0	Windows 独占:重启回 Windows 使用(VFIO 已被否:单卡 + 已有原生 Windows + 一份 LTSC 授权)
-autohotkey-win	win	AutoHotkey(Windows 独占)	0	Windows 独占:重启回 Windows 使用(VFIO 已被否)
-wechat-win	win	微信 Windows 版(Windows 独占)	0	Windows 独占:重启回 Windows 使用;Linux 侧无等价需求(VFIO 已被否)
+
+# ---- 回 Windows 使用(登记不判定;VFIO 已否决) ----
+office-win	win	Microsoft Office(Windows 独占)	0	Windows 独占:重启回 Windows 使用(VFIO 已否决:单卡 + 已有原生 Windows + 一份 LTSC 授权)
+autohotkey-win	win	AutoHotkey(Windows 独占)	0	Windows 独占:重启回 Windows 使用(VFIO 已否决)
+wechat-win	win	微信 Windows 版(Windows 独占)	0	Windows 独占:重启回 Windows 使用;Linux 侧常用替代首选网页版(VFIO 已否决)

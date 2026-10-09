@@ -4,7 +4,7 @@
 
 一套可复现、可安全撤除的 Windows 11 IoT Enterprise LTSC 2024 + Fedora 44 Silverblue 双系统部署手册,面向同规格的全新设备。
 
-本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**52 张动作卡、54 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
+本仓库是**部署手册**,不是安装器。它提供三轨道、L0 到 L5 的分步手册,每个阶段必须留下的产物契约,每张卡一个脚本(**56 张动作卡、58 个步骤脚本**:Windows 侧 PowerShell 与 Linux 侧 shell)及其共享契约库,以及把这一切钉死的分区表、验收清单与风险台账。每张卡都点明判定它的脚本,且脚本默认走安全方向:`--check` / `-Check` 只打印结论、零写,只有显式 `--apply` / `-Apply`(通常还需 `--yes` / `-Yes`)才改动系统。
 
 材料分两层。设计文档([docs/design/00-design.md](docs/design/00-design.md) 及其卡格式设计 / 步骤自动化设计两份同伴、现行变体设计 [docs/design/02-fedora-atomic-variant-design.md](docs/design/02-fedora-atomic-variant-design.md) 与记录 2026-09-25 回切的 [docs/design/06-atomic-restore-design.md](docs/design/06-atomic-restore-design.md))记录**为什么**这样设计:适用设备类、四条不变量、关键决策与被否方案、故障矩阵与 38 条风险总表;手册([docs/00-overview.md](docs/00-overview.md) 起)是可执行的那一层:每张卡给出「做」与「看到」判据,以及「出错时」的指针。
 
@@ -189,7 +189,7 @@ Fedora 44 Silverblue 是原子不可变系统,方案把它的得与失都写在�
 
 ## 验收
 
-是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分七组:
+是否完成,以 [docs/08-verification.md](docs/08-verification.md) 全绿为唯一判据,不以"装完了"为准。清单分八组:
 
 - **A. 引导安全组(A1-A10)**:多次重启后 `BootOrder` 首位仍是 Windows Boot Manager、`\EFI\Microsoft\` 与 L2 基线逐文件一致、`{bootmgr}` 的 `path` 未变、全程没写过永久启动顺序、fedora 条目位于末尾、两块 ESP 互不干扰,含一次**可逆的撤除演练**,并含两条**设备侧必测项**:固件识别两块 ESP(A9,参考设备必做、其他设备推荐)与 Anaconda 在已有 Windows ESP 的盘上装成功(A10,参考设备必做)。
 - **B. 系统功能组(B1-B11)**:Wayland 会话且无 X11 可选、显卡驱动正常且有 nouveau 兜底、模块签名者非空、Secure Boot 仍开启且未引入自签密钥、驱动来源为 ublue 预签名 NVIDIA 镜像、一次性 MOK 注册已完成(`mokutil --list-enrolled`)、`ntfs3` 读写挂载带 `nofail`、共享盘双向可见、家目录重定向生效、RTC 用 UTC、切换系统后蓝牙无需重配、`fwupd` 能识别设备。

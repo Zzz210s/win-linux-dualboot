@@ -115,7 +115,7 @@
 | **L / D** L4 | 首启收敛:共享盘挂载 / 家目录重定向 / 显卡与 Secure Boot(ublue 预签名镜像 + 一次性 MOK 注册)/ 时间 / 蓝牙 / zram 与 swapfile / journald 与更新策略 / SSH 与 SMART / **部署级回滚与变更前 pin** / 发行版升级(`rebase`)/ 回 Windows 入口 / 落 L4 产物 | [05-first-boot.md](05-first-boot.md) | `baseline/04-first-boot.md`、`baseline/04-robustness.md` |
 | **D** 共存增量 4 步 | 115GiB 预留(在 `02-partitioning` 做)/ 引导不变量核查 / `ntfs3` 共享盘 / 退役与救援 | 落在 [02-partitioning.md](02-partitioning.md)、[03-windows.md](03-windows.md)、[05-first-boot.md](05-first-boot.md)、[07-rescue.md](07-rescue.md) | 见对应轨道的产物 |
 | **D** L5 | 退役与救援:判层 / 从 grub 提示符回去 / Windows 侧修引导 / 只重装某一系统 / 基线回滚 / 周期巡检 / 应急纪律 / 退役五步 | [07-rescue.md](07-rescue.md) | [checklists/rollback.md](../checklists/rollback.md) |
-| 验收 / 查询 | A-G 七组勾选(唯一判据);症状速查 + 分阶段风险(38 条风险总表在 [设计文档](design/00-design.md) 第 9 节) | [08-verification.md](08-verification.md)、[10-faq.md](10-faq.md) | 每台设备填写版落 `baseline/` |
+| 验收 / 查询 | A-H 八组勾选(唯一判据);症状速查 + 分阶段风险(38 条风险总表在 [设计文档](design/00-design.md) 第 9 节) | [08-verification.md](08-verification.md)、[10-faq.md](10-faq.md) | 每台设备填写版落 `baseline/` |
 
 - **共用卡 vs 专属卡**:固件、安装介质、目标盘核对、KMS 激活与"部署回滚演练"属共用或双轨复用;**双系统专属**只有 4 条 —— 115GiB 预留、引导不变量核查(`BootOrder` 首位 = Windows Boot Manager)、`ntfs3` 共享盘、退役与救援。
 - 逐项勾选:L0-L4 用 [checklists/deploy.md](../checklists/deploy.md),L5 用 [checklists/rollback.md](../checklists/rollback.md)。交接规则:没有产物的阶段视为未完成,不得进入下一阶段;`baseline/` 不入库(含单机信息,每台设备一个子目录);L2 是唯一硬闸门(红项禁止进 L3);L1 与 L2 必须在同一次会话内连续完成;L4 任何驱动 / 分层 / 升级变更之前先确认"回 Windows 的入口"可用,并按 `05-9` 固定(pin)当前部署、记下部署号与驱动版本。

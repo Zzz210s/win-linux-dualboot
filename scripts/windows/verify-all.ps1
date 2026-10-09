@@ -1,5 +1,5 @@
 ﻿#Requires -Version 5.1
-# 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。条目表真源 = scripts\verification-items.tsv(A-G 七组 48 条):
+# 验收总控(Windows 侧;执行器:不进卡映射表、不登记 steps.tsv)。条目表真源 = scripts\verification-items.tsv(A-H 八组 51 条):
 #   本脚本只读它,按「侧」与「编号」分派判定 —— 侧 = L(在 Fedora 侧判)的条目在本侧记「需人工」并注明在 Fedora 侧跑;
 #   判定脚本 = - 的条目按标签记「需人工」(标签即人工核对步骤);其余走本侧内置探测(按编号分派:复用
 #   scripts\windows\verify-baseline.ps1 的 ①/②/③ 结论、bcdedit 固件表、baseline 产物与 git 核对)。增删条目只改那张表。
@@ -10,8 +10,8 @@
 #     powershell.exe -ExecutionPolicy Bypass -File scripts\windows\verify-all.ps1 -Check
 #   注入点:-BaselineDir(缺省 baseline)/-OutDir(缺省 <BaselineDir>\auto;缺省落点避开手填的 <BaselineDir>\08-verification.md);
 #   -ItemsTsv 或环境变量 DBK_ITEMS_TSV(换一张条目表,夹具用)。本文件必须保存为 UTF-8 with BOM。
-#   -Step 语义(执行器专用,真源 docs/design/03 第 5 节,与 Linux 侧 verify-all.sh 同口径):`08-A-G` = 七组全判(缺省);
-#   `08-A`…`08-G` = 只判该组(过滤条目表的**组**列);其它值 = 验收条目关联的卡号(NN-K,过滤**卡**列)。非法时打印可用集合
+#   -Step 语义(执行器专用,真源 docs/design/03 第 5 节,与 Linux 侧 verify-all.sh 同口径):`08-A-G`/`08-A-H` = 八组全判(缺省);
+#   `08-A`…`08-H` = 只判该组(过滤条目表的**组**列);其它值 = 验收条目关联的卡号(NN-K,过滤**卡**列)。非法时打印可用集合
 #   并非零退出 64;给了 -Step 时未命中的条目记「跳过」、不计入退出码(退出码语义不变:0/1/2/64)。夹具级验证,真机未跑。
 [CmdletBinding()]
 param(
@@ -43,7 +43,7 @@ if (-not $table.Ok) { Show-DbkUsage; Write-DbkNote ('用法错误: ' + $table.Er
 $sel = Get-DbkStepSelection -Items $table.Items -Step $script:DbkStep
 if ($sel.Mode -eq 'invalid') {
   Show-DbkUsage
-  Write-DbkNote ('用法错误: -Step ' + $script:DbkStep + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + $sel.Known + ';08-A-G = 七组全判(缺省)')
+  Write-DbkNote ('用法错误: -Step ' + $script:DbkStep + ' 不在本执行器(验收总控)的验收条目集合里;可用值:' + $sel.Known + ';可用组:08-' + (($sel.Groups -split ' ') -join ' 08-') + ';08-A-G/08-A-H = 八组全判(缺省)')
   exit $script:DBK_USAGE
 }
 $script:Items = New-Object System.Collections.ArrayList

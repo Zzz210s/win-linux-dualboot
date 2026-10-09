@@ -85,10 +85,14 @@
 - `[ ]` L4-16 虚拟桌面工作流:工作区数量 / 关动态工作区 / 前两个工作区直达键 | 脚本:`scripts/linux/set-workflow.sh --check`(执行加 `--apply --yes`) | 判据:逐行 `schema key = 期望值`,且 `Super+1`/`Super+2` 直达 | 卡:`05-16`
 - `[ ]` L4-17 应用清单与替代映射:按 `templates/apps.tsv` 断言必需项在位(VFIO 为被否项) | 脚本:`scripts/linux/check-apps.sh --check`(只读,`--apply` 同) | 判据:必需项全在位,可选项缺失只记一行,Windows 独占都有归属 | 卡:`05-17`
 - `[ ]` L4-18 配置快照与复原:五份快照落 `baseline/config/`,重装后回灌 | 脚本:`scripts/linux/export-config.sh --check`(落快照加 `--apply --yes`);`scripts/linux/import-config.sh --apply --yes`(复原) | 判据:`export-config.sh --check` 报无漂移;`import` 末尾自检一致 | 卡:`05-18`
+- `[ ]` L4-19 系统与硬件管理软件:按 `templates/apps.tsv` 经通道装必需项(GUI 走 Flatpak、CLI 走 Homebrew;`native` 缺失只提示不分层) | 脚本:`scripts/linux/install-apps.sh --check`(安装加 `--apply --yes`,单通道加 `--channel flatpak|brew`) | 判据:必需项全在位;缺项分通道列出;通道工具取不到记需人工 | 卡:`05-19`
+- `[ ]` L4-20 蓝牙与音频链路:BlueZ 服务/适配器/已配对设备/`bluetoothctl` 硬判据,PipeWire 与 aptX/LDAC 软判据 | 脚本:`scripts/linux/check-bluetooth.sh --check`(起服务与上电加 `--apply --yes`) | 判据:三层逐项 PASS 或逐条需人工(编解码器缺失不判失败);连一次耳机能出声 | 卡:`05-20`
+- `[ ]` L4-21 现代 CLI 与终端:fish(05-14)+ fzf/zoxide/eza/bat/ripgrep/fd/starship,只加不替 | 脚本:`bash scripts/linux/check-apps.sh --check`;`sudo bash scripts/linux/install-apps.sh --apply --yes --channel brew` | 判据:清单 CLI 段必需项在位;`rg`/`fd`/`eza`/`bat`/`starship` 各自打印版本 | 卡:`05-21`
+- `[ ]` L4-22 备份与同步:restic 备份家目录文档 + `/etc` 漂移 + 清单,远端经 rclone;凭据只从环境变量/600 文件读 | 脚本:`scripts/linux/backup-home.sh --check`(真跑一次加 `--apply --yes`) | 判据:五项检查通过(restic/rclone/仓库/密码来源/快照在期内);日志里无密码 | 卡:`05-22`
 
 ## 6. 完成判据
 
-- **唯一完成判据**是 [08-verification.md](../docs/08-verification.md) 的 A-G 七组全部勾选;不以"装完了"为准。每台设备的填写版落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`),随 `baseline/` 不入库。两侧总控([verify-all.sh](../scripts/linux/verify-all.sh)、[verify-all.ps1](../scripts/windows/verify-all.ps1))只做只读判定;落汇总时必须用 `--out-dir` / `-OutDir` 指到与"填写版"不同的目录,避免互相覆盖(见 [08-verification.md](../docs/08-verification.md) 的"记录载体")。
+- **唯一完成判据**是 [08-verification.md](../docs/08-verification.md) 的 A-H 八组全部勾选;不以"装完了"为准。每台设备的填写版落盘为 `baseline/08-verification.md`(多设备时 `baseline/<设备别名>/08-verification.md`),随 `baseline/` 不入库。两侧总控([verify-all.sh](../scripts/linux/verify-all.sh)、[verify-all.ps1](../scripts/windows/verify-all.ps1))只做只读判定;落汇总时必须用 `--out-dir` / `-OutDir` 指到与"填写版"不同的目录,避免互相覆盖(见 [08-verification.md](../docs/08-verification.md) 的"记录载体")。
 - **没有产物的阶段视为未完成**,不得进入下一阶段:本清单每一节开头的"本阶段产物"行就是该节的完成门槛。
 - **L2 是硬闸门**:报告末行结论为"禁止进入 L3"时,不得继续 L3 及以后的动作。
 - **共存增量 4 步**(只轨道 D 走):115GiB 预留(§2 分盘-4)、引导不变量核查(§3 全程 + A 组)、`ntfs3` 共享盘(§5 L4-1)、退役与救援(L5)。

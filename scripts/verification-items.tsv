@@ -55,3 +55,6 @@ F10	F	05-9	B	-	-	启动失败自动回滚演练(参考设备必做):setup-greenb
 G1	G	05-15	L	scripts/linux/set-default-apps.sh	--check	默认应用绑定与 templates/mimeapps.tsv 一致(应用未装记需人工)
 G2	G	05-17	L	scripts/linux/check-apps.sh	--check	应用清单里的必需项都在位(可选缺失只记一行)
 G3	G	05-18	L	scripts/linux/export-config.sh	--check	配置快照与现状无漂移(漂移记需人工)
+H1	H	05-19	L	scripts/linux/install-apps.sh	--check	安装层就绪:清单(必需 = 1)的 flatpak/brew 项全部已装;缺项分通道列出,工具不可用记需人工
+H2	H	05-20	L	scripts/linux/check-bluetooth.sh	--check	蓝牙与音频链路可用:BlueZ 服务/适配器/已配对设备 + bluetoothctl + PipeWire 与编解码器状态
+H3	H	05-22	L	scripts/linux/backup-home.sh	--check	备份链路可跑通:restic/rclone 在位、仓库与凭据可读、最近一次备份在期内

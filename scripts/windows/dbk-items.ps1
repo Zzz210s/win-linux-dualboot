@@ -7,7 +7,7 @@
 #        制表符分隔、LF(CRLF 亦可)、# 与空行跳过。表不存在/读不出/某行不足 7 列/侧不是 L|W|B/编号为空/零条目
 #        -> Ok=$false 且 Error 非空;调用方据此退 64 且零写(禁止回退到硬编码条目,否则真源分裂)。
 #   2) Get-DbkStepSelection -Items <Items> -Step <值> -> @{ Mode; Group; Card; Error; Known; Groups }
-#        Mode = all(缺省或 08-A-G)/group(08-A…08-G,过滤「组」列)/card(NN-K,过滤「卡」列)/invalid(Error 非空)。
+#        Mode = all(缺省、08-A-G 或 08-A-H)/group(08-A…08-H,过滤「组」列)/card(NN-K,过滤「卡」列)/invalid(Error 非空)。
 #        Known/Groups = 空格分隔的可用卡号/组集合(供用法错误信息打印,与 Linux 侧 verify-all.sh 同口径)。
 #   3) Test-DbkItemSelected -Item <项> -Selection <上者> -> $true/$false(是否命中当前 -Step 选择符)。
 #   4) Get-DbkSkipPrefix -Step <值> -Selection <上者> -> 未选中条目的原因前缀(「未选中(-Step X 只判组/卡 Y):」)。
@@ -55,8 +55,8 @@ function Get-DbkStepSelection {
   foreach ($i in @($Items)) { $cards += [string]$i.Card; $groups += [string]$i.Group }
   $cards = @($cards | Sort-Object -Unique); $groups = @($groups | Sort-Object -Unique)
   $sel.Known = ($cards -join ' '); $sel.Groups = ($groups -join ' ')
-  if (-not $Step -or $Step -eq '08-A-G') { return $sel }
-  if ($Step -match '^08-([A-G])$') {
+  if (-not $Step -or $Step -eq '08-A-G' -or $Step -eq '08-A-H') { return $sel }
+  if ($Step -match '^08-([A-H])$') {
     if ($groups -notcontains $Matches[1]) { $sel.Mode = 'invalid'; $sel.Error = ('组 ' + $Matches[1] + ' 不在条目表里'); return $sel }
     $sel.Mode = 'group'; $sel.Group = $Matches[1]; return $sel
   }

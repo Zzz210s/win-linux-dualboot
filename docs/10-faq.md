@@ -303,10 +303,25 @@
 ### 10-32 Windows 独占软件在 Linux 侧怎么用(VFIO 为什么不采纳)
 
 - 按 `templates/apps.tsv` 逐项定归属,四种通道:原生开源替代(GIMP / Blender / Shotcut 等)、Flatpak、网页版、**重启回 Windows**;`bash scripts/linux/check-apps.sh --check` 会断言必需项在位。
-- **不用 VFIO / 显卡直通**:单张 NVIDIA 卡无法同时供宿主与客户机,双系统已有原生 Windows 不必再跑一个,而且一份 LTSC 授权不能两处同时用(设计 02 决策表 `D7` 与被否项)。
+- **不用 VFIO / 显卡直通**:单张 NVIDIA 卡无法同时供宿主与客户机,双系统已有原生 Windows 不必再跑一个,而且一份 LTSC 授权不能两处同时用(设计 02 的被否项与决策 `D8` 的通道优先级)。
 - 非 3D 的 Windows 独占才考虑轻量 VM;需要 3D 时直接重启回 Windows(`05-11` 的入口)。
 -> `05-11`、`05-17`
 脚本:`scripts/linux/check-apps.sh --check`
+
+### 10-33 蓝牙在双系统上为什么连过一次就再也连不上,音频编解码器要不要折腾
+
+- 蓝牙配对密钥在 Windows 与 Linux 各存一套,同一副耳机在两边分别配对后,先连的那一边常把密钥写回设备,另一边就失效。处置:**先在一边删掉旧配对再重配第二次**(`bluetoothctl remove <MAC>` 或 GNOME 设置里忘记设备)。
+- 三层体检用 `sudo bash scripts/linux/check-bluetooth.sh --check`:服务 / 适配器 / 已配对设备 / `bluetoothctl` 是硬判据;PipeWire/WirePlumber 与 aptX/LDAC 编解码器缺失只记**需人工**(音质降级、功能不坏),不判失败。
+- 要不要为 aptX/LDAC 分层?设计 02 决策 `D9`:**不为它分层**,缺就选「接受 AAC/SBC」,或按需手工分层并记账(分层会拖慢每次更新)。
+-> `05-20`、`05-5`
+脚本:`scripts/linux/check-bluetooth.sh --check`
+
+### 10-34 软件都从哪装、备份怎么做
+
+- 通道优先级(设计 02 决策 `D8`):**GUI 走 Flatpak(Flathub) -> CLI 走 Homebrew -> 只有需要内核模块/驱动的系统级组件才允许 `rpm-ostree` 分层,且必须逐项记账**。清单唯一真源是 `templates/apps.tsv`(42 行,30 项必需);核对用 `check-apps.sh --check`,安装用 `install-apps.sh --apply --yes`(`native` 缺失只提示不自动分层)。
+- 备份两件一起:配置层用 `export-config.sh`(G3 快照,重装后可回灌)+ 数据层用 `backup-home.sh`(restic 备份家目录文档 + `/etc` 漂移 + 清单,远端经 rclone 推服务器,外置盘留接口)。**凭据只从环境变量或本机 600 文件读,不进仓库。**
+-> `05-19`、`05-21`、`05-22`、`05-18`
+脚本:`scripts/linux/install-apps.sh --check`;`scripts/linux/backup-home.sh --check`
 
 ## 分阶段风险速查(5 张)
 

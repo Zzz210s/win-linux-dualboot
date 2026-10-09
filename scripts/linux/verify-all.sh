@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 验收总控(Fedora 44 Silverblue / 原子版侧;执行器:不进卡映射表、不登记 steps.tsv):按 docs/08-verification.md 的 A-G 七组
+# 验收总控(Fedora 44 Silverblue / 原子版侧;执行器:不进卡映射表、不登记 steps.tsv):按 docs/08-verification.md 的 A-H 八组
 #   逐项判定——能自动的调既有步骤脚本的 --check/--list 或读系统状态,不能自动的记「需人工」并给手动核对步骤。
 #   **绝不执行任何 --apply**:只允许 --check 与只读子命令,收到 --apply/--rollback/--pin/--unpin → 64 且一个子脚本
 #   都不调。汇总只在 --apply 时落盘 <out-dir>/08-verification.md(每台设备副本,含「已知例外」表与结论行);
 #   --check 零写。退出码:0 无自动失败且无待确认人工项 / 1 有自动失败 / 2 有需人工项(加 --confirm-manual
 #   表示人工项已按清单逐条核对完成,不再计入退出码)/ 64 用法错误。
-# 条目表真源:**scripts/verification-items.tsv**(48 条;列 = 编号/组/卡/侧/判定脚本/参数/标签)。本执行器只读它并按行分派:
+# 条目表真源:**scripts/verification-items.tsv**(51 条 = A-G 48 条 + H 组 3 条;列 = 编号/组/卡/侧/判定脚本/参数/标签)。本执行器只读它并按行分派:
 #   侧 = W 的条目在本侧记「需人工」;判定脚本 = 仓库相对路径 → 只读调用该步骤脚本;= builtin → 调 dbk-verify-probes.sh 的
 #   probe_<编号>;= - → 直接记「需人工」(原因取标签列)。增删条目只改那张表(与 docs/08-verification.md 同步)。
 # 用法: verify-all.sh [--check|--apply] [--out-dir <目录>] [--confirm-manual] [--json] [--log <路径>]
@@ -33,10 +33,10 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 dbk_parse_args ${ARGS[@]+"${ARGS[@]}"}
-# --step(执行器专用,与 Windows 侧 verify-all.ps1 同口径,真源 docs/design/03 第 5 节):`08-A-G` = 七组全判(缺省);
-#   `08-A`…`08-G` = 只判该组(过滤条目表的**组**列);其它值 = 验收条目关联的卡号(NN-K,过滤**卡**列)。非法值 → 64 且不落产物。
+# --step(执行器专用,与 Windows 侧 verify-all.ps1 同口径,真源 docs/design/03 第 5 节):`08-A-G`(或 `08-A-H`)= 八组全判(缺省);
+#   `08-A`…`08-H` = 只判该组(过滤条目表的**组**列;H 组的 H1/H2/H3 与 G 组同走 chk_step);其它值 = 验收条目关联的卡号(NN-K,过滤**卡**列)。非法值 → 64 且不落产物。
 #   未选中的条目记「跳过」、不计入退出码(本执行器不绑卡、无「# 对应卡:」头)。
-STEP_SEL="${DBK_STEP:-}"; case "$STEP_SEL" in 08-A-G) STEP_SEL="" ;; esac; DBK_STEP="${STEP_SEL:-08-A-G}"
+STEP_SEL="${DBK_STEP:-}"; case "$STEP_SEL" in 08-A-G|08-A-H) STEP_SEL="" ;; esac; DBK_STEP="${STEP_SEL:-08-A-G}"
 if [ "$DBK_MODE" = apply ]; then dbk_log_default "verify-all"; fi
 STEP_ROOT="${DBK_STEP_ROOT:-$ROOT}"; GIT_ROOT="${DBK_GIT_ROOT:-$ROOT}"; BASEDIR="${DBK_BASELINE_DIR:-$ROOT/baseline}"
 FSTAB="${DBK_FSTAB:-/etc/fstab}"; JRNL="${DBK_JOURNAL_DIR:-/var/log/journal}"
@@ -103,9 +103,9 @@ GRP_LIST="$(printf '%s\n' "${R[@]}" | cut -d'|' -f2 | sort -u | tr '\n' ' ')"
 SEL_GROUP=""
 if [ -n "$STEP_SEL" ]; then
   case "$STEP_SEL" in
-    08-[A-G]) SEL_GROUP="${STEP_SEL#08-}"
-      printf ' %s ' "$GRP_LIST" | grep -q " $SEL_GROUP " || { dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器的组集合里;可用组:08-A 08-B 08-C 08-D 08-E 08-F 08-G;08-A-G = 七组全判(缺省)"; exit "$DBK_USAGE"; } ;;
-    *) printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL " || { dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-G = 七组全判(缺省)"; exit "$DBK_USAGE"; } ;;
+    08-[A-H]) SEL_GROUP="${STEP_SEL#08-}"
+      printf ' %s ' "$GRP_LIST" | grep -q " $SEL_GROUP " || { dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器的组集合里;可用组:08-A 08-B 08-C 08-D 08-E 08-F 08-G 08-H;08-A-G/08-A-H = 八组全判(缺省)"; exit "$DBK_USAGE"; } ;;
+    *) printf ' %s ' "$KNOWN" | grep -q " $STEP_SEL " || { dbk_usage; dbk_note "用法错误: --step $STEP_SEL 不在本执行器(验收总控)的验收条目集合里;可用值:$KNOWN;08-A-G/08-A-H = 八组全判(缺省)"; exit "$DBK_USAGE"; } ;;
   esac
 fi
 for idx in "${!R[@]}"; do IFS='|' read -r i g s m c <<<"${R[$idx]}"
