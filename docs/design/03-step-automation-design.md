@@ -115,7 +115,7 @@ errtrap 的退出码与误用防护(与 O3 同级,修复轮 2 补齐):
 
 | 规则 | 内容 |
 |---|---|
-| C9e | 验收条目的**唯一真源**是 `scripts/verification-items.tsv`(批 H 起 51 条)(两侧总控都读它,`docs/08-verification.md` 是人读视图);C9e 逐条比对两边编号集合(条目表有、卡里没有 = 报;卡里有、条目表没有 = 也报),行序与文案不限。条目表读不到时两侧总控必须退 64 且**禁止回退硬编码条目**(夹具用 `-ItemsTsv`/`DBK_ITEMS_TSV` 换表验证) |
+| C9e | 验收条目的**唯一真源**是 `scripts/verification-items.tsv`(批 H 起 51 条)(两侧总控都读它,`docs/08-verification.md` 是人读视图);C9e 逐条比对两边编号集合(条目表有、卡里没有 = 报;卡里有、条目表没有 = 也报),行序与文案不限。条目表读不到时两侧总控必须退 64 且**禁止回退硬编码条目**(夹具用 `-ItemsTsv`/`DBK_ITEMS_TSV` 换表验证) |;**实现注记**(2026-10-09):判定逻辑在 `scripts/repo/check-docs-repo.sh`,卡体解析共用 `scripts/repo/check-docs-parse.awk`;该解析器缺失时 `check-docs.sh` / `check-docs-repo.sh` **响亮退 2** |
 | C9a | 卡内出现的 `scripts/**/*.{sh,ps1}` 路径**必须存在**(正斜杠与反斜杠写法都认,如 `scripts\windows\x.ps1`) |
 | C9b | 每个 `scripts/repo/*.sh`、`scripts/linux/*.sh` 与 `scripts/windows/*.ps1` **必须**含 `# 对应卡:` 行(或 `# Card:`),且该卡号在对应文档中真实存在;正则允许行首 UTF-8 BOM(`.ps1` 必须带 BOM),并支持逗号列表写法(一脚本服务多张卡,列表里至少一个卡号真实存在)(白名单:库文件与仓库自检脚本) |
 | C9c | **反向覆盖**:每个步骤脚本必须被至少一张卡引用(`grep` 卡内路径,正斜杠与反斜杠写法都认) |
