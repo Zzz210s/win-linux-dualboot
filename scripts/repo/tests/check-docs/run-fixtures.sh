@@ -3,7 +3,7 @@
 # 用法:bash scripts/repo/tests/check-docs/run-fixtures.sh(可从仓库任意工作目录运行)
 # 末尾串联 extra-checks.sh(C1-C8 边界回归)与 extra-checks-c9.sh(C7/C9 边界与真实仓库样本),一条命令全跑。
 # 目录约定:FIX 下是常驻样例;tmp-repo/ 是样例仓库模板(不含 check-docs 自身副本),
-#   运行时复制到 .tmp/run/<样例名>/ 并注入当前 scripts/repo/check-docs*.sh 后执行;.tmp/ 不入库。
+#   运行时复制到 .tmp/run/<样例名>/ 并注入当前 scripts/repo/check-docs*.sh 与 *.awk 后执行;.tmp/ 不入库。
 # 自带自检:每个用例执行前先对夹具里的 .sh 跑 `bash -n`,夹具数据语法坏了立即报 FAIL 并让整体退非 0,
 #   而不是让坏夹具污染 check-docs 的结论(夹具路径含 /tests/,不受 check-scripts.sh 的语法扫描覆盖)。
 set -uo pipefail
@@ -47,7 +47,7 @@ check() { # 样例名 / 目标(样例 md 相对 FIX 的路径,或 tmp-repo/<样�
     d="$FIX/.tmp/run/$(basename "$tgt")"
     rm -rf "$d"; mkdir -p "$d/scripts/repo"
     cp -r "$FIX/tmp-repo/$tgt/." "$d/"
-    cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$d/scripts/repo/"
+    cp "$ROOT"/scripts/repo/check-docs*.sh "$ROOT"/scripts/repo/check-docs*.awk "$d/scripts/repo/"
     out="$(cd "$d" && bash scripts/repo/check-docs.sh 2>&1)"; code=$?
     cmd="(样例仓库 .tmp/run/$(basename "$tgt")) bash scripts/repo/check-docs.sh"
   else

@@ -101,7 +101,7 @@ has "W5b 报错保留剥标题后的原始目标文本" "相对链接目标不�
 
 # ==== F9:仓库级扫描目录含 scripts/repo =======================================
 D="$W/repo-f9"; mkdir -p "$D/docs" "$D/scripts/repo"
-cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$D/scripts/repo/"
+cp "$ROOT"/scripts/repo/check-docs*.sh "$ROOT"/scripts/repo/check-docs*.awk "$D/scripts/repo/"
 cat > "$D/docs/01-firmware.md" <<'EOF'
 # L0:夹具样例
 
@@ -158,7 +158,7 @@ else verdict 1 "F12a 真实仓库 --repo 追加条数与整仓扫描不一致" "
 # F12c:临时仓库(存在未被任何卡引用的步骤脚本)→ --repo 在单文件模式下追加 C9c
 D12c="$W/repo-f12c"; mkdir -p "$D12c/scripts/repo"
 cp -r "$FIX/tmp-repo/c9c/." "$D12c/"
-cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$D12c/scripts/repo/"
+cp "$ROOT"/scripts/repo/check-docs*.sh "$ROOT"/scripts/repo/check-docs*.awk "$D12c/scripts/repo/"
 out="$(cd "$D12c" && bash scripts/repo/check-docs.sh --repo docs/01-firmware.md 2>&1)"; rc=$?
 n_c="$(printf '%s\n' "$out" | grep -c ' C9c ' || true)"
 if [ "$rc" -eq 1 ] && [ "$n_c" -ge 1 ]; then verdict 0 "F12c --repo 在单文件模式下追加 C9c(临时仓库:步骤脚本无人引用)"
@@ -166,7 +166,7 @@ else verdict 1 "F12c --repo 未追加 C9c(rc=$rc C9c=$n_c)" "$out"; fi
 # F12b:临时仓库(同一 (步骤号, 脚本) 对重复)→ --repo 必须把 C9d 一并追加进来
 D12="$W/repo-f12"; mkdir -p "$D12/scripts/repo"
 cp -r "$FIX/tmp-repo/c9d-dup/." "$D12/"
-cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$D12/scripts/repo/"
+cp "$ROOT"/scripts/repo/check-docs*.sh "$ROOT"/scripts/repo/check-docs*.awk "$D12/scripts/repo/"
 out="$(cd "$D12" && bash scripts/repo/check-docs.sh --repo docs/01-firmware.md 2>&1)"; rc=$?
 n_d="$(printf '%s\n' "$out" | grep -c ' C9d ' || true)"
 if [ "$rc" -eq 1 ] && [ "$n_d" -ge 1 ]; then verdict 0 "F12b --repo 也会追加 C9d(临时仓库:同一 (步骤号, 脚本) 对重复)"
@@ -196,7 +196,7 @@ else verdict 1 "D5 坏脚本未被拦下(rc=$rc)" "$out"; fi
 mk_c9e() {   # mk_c9e <目录> <tsv 额外编号行(可空)> <卡里额外的一行(可空)>
   local d="$1" tsvline="$2" extra="$3"
   rm -rf "$d"; mkdir -p "$d/scripts/repo" "$d/docs"
-  cp "$ROOT"/scripts/repo/check-docs.sh "$ROOT"/scripts/repo/check-docs-lib.sh "$ROOT"/scripts/repo/check-docs-repo.sh "$d/scripts/repo/"
+  cp "$ROOT"/scripts/repo/check-docs*.sh "$ROOT"/scripts/repo/check-docs*.awk "$d/scripts/repo/"
   { printf '# 条目唯一真源(夹具)\nA1\tA\t02-1\tW\t-\t\t示例\n'; [ -n "$tsvline" ] && printf '%s\n' "$tsvline"; } > "$d/scripts/verification-items.tsv"
   { printf '# 验收(夹具)\n\n- [ ] A1 示例 -> 看到:示例\n'; [ -n "$extra" ] && printf '%s\n' "$extra"; } > "$d/docs/08-verification.md"
 }
